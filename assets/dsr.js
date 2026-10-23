@@ -1,4 +1,4 @@
-/* Hub Toko 2299 — pembaca file Item DSR & rumus sales.
+/* Basecamp 2299 — pembaca file Item DSR & rumus sales.
  * Dipakai di browser (window.DSR) dan bisa diuji di Node (module.exports).
  * Rumus disamakan dengan Integrated Hub Jateng 01. */
 (function (root) {

@@ -1,8 +1,9 @@
-/* Hub Toko 2299 — aplikasi web (tanpa framework). */
+/* Basecamp 2299 — aplikasi web (tanpa framework). */
 (function () {
   'use strict';
 
   var CFG = window.HUB_CONFIG || {};
+  var APP = CFG.APP_NAME || ('Basecamp ' + (CFG.STORE || ''));
 
   // append/replaceChildren bawaan browser menulis null sebagai teks "null"; abaikan null/false
   ['append', 'replaceChildren'].forEach(function (m) {
@@ -234,7 +235,7 @@
     return el('div', { class: 'shell' },
       el('aside', { class: 'side' },
         el('div', { class: 'brand' }, el('div', { class: 'logo-plate' }, el('img', { src: 'assets/logo.png', alt: 'Eigerindo MPI' })),
-          el('div', { class: 'brand-txt' }, el('b', { text: 'Hub Toko ' + CFG.STORE }), el('span', { text: CFG.STORE_NAME }))),
+          el('div', { class: 'brand-txt' }, el('b', { text: APP }), el('span', { text: CFG.STORE_NAME }))),
         side,
         el('div', { class: 'side-foot' }, el('div', { text: 'Dibuat oleh' }), el('b', { text: 'Ali Muhammad Shobrun' }))),
       el('div', { class: 'main-col' },
@@ -248,7 +249,7 @@
             el('button', { class: 'btn-out', text: 'Keluar', onclick: logout })),
           tabs),
         el('main', { class: 'view', id: 'view' }),
-        el('footer', { class: 'credit' }, 'Hub Toko ' + CFG.STORE + ' · Dibuat oleh ', el('b', { text: 'Ali Muhammad Shobrun' }))));
+        el('footer', { class: 'credit' }, APP + ' · Dibuat oleh ', el('b', { text: 'Ali Muhammad Shobrun' }))));
   }
 
   function logout() {
@@ -267,7 +268,7 @@
   }
   function brandBlock() {
     return el('div', { class: 'auth-brand' }, el('img', { class: 'auth-logo', src: 'assets/logo.png', alt: 'Eigerindo MPI' }),
-      el('div', null, el('h1', { text: 'Hub Toko ' + CFG.STORE }), el('p', { text: 'Store Management · ' + CFG.STORE_NAME })));
+      el('div', null, el('h1', { text: APP }), el('p', { text: (CFG.TAGLINE || 'Store Management') + ' · EIGER ' + CFG.STORE_NAME })));
   }
 
   /* ---------- login & daftar ---------- */
@@ -519,7 +520,7 @@
   function viewMonitoring(v) {
     var hero = el('section', { class: 'hero' },
       el('div', null, el('h2', { text: 'Monitoring Sales · ' + CFG.STORE_NAME }), el('p', { id: 'mon-sub', text: 'Memuat…' })),
-      el('div', { class: 'hero-right' }, el('b', { text: 'Hub Toko ' + CFG.STORE }), el('br'), el('span', { text: 'diambil ' + nowJkt() + (S.user ? ' · ' + S.user.nama : '') })));
+      el('div', { class: 'hero-right' }, el('b', { text: APP }), el('br'), el('span', { text: 'diambil ' + nowJkt() + (S.user ? ' · ' + S.user.nama : '') })));
     var date = el('input', { type: 'date', id: 'mon-date' });
     var segMode = segmented([['netto', 'Netto'], ['bruto', 'Bruto']], S.mode, function (m) { S.mode = m; store.set('mode', m); draw(); });
     var segFmt = segmented([['penuh', 'Penuh'], ['ringkas', 'Ringkas (jt)']], S.fmt, function (m) { S.fmt = m; store.set('fmt', m); draw(); });
@@ -1882,7 +1883,7 @@
   function viewPica(v) {
     v.append(el('section', { class: 'hero hero-sm' },
       el('div', null, el('h2', { text: 'Analisa PICA · ' + CFG.STORE_NAME }), el('p', { id: 'pica-sub', text: 'Problem Identification & Corrective Action' })),
-      el('div', { class: 'hero-right' }, el('b', { text: 'Hub Toko ' + CFG.STORE }), el('br'), el('span', { text: 'diambil ' + nowJkt() + (S.user ? ' · ' + S.user.nama : '') }))));
+      el('div', { class: 'hero-right' }, el('b', { text: APP }), el('br'), el('span', { text: 'diambil ' + nowJkt() + (S.user ? ' · ' + S.user.nama : '') }))));
     var tools = el('div', { class: 'toolbar2' }), body = el('div', null, skel(3));
     v.append(tools, body);
     var tanggal = S.picaTgl || '';
