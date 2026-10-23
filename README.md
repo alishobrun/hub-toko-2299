@@ -7,6 +7,7 @@ Web hub untuk tim EIGER Store A. Yani Kertasuro Sukoharjo (2299): monitoring sal
 - **Login per orang.** Anggota tim mendaftar sendiri, lalu admin menyetujui. Akun pertama yang mendaftar otomatis menjadi admin.
 - **Monitoring Sales.** Achievement bulanan, kumulatif, dan harian (Bruto/Netto), plus UPT dan basket. Rumusnya sama dengan Integrated Hub Jateng 01.
 - **Unggah DSR.** File *Item DSR Report* (.xlsx) dari sistem. Data dicocokkan per nomor invoice: invoice yang sudah ada diganti, invoice baru ditambah, jadi tidak pernah dobel.
+- **Cek Kas Till.** Hitung uang di laci per pecahan, catat perubahan kas dengan keterangan, lalu cocokkan dengan modal till + penjualan tunai sistem. Riwayat tiap hitungan tersimpan. Modal till diatur admin.
 - **Jadwal.** Dibaca langsung dari sheet JADWAL KARTASURA JAYA (tab periode berjalan).
 
 ## Rumus sales

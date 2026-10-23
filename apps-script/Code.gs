@@ -28,15 +28,23 @@ const TABS = {
     'cust_key', 'cust_name', 'upload_id'],
   uploads: ['id', 'waktu', 'username', 'nama_file', 'dari', 'sampai', 'baris', 'invoice_baru', 'invoice_diperbarui', 'invoice_sama'],
   targets: ['bulan', 'target', 'sumber', 'diperbarui'],
-  bobot: ['tanggal', 'harian', 'kumulatif']
+  bobot: ['tanggal', 'harian', 'kumulatif'],
+  kas: ['id', 'tanggal', 'waktu', 'username', 'nama', 'pecahan', 'total_fisik', 'modal', 'penjualan_tunai',
+    'masuk', 'keluar', 'perubahan', 'seharusnya', 'selisih', 'catatan'],
+  settings: ['key', 'value', 'diperbarui', 'oleh']
 };
+
+const PECAHAN = [100000, 50000, 20000, 10000, 5000, 2000, 1000, 500, 200, 100];
+const SETTING_DEFAULTS = { modal_till: 600000 };
 
 // Kolom yang disimpan sebagai teks (supaya tanggal/kode tidak diubah Sheets)
 const NUM_COLS = {
   dsr: ['qty', 'harga', 'gross', 'promo_value', 'coupon', 'discount', 'net'],
   uploads: ['baris', 'invoice_baru', 'invoice_diperbarui', 'invoice_sama'],
   targets: ['target'],
-  bobot: ['harian', 'kumulatif']
+  bobot: ['harian', 'kumulatif'],
+  kas: ['total_fisik', 'modal', 'penjualan_tunai', 'masuk', 'keluar', 'seharusnya', 'selisih'],
+  settings: ['value']
 };
 const DSR_FIELDS = TABS.dsr.slice(0, TABS.dsr.length - 1); // tanpa upload_id
 
@@ -271,8 +279,102 @@ const API = {
   jadwal: function (req) {
     auth_(req);
     return readJadwal_(Utilities.formatDate(new Date(), CFG.TZ, 'yyyy-MM-dd'));
+  },
+
+  /* ---------- Cek kas till ---------- */
+  settings: function (req) {
+    auth_(req);
+    return settings_();
+  },
+
+  setSetting: function (req) {
+    const a = auth_(req, true);
+    const key = String(req.key || '');
+    if (!Object.prototype.hasOwnProperty.call(SETTING_DEFAULTS, key)) throw new Error('Pengaturan tidak dikenal');
+    const val = Number(req.value);
+    if (!isFinite(val) || val < 0) throw new Error('Nilai harus angka 0 atau lebih');
+    return withLock_(function () {
+      const rows = read_('settings');
+      const ex = rows.filter(function (r) { return String(r.key) === key; })[0];
+      if (ex) { ex.value = val; ex.diperbarui = now_(); ex.oleh = a.username; }
+      else rows.push({ key: key, value: val, diperbarui: now_(), oleh: a.username });
+      writeAll_('settings', rows);
+      return settings_();
+    });
+  },
+
+  kasSave: function (req) {
+    const u = auth_(req);
+    const counts = req.pecahan || {};
+    const clean = {};
+    let fisik = 0;
+    PECAHAN.forEach(function (p) {
+      const n = Number(counts[p] || 0);
+      if (!isFinite(n) || n < 0 || Math.floor(n) !== n || n > 100000) throw new Error('Jumlah lembar pecahan ' + p + ' tidak valid');
+      if (n) clean[p] = n;
+      fisik += n * p;
+    });
+    const tunai = Number(req.penjualanTunai || 0);
+    if (!isFinite(tunai) || tunai < 0) throw new Error('Penjualan tunai tidak valid');
+    const perubahan = (req.perubahan || []).map(function (x, i) {
+      const jenis = x && x.jenis === 'masuk' ? 'masuk' : 'keluar';
+      const jumlah = Number(x && x.jumlah);
+      const ket = String((x && x.ket) || '').trim().slice(0, 200);
+      if (!isFinite(jumlah) || jumlah <= 0) throw new Error('Jumlah perubahan kas ke-' + (i + 1) + ' tidak valid');
+      if (!ket) throw new Error('Keterangan perubahan kas ke-' + (i + 1) + ' wajib diisi');
+      return { jenis: jenis, jumlah: Math.round(jumlah), ket: ket };
+    });
+    const masuk = perubahan.filter(function (x) { return x.jenis === 'masuk'; }).reduce(function (s, x) { return s + x.jumlah; }, 0);
+    const keluar = perubahan.filter(function (x) { return x.jenis === 'keluar'; }).reduce(function (s, x) { return s + x.jumlah; }, 0);
+    const modal = settings_().modal_till;
+    const seharusnya = modal + tunai + masuk - keluar;
+    const selisih = fisik - seharusnya;
+    const catatan = String(req.catatan || '').trim().slice(0, 300);
+    if (selisih !== 0 && !catatan) throw new Error('Ada selisih, isi catatan penjelasannya dulu');
+    const now = new Date();
+    const rec = {
+      id: Utilities.formatDate(now, CFG.TZ, 'yyyyMMdd-HHmmss') + '-' + u.username,
+      tanggal: Utilities.formatDate(now, CFG.TZ, 'yyyy-MM-dd'), waktu: now_(),
+      username: u.username, nama: u.nama, pecahan: JSON.stringify(clean), total_fisik: fisik,
+      modal: modal, penjualan_tunai: Math.round(tunai), masuk: masuk, keluar: keluar,
+      perubahan: JSON.stringify(perubahan), seharusnya: seharusnya, selisih: selisih, catatan: catatan
+    };
+    withLock_(function () { append_('kas', rec); });
+    return kasOut_(rec);
+  },
+
+  kasList: function (req) {
+    auth_(req);
+    const tgl = /^\d{4}-\d{2}-\d{2}$/.test(String(req.tanggal || '')) ? String(req.tanggal) : Utilities.formatDate(new Date(), CFG.TZ, 'yyyy-MM-dd');
+    const all = read_('kas');
+    const days = {};
+    all.forEach(function (r) { days[String(r.tanggal)] = 1; });
+    return {
+      tanggal: tgl,
+      tanggalTersedia: Object.keys(days).sort().reverse().slice(0, 60),
+      list: all.filter(function (r) { return String(r.tanggal) === tgl; }).map(kasOut_).reverse()
+    };
   }
 };
+
+function settings_() {
+  const out = {};
+  Object.keys(SETTING_DEFAULTS).forEach(function (k) { out[k] = SETTING_DEFAULTS[k]; });
+  read_('settings').forEach(function (r) { if (Object.prototype.hasOwnProperty.call(SETTING_DEFAULTS, String(r.key)) && r.value !== '') out[String(r.key)] = Number(r.value); });
+  return out;
+}
+
+function kasOut_(r) {
+  let pec = {}, per = [];
+  try { pec = JSON.parse(String(r.pecahan || '{}')); } catch (e) {}
+  try { per = JSON.parse(String(r.perubahan || '[]')); } catch (e) {}
+  return {
+    id: String(r.id), tanggal: String(r.tanggal), waktu: String(r.waktu), username: r.username, nama: r.nama,
+    pecahan: pec, totalFisik: Number(r.total_fisik), modal: Number(r.modal), penjualanTunai: Number(r.penjualan_tunai),
+    masuk: Number(r.masuk), keluar: Number(r.keluar), perubahan: per,
+    seharusnya: Number(r.seharusnya), selisih: Number(r.selisih), catatan: String(r.catatan || '')
+  };
+}
 
 /* ===================== Rumus sales (sama dengan Integrated Hub Jateng 01) ===================== */
 
@@ -532,8 +634,17 @@ function withLock_(fn, ms) {
 }
 
 function sh_(n) {
-  const s = SpreadsheetApp.getActive().getSheetByName(n);
-  if (!s) throw new Error('Tab "' + n + '" belum ada. Jalankan fungsi setup() di Apps Script.');
+  const ss = SpreadsheetApp.getActive();
+  let s = ss.getSheetByName(n);
+  if (!s) {
+    if (!TABS[n]) throw new Error('Tab "' + n + '" tidak dikenal');
+    // tab baru (mis. setelah pembaruan kode) dibuat otomatis
+    s = ss.insertSheet(n);
+    const h = TABS[n];
+    s.getRange(1, 1, 1, h.length).setValues([h]).setFontWeight('bold').setBackground('#0B1F5C').setFontColor('#FFFFFF');
+    s.setFrozenRows(1);
+    formatCols_(s, n, 1, s.getMaxRows());
+  }
   return s;
 }
 
