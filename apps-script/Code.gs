@@ -33,7 +33,7 @@ const TABS = {
   sessions: ['token', 'username', 'kedaluwarsa'],
   dsr: ['invoice', 'order_no', 'tanggal', 'jam', 'status', 'tipe', 'sku', 'nama_sku', 'kat3', 'kat4', 'brand',
     'qty', 'harga', 'sales_person', 'gross', 'promo_value', 'promo_name', 'coupon', 'discount', 'net',
-    'cust_key', 'cust_name', 'upload_id'],
+    'cust_key', 'cust_name', 'upload_id', 'emp_disc'],
   uploads: ['id', 'waktu', 'username', 'nama_file', 'dari', 'sampai', 'baris', 'invoice_baru', 'invoice_diperbarui', 'invoice_sama'],
   targets: ['bulan', 'target', 'sumber', 'diperbarui'],
   bobot: ['tanggal', 'harian', 'kumulatif'],
@@ -46,7 +46,8 @@ const TABS = {
     'diputus_oleh', 'diputus_pada', 'catatan_admin', 'tertulis'],
   tukar_shift: ['id', 'dibuat', 'pemohon', 'nama_pemohon', 'rekan', 'nama_rekan', 'tanggal', 'shift_pemohon', 'shift_rekan',
     'alasan', 'status', 'diputus_oleh', 'diputus_pada', 'tertulis'],
-  simpanan_off: ['id', 'dibuat', 'username', 'nama', 'tanggal_masuk', 'keterangan', 'status', 'diambil_tanggal', 'dicatat_oleh']
+  simpanan_off: ['id', 'dibuat', 'username', 'nama', 'tanggal_masuk', 'keterangan', 'status', 'diambil_tanggal', 'dicatat_oleh'],
+  traffic: ['tanggal', 'traffic', 'diperbarui']
 };
 
 const PECAHAN = [100000, 50000, 20000, 10000, 5000, 2000, 1000, 500, 200, 100];
@@ -54,7 +55,8 @@ const SETTING_DEFAULTS = { modal_till: 600000, floating_cash: 2400000 };
 
 // Kolom yang disimpan sebagai teks (supaya tanggal/kode tidak diubah Sheets)
 const NUM_COLS = {
-  dsr: ['qty', 'harga', 'gross', 'promo_value', 'coupon', 'discount', 'net'],
+  dsr: ['qty', 'harga', 'gross', 'promo_value', 'coupon', 'discount', 'net', 'emp_disc'],
+  traffic: ['traffic'],
   uploads: ['baris', 'invoice_baru', 'invoice_diperbarui', 'invoice_sama'],
   targets: ['target'],
   bobot: ['harian', 'kumulatif'],
@@ -62,7 +64,7 @@ const NUM_COLS = {
   settings: ['value'],
   ringkasan: ['bruto', 'netto', 'qty', 'trx']
 };
-const DSR_FIELDS = TABS.dsr.slice(0, TABS.dsr.length - 1); // tanpa upload_id
+const DSR_FIELDS = TABS.dsr.filter(function (f) { return f !== 'upload_id'; }); // urutan kolom yang dikirim web
 
 /* ===================== Setup ===================== */
 
@@ -81,6 +83,8 @@ function setup() {
     if (s && ss.getSheets().length > 1 && s.getLastRow() === 0) ss.deleteSheet(s);
   });
   pasangCadanganMingguan_();
+  pasangCatatTraffic_();
+  try { syncTraffic_(); } catch (e) { Logger.log('Traffic: ' + e); }
   rebuildRingkasan_();
   const r = syncTarget_();
   Logger.log('Setup selesai. Target: ' + JSON.stringify(r));
@@ -288,6 +292,7 @@ const API = {
     const tanggal = /^\d{4}-\d{2}-\d{2}$/.test(String(req.tanggal || '')) ? String(req.tanggal) : latest;
     const bulan = tanggal.slice(0, 7);
     syncTargetIfNeeded_(bulan);
+    syncTrafficIfNeeded_();
     const t = read_('targets').filter(function (x) { return String(x.bulan) === bulan; })[0];
     const bobot = {};
     read_('bobot').forEach(function (b) {
@@ -299,7 +304,8 @@ const API = {
       store: CFG.STORE, storeName: CFG.STORE_NAME,
       target: t ? Number(t.target) : null, targetSumber: t ? String(t.sumber) : null,
       bobot: bobot,
-      harian: ringkasan_().filter(function (r) { return r.tanggal.slice(0, 7) === bulan; })
+      harian: ringkasan_().filter(function (r) { return r.tanggal.slice(0, 7) === bulan; }),
+      traffic: trafficMap_(bulan)
     };
   },
 
@@ -1395,4 +1401,131 @@ function pakaiSimpanan_(username, tanggal) {
   const s = read_('simpanan_off').filter(function (x) { return x.username === username && x.status === 'tersedia'; })
     .sort(function (a, b) { return String(a.tanggal_masuk) < String(b.tanggal_masuk) ? -1 : 1; })[0];
   if (s) updateRow_('simpanan_off', 'id', s.id, { status: 'diambil', diambil_tanggal: tanggal });
+}
+
+/* =====================================================================
+ * TAHAP 3: traffic dari SOH (untuk CR), data harian untuk WA, area
+ * ===================================================================== */
+
+Object.assign(API, {
+  /** Data satu hari untuk laporan WA dan PICA. */
+  hari: function (req) {
+    auth_(req);
+    const tgl = /^\d{4}-\d{2}-\d{2}$/.test(String(req.tanggal || '')) ? String(req.tanggal) : latestDate_();
+    syncTrafficIfNeeded_();
+    return cached_('hari_' + tgl, 600, function () {
+      const rows = read_('dsr').filter(function (r) { return String(r.tanggal) === tgl; });
+      const out = hari_(rows);
+      out.tanggal = tgl;
+      const tr = read_('traffic').filter(function (x) { return String(x.tanggal) === tgl; })[0];
+      out.traffic = tr && tr.traffic !== '' ? Number(tr.traffic) : null;
+      return out;
+    });
+  },
+
+  /** Posisi toko di laporan regional Jateng 01. */
+  area: function (req) {
+    auth_(req);
+    const c = CacheService.getScriptCache();
+    const hit = c.get('area');
+    if (hit) return JSON.parse(hit);
+    const out = readArea_();
+    try { c.put('area', JSON.stringify(out), 1800); } catch (e) {}
+    return out;
+  }
+});
+
+function hari_(rows) {
+  const o = { bruto: 0, netto: 0, qty: 0, inv: {}, ea: [0, 0], wholesale: [0, 0], empDisc: 0, promo: 0, coupon: 0, prod: {}, ra: {} };
+  rows.forEach(function (r) {
+    if (!isSalesLine_(r)) return;
+    const g = Number(r.gross) || 0, n = Number(r.net) || 0, q = Number(r.qty) || 0;
+    const tipe = String(r.tipe || '').toLowerCase();
+    o.bruto += g; o.netto += n; o.qty += q; o.inv[String(r.invoice)] = 1;
+    if (tipe.indexOf('endless') >= 0) { o.ea[0] += g; o.ea[1] += n; }
+    if (tipe.indexOf('wholesale') >= 0) { o.wholesale[0] += g; o.wholesale[1] += n; }
+    o.empDisc += Number(r.emp_disc) || 0;
+    o.promo += Number(r.promo_value) || 0;
+    o.coupon += Number(r.coupon) || 0;
+    const P = o.prod[String(r.sku)] || (o.prod[String(r.sku)] = { nama: String(r.nama_sku), q: 0, b: 0, n: 0 });
+    P.q += q; P.b += g; P.n += n;
+    const sp = String(r.sales_person || '').trim() || '(tanpa nama)';
+    const R = o.ra[sp] || (o.ra[sp] = { b: 0, n: 0, inv: {} });
+    R.b += g; R.n += n; R.inv[String(r.invoice)] = 1;
+  });
+  const R0 = Math.round;
+  return {
+    bruto: R0(o.bruto), netto: R0(o.netto), qty: o.qty, trx: Object.keys(o.inv).length,
+    ea: { bruto: R0(o.ea[0]), netto: R0(o.ea[1]) }, wholesale: { bruto: R0(o.wholesale[0]), netto: R0(o.wholesale[1]) },
+    empDisc: R0(o.empDisc), promo: R0(o.promo), coupon: R0(o.coupon),
+    produk: Object.keys(o.prod).map(function (k) { const x = o.prod[k]; return [x.nama, x.q, R0(x.b), R0(x.n)]; })
+      .sort(function (a, b) { return b[3] - a[3]; }).slice(0, 5),
+    ra: Object.keys(o.ra).map(function (k) { const x = o.ra[k]; return [k, R0(x.b), R0(x.n), Object.keys(x.inv).length]; })
+      .sort(function (a, b) { return b[2] - a[2]; })
+  };
+}
+
+/* ---------- traffic ---------- */
+function trafficMap_(bulan) {
+  const m = {};
+  read_('traffic').forEach(function (r) {
+    const d = String(r.tanggal);
+    if ((!bulan || d.slice(0, 7) === bulan) && r.traffic !== '') m[d] = Number(r.traffic);
+  });
+  return m;
+}
+function syncTrafficIfNeeded_() {
+  const c = CacheService.getScriptCache();
+  if (c.get('trafsync')) return;
+  try { syncTraffic_(); } catch (e) { Logger.log('Traffic gagal: ' + e); }
+  c.put('trafsync', '1', 1800);
+}
+/** Baca traffic hari berjalan di tab DAILY REPORT sheet SOH lalu simpan per tanggal. */
+function syncTraffic_() {
+  const sh = SpreadsheetApp.openById(CFG.SOH_SHEET_ID).getSheetByName('DAILY REPORT');
+  if (!sh) throw new Error('Tab DAILY REPORT tidak ditemukan');
+  const v = sh.getRange('A5:W9').getDisplayValues();
+  const m = String(v[0][0]).match(/(\d{1,2})\s+([A-Za-z]+)\s+(\d{4})/);
+  if (!m) throw new Error('Tanggal di DAILY REPORT tidak terbaca: ' + v[0][0]);
+  const mi = BULAN_PANJANG.indexOf(m[2].toUpperCase());
+  if (mi < 0) throw new Error('Nama bulan tidak dikenal: ' + m[2]);
+  const tgl = m[3] + '-' + pad_(mi + 1) + '-' + pad_(Number(m[1]));
+  const head = v[2].map(function (x) { return String(x).trim().toLowerCase(); });
+  const it = head.indexOf('traffic');
+  if (it < 0) throw new Error('Kolom Traffic tidak ditemukan di DAILY REPORT');
+  const traffic = numId_(v[4][it]);
+  if (traffic == null) return { tanggal: tgl, traffic: null };
+  withLock_(function () {
+    const rows = read_('traffic');
+    const ex = rows.filter(function (r) { return String(r.tanggal) === tgl; })[0];
+    if (ex) { ex.traffic = traffic; ex.diperbarui = now_(); }
+    else rows.push({ tanggal: tgl, traffic: traffic, diperbarui: now_() });
+    rows.sort(function (a, b) { return String(a.tanggal) < String(b.tanggal) ? -1 : 1; });
+    writeAll_('traffic', rows);
+  });
+  return { tanggal: tgl, traffic: traffic };
+}
+/** Dipanggil pemicu per jam supaya traffic tiap hari tetap tercatat walau web tidak dibuka. */
+function catatTraffic() { return syncTraffic_(); }
+function pasangCatatTraffic_() {
+  ScriptApp.getProjectTriggers().forEach(function (t) { if (t.getHandlerFunction() === 'catatTraffic') ScriptApp.deleteTrigger(t); });
+  ScriptApp.newTrigger('catatTraffic').timeBased().everyHours(1).create();
+}
+
+/* ---------- area Jateng 01 ---------- */
+function readArea_() {
+  const sh = SpreadsheetApp.openById(CFG.TARGET_SHEET_ID).getSheetByName('Report');
+  if (!sh) throw new Error('Tab Report tidak ditemukan');
+  const v = sh.getRange('A4:P45').getDisplayValues();
+  const us = function (s) { s = String(s).trim(); if (!s || /[a-z]/i.test(s)) return null; const p = s.indexOf('%') >= 0; const n = Number(s.replace(/[%,]/g, '')); return isNaN(n) ? null : (p ? n / 100 : n); };
+  const rows = v.slice(4).filter(function (r) { return String(r[0]).trim(); }).map(function (r) {
+    return { site: String(r[0]).trim(), store: String(r[1]).trim(), achBulan: us(r[4]), achKum: us(r[9]), achHarian: us(r[14]) };
+  });
+  const stores = rows.filter(function (r) { return r.site !== 'TOTAL' && r.achKum != null; }).sort(function (a, b) { return b.achKum - a.achKum; });
+  const me = stores.filter(function (r) { return r.site === CFG.STORE; })[0] || null;
+  return {
+    tanggal: String(v[0][1] || '').trim(),
+    total: rows.filter(function (r) { return r.site === 'TOTAL'; })[0] || null,
+    toko: me, peringkat: me ? stores.indexOf(me) + 1 : null, jumlah: stores.length
+  };
 }

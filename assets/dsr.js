@@ -7,14 +7,14 @@
   // Kolom yang disimpan, urutannya harus sama dengan DSR_FIELDS di Apps Script
   var FIELDS = ['invoice', 'order_no', 'tanggal', 'jam', 'status', 'tipe', 'sku', 'nama_sku', 'kat3', 'kat4', 'brand',
     'qty', 'harga', 'sales_person', 'gross', 'promo_value', 'promo_name', 'coupon', 'discount', 'net',
-    'cust_key', 'cust_name'];
+    'cust_key', 'cust_name', 'emp_disc'];
 
   var HEAD = {
     invoice: 'Invoice No', order_no: 'Order No', date: 'Order Date', status: 'Bill Status', tipe: 'Transaction Type',
     sku: 'SKU Code', nama_sku: 'Sku Name', kat3: 'Category Lv.3', kat4: 'Category Lv.4', brand: 'Brand',
     lokasi: 'Location', qty: 'Quantity', harga: 'Sale Price', sales_person: 'Sales Person', gross: 'Gross Amount',
     promo_value: 'Promotion Value', promo_name: 'Promotion Name', coupon: 'Coupon Value', discount: 'Discount Amount',
-    net: 'Net Amount', phone: 'Customer Phone', email: 'Customer Email', cust_name: 'Customer Name'
+    net: 'Net Amount', emp_disc: 'Employee Discount', phone: 'Customer Phone', email: 'Customer Email', cust_name: 'Customer Name'
   };
   var REQUIRED = ['invoice', 'date', 'brand', 'nama_sku', 'qty', 'gross', 'net'];
 
@@ -81,7 +81,7 @@
         qty: toNum(g('qty')), harga: toNum(g('harga')), sales_person: t('sales_person'), gross: toNum(g('gross')),
         promo_value: toNum(g('promo_value')), promo_name: t('promo_name'), coupon: toNum(g('coupon')),
         discount: toNum(g('discount')), net: toNum(g('net')),
-        cust_key: '', cust_name: t('cust_name'),
+        cust_key: '', cust_name: t('cust_name'), emp_disc: toNum(g('emp_disc')),
         _phone: t('phone'), _email: t('email')
       });
     }

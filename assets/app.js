@@ -114,6 +114,22 @@
     users: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0M16 4.5a3.5 3.5 0 0 1 0 7M18 14a6 6 0 0 1 3.5 6"/></svg>',
     user: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>',
     refresh: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7"/></svg>',
+    gauge: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 14l4-4"/><path d="M3.5 18a9 9 0 1 1 17 0"/><circle cx="12" cy="14" r="1.5"/></svg>',
+    trend: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17l6-6 4 4 8-8"/><path d="M15 7h6v6"/></svg>',
+    award: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="9" r="5.5"/><path d="M8.5 13.5 7 22l5-3 5 3-1.5-8.5"/></svg>',
+    tag: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12V4a1 1 0 0 1 1-1h8l9 9-9 9z"/><circle cx="7.5" cy="7.5" r="1.5"/></svg>',
+    heart: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.8 5.6a5 5 0 0 0-7.1 0L12 7.3l-1.7-1.7a5 5 0 0 0-7.1 7.1L12 21.5l8.8-8.8a5 5 0 0 0 0-7.1z"/></svg>',
+    clip: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="4" width="14" height="18" rx="2"/><path d="M9 4V2.5h6V4M8.5 11h7M8.5 15h7M8.5 19h4"/></svg>',
+    scale: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18M5 21h14M6 7h12"/><path d="M6 7l-3 7a3 3 0 0 0 6 0zM18 7l-3 7a3 3 0 0 0 6 0z"/></svg>',
+    inbox: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 13l3-8h12l3 8v6a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z"/><path d="M3 13h5l1.5 3h5L16 13h5"/></svg>',
+    swap: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 4 3 8l4 4M3 8h14M17 20l4-4-4-4M21 16H7"/></svg>',
+    bookmark: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h12v18l-6-4-6 4z"/></svg>',
+    shield: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/><path d="M9 12l2 2 4-4"/></svg>',
+    list: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h13M8 12h13M8 18h13M3.5 6h.01M3.5 12h.01M3.5 18h.01"/></svg>',
+    whatsapp: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11.5a8 8 0 0 1-11.8 7L4 20l1.5-4.1A8 8 0 1 1 20 11.5z"/><path d="M9 9.5c0 3 2.5 5.5 5.5 5.5l1-1.5-2-1-1 1c-1-.4-1.8-1.2-2.2-2.2l1-1-1-2z"/></svg>',
+    copy: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="13" height="13" rx="2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"/></svg>',
+    spark: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8zM19 16l.8 2.2L22 19l-2.2.8L19 22l-.8-2.2L16 19l2.2-.8z"/></svg>',
+    eye: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>',
     box: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8 12 3 3 8v8l9 5 9-5z"/><path d="M3 8l9 5 9-5M12 13v8"/></svg>',
     cash: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/><path d="M6 10v4M18 10v4"/></svg>',
     file: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6M8 13h8M8 17h5"/></svg>',
@@ -127,28 +143,29 @@
 
   /* ---------- router & menu ---------- */
   var GROUPS = [
-    { id: 'beranda', label: 'Beranda', icon: 'home', items: [{ id: 'beranda', label: 'Beranda' }] },
+    { id: 'beranda', label: 'Beranda', icon: 'home', items: [{ icon: 'home', id: 'beranda', label: 'Beranda' }] },
     { id: 'sales', label: 'Sales', icon: 'chart', items: [
-      { id: 'monitoring', label: 'Monitoring Sales', desc: 'Achievement, UPT & basket' },
-      { id: 'trend', label: 'Sales Trend', desc: 'Per jam & per hari' },
-      { id: 'ra', label: 'RA Performance', desc: 'Sales per orang' },
-      { id: 'produk', label: 'Produk & Promo', desc: 'Kategori, terlaris & promo' },
-      { id: 'customer', label: 'Customer & Retur', desc: 'Member & barang kembali' }] },
+      { icon: 'gauge', id: 'monitoring', label: 'Monitoring Sales', desc: 'Achievement, UPT & basket' },
+      { icon: 'clip', id: 'pica', label: 'Analisa PICA', desc: 'Problem & corrective action, salin WA' },
+      { icon: 'trend', id: 'trend', label: 'Sales Trend', desc: 'Per jam & per hari' },
+      { icon: 'award', id: 'ra', label: 'RA Performance', desc: 'Sales per orang' },
+      { icon: 'tag', id: 'produk', label: 'Produk & Promo', desc: 'Kategori, terlaris & promo' },
+      { icon: 'heart', id: 'customer', label: 'Customer & Retur', desc: 'Member & barang kembali' }] },
     { id: 'inventory', label: 'Inventory', icon: 'box', items: [
-      { id: 'stok', label: 'Monitoring Stok', desc: 'Stok, rasio & display dari SOH' }] },
+      { icon: 'box', id: 'stok', label: 'Monitoring Stok', desc: 'Stok, rasio & display dari SOH' }] },
     { id: 'kasg', label: 'Kas', icon: 'cash', items: [
-      { id: 'kas', label: 'Cek Kas', desc: 'Till, Store Safe, Floating, Petty' },
-      { id: 'kas-rekap', label: 'Rekap Selisih', desc: 'Selisih kas per orang' }] },
+      { icon: 'cash', id: 'kas', label: 'Cek Kas', desc: 'Till, Store Safe, Floating, Petty' },
+      { icon: 'scale', id: 'kas-rekap', label: 'Rekap Selisih', desc: 'Selisih kas per orang' }] },
     { id: 'data', label: 'Data', icon: 'upload', items: [
-      { id: 'unggah', label: 'Unggah DSR', desc: 'Perbarui data penjualan' }] },
+      { icon: 'upload', id: 'unggah', label: 'Unggah DSR', desc: 'Perbarui data penjualan' }] },
     { id: 'tim', label: 'Tim', icon: 'users', items: [
-      { id: 'jadwal', label: 'Jadwal', desc: 'Shift tim per periode' },
-      { id: 'request', label: 'Request Jadwal', desc: 'Ajukan OFF, cuti atau shift' },
-      { id: 'tukar', label: 'Tukar Shift', desc: 'Tukar shift dengan rekan' },
-      { id: 'simpanan', label: 'Simpanan OFF', desc: 'OFF yang belum diambil' },
-      { id: 'akun', label: 'Akun', desc: 'Ganti password' },
-      { id: 'admin', label: 'Admin', desc: 'Akun tim & pengaturan', admin: true },
-      { id: 'aktivitas', label: 'Aktivitas', desc: 'Catatan siapa melakukan apa', admin: true }] }
+      { icon: 'cal', id: 'jadwal', label: 'Jadwal', desc: 'Shift tim per periode' },
+      { icon: 'inbox', id: 'request', label: 'Request Jadwal', desc: 'Ajukan OFF, cuti atau shift' },
+      { icon: 'swap', id: 'tukar', label: 'Tukar Shift', desc: 'Tukar shift dengan rekan' },
+      { icon: 'bookmark', id: 'simpanan', label: 'Simpanan OFF', desc: 'OFF yang belum diambil' },
+      { icon: 'user', id: 'akun', label: 'Akun', desc: 'Ganti password' },
+      { icon: 'shield', id: 'admin', label: 'Admin', desc: 'Akun tim & pengaturan', admin: true },
+      { icon: 'list', id: 'aktivitas', label: 'Aktivitas', desc: 'Catatan siapa melakukan apa', admin: true }] }
   ];
   var VIEWS = {};
   function routeOf(id) {
@@ -189,7 +206,7 @@
       if (g.id === 'beranda') return el('a', { href: '#/beranda', 'aria-current': m.r.id === 'beranda' ? 'page' : null }, icon(g.icon), 'Beranda');
       return el('div', { class: 'side-group' + (g === m.g ? ' open' : '') },
         el('div', { class: 'side-head' }, icon(g.icon), g.label),
-        items.map(function (x) { return el('a', { href: '#/' + x.id, class: 'sub', 'aria-current': x.id === m.r.id ? 'page' : null }, x.label, badge(x.id)); }));
+        items.map(function (x) { return el('a', { href: '#/' + x.id, class: 'sub', 'aria-current': x.id === m.r.id ? 'page' : null }, icon(x.icon), el('span', { text: x.label }), badge(x.id)); }));
     }));
     var tabs = el('nav', { class: 'tabs' }, GROUPS.map(function (g) {
       var single = g.id === 'beranda';
@@ -204,7 +221,8 @@
         a.setAttribute('aria-expanded', 'true');
         menuEl = el('div', { class: 'menu-pop', role: 'menu' }, visibleItems(g).map(function (x) {
           return el('a', { href: '#/' + x.id, role: 'menuitem', class: x.id === m.r.id ? 'on' : null },
-            el('b', null, x.label, badge(x.id)), x.desc ? el('span', { text: x.desc }) : null);
+            el('span', { class: 'mp-ic' }, icon(x.icon)),
+            el('span', { class: 'mp-txt' }, el('b', null, x.label, badge(x.id)), x.desc ? el('span', { text: x.desc }) : null));
         }));
         $('.topbar').appendChild(menuEl);
       });
@@ -218,7 +236,7 @@
         el('div', { class: 'brand' }, el('div', { class: 'logo-plate' }, el('img', { src: 'assets/logo.png', alt: 'Eigerindo MPI' })),
           el('div', { class: 'brand-txt' }, el('b', { text: 'Hub Toko ' + CFG.STORE }), el('span', { text: CFG.STORE_NAME }))),
         side,
-        el('div', { class: 'side-foot', text: 'Rumus sales sama dengan Integrated Hub Jateng 01' })),
+        el('div', { class: 'side-foot' }, el('div', { text: 'Dibuat oleh' }), el('b', { text: 'Ali Muhammad Shobrun' }))),
       el('div', { class: 'main-col' },
         el('header', { class: 'topbar' },
           el('div', { class: 'topbar-in' },
@@ -229,7 +247,8 @@
             refreshBtn,
             el('button', { class: 'btn-out', text: 'Keluar', onclick: logout })),
           tabs),
-        el('main', { class: 'view', id: 'view' })));
+        el('main', { class: 'view', id: 'view' }),
+        el('footer', { class: 'credit' }, 'Hub Toko ' + CFG.STORE + ' · Dibuat oleh ', el('b', { text: 'Ali Muhammad Shobrun' }))));
   }
 
   function logout() {
@@ -311,7 +330,7 @@
     draw();
     return el('div', { class: 'auth' }, el('div', { class: 'auth-card' },
       brandBlock(), el('div', { class: 'seg', role: 'group', 'aria-label': 'Masuk atau daftar' }, segIn, segUp), box,
-      el('div', { class: 'auth-foot', text: 'Khusus tim toko ' + CFG.STORE })));
+      el('div', { class: 'auth-foot' }, 'Khusus tim toko ' + CFG.STORE + ' · Dibuat oleh ', el('b', { text: 'Ali Muhammad Shobrun' }))));
   }
 
   /* ---------- data loader ---------- */
@@ -541,6 +560,8 @@
           monCard('Bulan ' + BULAN[p.m - 1], sm.monthly, true)),
         el('div', { class: 'legend' },
           el('span', null, el('i', { class: 'bg-good' }), '≥100%'), el('span', null, el('i', { class: 'bg-warn' }), '95–100%'), el('span', null, el('i', { class: 'bg-bad' }), '<95%')),
+        el('div', { class: 'wa-actions', style: 'margin:12px 0 4px' },
+          el('a', { class: 'btn btn-wa', href: '#/pica' }, icon('whatsapp'), 'Laporan WA & Analisa PICA')),
         el('p', { class: 'note', text: 'Sales = ' + (S.mode === 'netto' ? 'Net Amount' : 'Gross Amount') + ' barang dagangan EIGER (paper bag, jasa & packing tidak dihitung; retur mengurangi). UPT = qty ÷ jumlah transaksi. Basket = sales ÷ jumlah transaksi. Target kumulatif = target bulan × bobot kumulatif s/d tanggal laporan. Target harian = target bulan × bobot hari itu.' }),
         el('div', { class: 'card section' }, el('h3', { text: 'Sales harian ' + BULAN[p.m - 1] + ' ' + p.y }),
           el('p', { class: 'sub', text: 'Batang = sales (warna sesuai achievement), garis putus-putus = target harian. Ketuk batang untuk detail.' }),
@@ -1743,11 +1764,279 @@
       el('button', { class: 'btn btn-danger section', text: 'Keluar dari akun ini', onclick: logout }));
   }
 
+  /* =================== Analisa PICA & laporan WA =================== */
+  function rpPlain(v) { return 'Rp' + nf.format(Math.round(v || 0)); }
+  function numPlain(v) { return nf.format(Math.round(v || 0)); }
+  function pctDot(v) { return v == null || isNaN(v) ? '-' : (v * 100).toFixed(2) + '%'; }
+  function daysIn(ym) { var p = ym.split('-').map(Number); return new Date(Date.UTC(p[0], p[1], 0)).getUTCDate(); }
+  function prevSameDay(iso) {
+    var p = dParts(iso), y = p.y, m = p.m - 1;
+    if (m < 1) { m = 12; y--; }
+    var ym = y + '-' + pad2(m);
+    return ym + '-' + pad2(Math.min(p.d, daysIn(ym)));
+  }
+  function sumUpto(mon, tgl, mode) {
+    var key = mode === 'netto' ? 'netto' : 'bruto';
+    var o = { sales: 0, trx: 0, qty: 0, hari: 0, trafficTrx: 0, traffic: 0 };
+    (mon.harian || []).forEach(function (h) {
+      if (h.tanggal > tgl) return;
+      o.sales += h[key]; o.trx += h.trx; o.qty += h.qty; o.hari++;
+      var t = (mon.traffic || {})[h.tanggal];
+      if (t) { o.traffic += t; o.trafficTrx += h.trx; }
+    });
+    o.basket = o.trx ? o.sales / o.trx : null;
+    o.upt = o.trx ? o.qty / o.trx : null;
+    o.cr = o.traffic ? o.trafficTrx / o.traffic : null;
+    return o;
+  }
+  function chg(a, b) { return a == null || b == null || !b ? null : a / b - 1; }
+
+  /** Teks laporan WA sesuai format toko. */
+  function buildWA(mon, h, mode, extra) {
+    var sm = DSR.summarize(mon, mode);
+    var key = mode === 'netto' ? 'netto' : 'bruto';
+    var p = dParts(mon.tanggal);
+    var sales = h[key];
+    var cr = h.traffic ? h.trx / h.traffic : null;
+    var lines = [
+      CFG.STORE + '- Eiger Store A Yani Kertasura',
+      pad2(p.d) + '/' + pad2(p.m) + '/' + p.y,
+      '',
+      'Daily Sales : ' + rpPlain(sales),
+      'Target Harian  : ' + rpPlain(sm.daily.target),
+      'CR :' + pctDot(cr),
+      'BS: ' + numPlain(h.trx ? sales / h.trx : 0),
+      'Wholesale: ' + numPlain(h.wholesale[key]),
+      'EA :' + numPlain(h.ea[key]),
+      'Disc Employee : ' + numPlain(h.empDisc),
+      'promo : IDR' + numPlain(h.promo),
+      '',
+      'Kumulatif 1-' + daysIn(mon.bulan) + ' ' + BULAN[p.m - 1].toUpperCase() + ' ' + p.y + ' :',
+      'TARGET : ' + numPlain(sm.monthly.target),
+      'ACH      : ' + rpPlain(sm.monthly.sales) + '/' + pctDot(sm.monthly.ach)
+    ];
+    if (extra) {
+      var sisa = daysIn(mon.bulan) - p.d;
+      var need = sm.monthly.target != null ? Math.max(0, sm.monthly.target - sm.monthly.sales) : null;
+      lines.push('',
+        'Transaksi : ' + h.trx + ' | UPT : ' + (h.trx ? (h.qty / h.trx).toFixed(2) : '-') + (h.traffic ? ' | Traffic : ' + h.traffic : ''),
+        'Ach s/d tgl ' + p.d + ' : ' + pctDot(sm.kum.ach) + ' (target ' + rpPlain(sm.kum.target) + ')',
+        sisa > 0 && need != null ? 'Butuh per hari : ' + rpPlain(need / sisa) + ' (sisa ' + sisa + ' hari)' : 'Butuh per hari : -');
+      if (h.produk.length) {
+        lines.push('', 'Top produk :');
+        h.produk.slice(0, 3).forEach(function (x, i) { lines.push((i + 1) + '. ' + x[0] + ' (' + rpPlain(mode === 'netto' ? x[3] : x[2]) + ')'); });
+      }
+      if (h.ra.length) {
+        var top = h.ra.slice().sort(function (a, b) { return (mode === 'netto' ? b[2] - a[2] : b[1] - a[1]); })[0];
+        lines.push('Top RA : ' + titleCase(top[0]) + ' (' + rpPlain(mode === 'netto' ? top[2] : top[1]) + ')');
+      }
+    }
+    return lines.join('\n');
+  }
+
+  function copyText(text) {
+    if (navigator.clipboard && window.isSecureContext) return navigator.clipboard.writeText(text);
+    return new Promise(function (res, rej) {
+      var ta = el('textarea', { style: 'position:fixed;left:-9999px' }); ta.value = text; document.body.appendChild(ta); ta.select();
+      try { document.execCommand('copy'); res(); } catch (e) { rej(e); } finally { ta.remove(); }
+    });
+  }
+
+  function waCard(mon, h) {
+    var extra = store.get('waExtra') !== '0';
+    var pre = el('pre', { class: 'wa-pre' });
+    var cb = el('input', { type: 'checkbox', id: 'wa-x' }); cb.checked = extra;
+    function draw() { pre.textContent = buildWA(mon, h, S.mode, cb.checked); }
+    cb.addEventListener('change', function () { store.set('waExtra', cb.checked ? '1' : '0'); draw(); });
+    draw();
+    return el('div', { class: 'card wa-card', id: 'wa' },
+      el('div', { class: 'card-head' }, el('div', null, el('h3', { text: 'Laporan WhatsApp' }), el('p', { class: 'sub', text: (S.mode === 'netto' ? 'Netto' : 'Bruto') + ' · CR = transaksi ÷ traffic dari sheet SOH' + (h.traffic ? '' : ' (traffic tanggal ini belum tercatat)') })),
+        el('span', { class: 'wa-badge' }, icon('whatsapp'))),
+      pre,
+      el('label', { class: 'check', for: 'wa-x' }, cb, 'Tambahkan data lain (transaksi, UPT, butuh per hari, top produk & RA)'),
+      el('div', { class: 'wa-actions' },
+        el('button', { class: 'btn btn-primary', type: 'button', onclick: function () {
+          copyText(pre.textContent).then(function () { toast('Laporan disalin, tinggal tempel di WhatsApp'); }, function () { toast('Gagal menyalin, salin manual dari kotak di atas', true); });
+        } }, icon('copy'), 'Salin teks'),
+        el('a', { class: 'btn btn-wa', target: '_blank', rel: 'noopener', href: '#', onclick: function (e) {
+          e.currentTarget.href = 'https://wa.me/?text=' + encodeURIComponent(pre.textContent);
+        } }, icon('whatsapp'), 'Kirim ke WhatsApp')));
+  }
+
+  function hideable(key, title, sub, content) {
+    var hidden = {};
+    try { hidden = JSON.parse(store.get('picaHide') || '{}'); } catch (e) {}
+    var body = el('div', { class: 'pica-body' + (hidden[key] ? ' hide' : '') }, content);
+    var btn = el('button', { type: 'button', class: 'mini-btn', text: hidden[key] ? 'Tampilkan' : 'Sembunyikan' });
+    btn.addEventListener('click', function () {
+      hidden[key] = !hidden[key];
+      store.set('picaHide', JSON.stringify(hidden));
+      body.classList.toggle('hide', hidden[key]);
+      btn.textContent = hidden[key] ? 'Tampilkan' : 'Sembunyikan';
+    });
+    return el('div', { class: 'card section pica-card' },
+      el('div', { class: 'card-head' }, el('div', null, el('h3', { text: title }), sub ? el('p', { class: 'sub', style: 'margin-bottom:0', text: sub }) : null), btn),
+      body);
+  }
+
+  function viewPica(v) {
+    v.append(el('section', { class: 'hero hero-sm' },
+      el('div', null, el('h2', { text: 'Analisa PICA · ' + CFG.STORE_NAME }), el('p', { id: 'pica-sub', text: 'Problem Identification & Corrective Action' })),
+      el('div', { class: 'hero-right' }, el('b', { text: 'Hub Toko ' + CFG.STORE }), el('br'), el('span', { text: 'diambil ' + nowJkt() + (S.user ? ' · ' + S.user.nama : '') }))));
+    var tools = el('div', { class: 'toolbar2' }), body = el('div', null, skel(3));
+    v.append(tools, body);
+    var tanggal = S.picaTgl || '';
+
+    function load() {
+      body.replaceChildren(skel(3));
+      api('monitoring', { tanggal: tanggal }).then(function (mon) {
+        tanggal = mon.tanggal; S.picaTgl = tanggal;
+        var pt = prevSameDay(tanggal);
+        return Promise.all([
+          Promise.resolve(mon),
+          api('monitoring', { tanggal: pt }).catch(function () { return null; }),
+          loadLap(mon.bulan).catch(function () { return null; }),
+          api('laporan', { bulan: pt.slice(0, 7) }).catch(function () { return null; }),
+          (S.stok ? Promise.resolve(S.stok) : api('stok').then(function (d) { S.stok = d; return d; })).catch(function () { return null; }),
+          api('area').catch(function () { return null; }),
+          api('hari', { tanggal: tanggal }).catch(function () { return null; }),
+          Promise.resolve(pt)
+        ]);
+      }).then(function (r) { draw.apply(null, r); }).catch(function (e) { body.replaceChildren(errBox(e)); });
+    }
+
+    function draw(mon, prev, lap, lapPrev, stok, area, hari, pt) {
+      var dates = mon.harian.map(function (h) { return h.tanggal; }).filter(function (d) { return d <= mon.dataSampai; });
+      if (dates.indexOf(tanggal) < 0) dates.push(tanggal);
+      var dsel = el('select', { class: 'sel', 'aria-label': 'Tanggal laporan' });
+      dates.sort().reverse().forEach(function (t) { var o = el('option', { value: t, text: dDayName(t) + ', ' + dShort(t) }); if (t === tanggal) o.selected = true; dsel.append(o); });
+      dsel.addEventListener('change', function () { tanggal = dsel.value; S.picaTgl = tanggal; load(); });
+      tools.replaceChildren(dsel, modeSeg(function () { draw(mon, prev, lap, lapPrev, stok, area, hari, pt); }));
+
+      var mode = S.mode, sm = DSR.summarize(mon, mode), p = dParts(tanggal);
+      var cur = sumUpto(mon, tanggal, mode), pre = prev ? sumUpto(prev, pt, mode) : null;
+      var sisa = daysIn(mon.bulan) - p.d;
+      var need = sm.monthly.target != null ? Math.max(0, sm.monthly.target - sm.monthly.sales) : null;
+      var needDay = sisa > 0 && need != null ? need / sisa : null;
+      $('#pica-sub').textContent = 'Problem Identification & Corrective Action · kumulatif 1–' + p.d + ' ' + BUL3[p.m - 1] + ' · ' + (mode === 'netto' ? 'Netto' : 'Bruto');
+
+      var card = function (cls, label, val, note) { return el('div', { class: 'pc ' + cls }, el('span', { text: label }), el('b', { text: val }), el('small', { text: note })); };
+      var cards = el('div', { class: 'pica-cards' },
+        card('pc-' + achClass(sm.kum.ach), 'Pencapaian kumulatif', fPct(sm.kum.ach), fRpShort(sm.kum.sales) + ' vs target ' + fRpShort(sm.kum.target)),
+        card('pc-' + achClass(sm.daily.ach), 'Pencapaian harian', fPct(sm.daily.ach), fRpShort(sm.daily.sales) + ' vs target ' + fRpShort(sm.daily.target)),
+        card('pc-dark', 'Butuh per hari', needDay == null ? (sisa > 0 ? '—' : 'Bulan selesai') : fRpShort(needDay), sisa > 0 ? 'sisa ' + sisa + ' hari · gap ' + fRpShort(need) : 'akhir bulan'));
+
+      var row = function (label, a, b, fmt, extra) {
+        var c = chg(a, b);
+        return el('tr', null, el('td', { text: label }), el('td', { class: 'n', text: fmt(a) + (extra || '') }), el('td', { class: 'n', text: b == null ? '—' : fmt(b) }),
+          el('td', { class: 'n ' + (c == null ? '' : c >= 0 ? 'c-good' : 'c-bad'), text: c == null ? '—' : (c >= 0 ? '▲ ' : '▼ ') + fPct(Math.abs(c)) }));
+      };
+      var crDiff = cur.cr != null && pre && pre.cr != null ? cur.cr - pre.cr : null;
+      var tbl = el('div', { class: 'scroll-x' }, el('table', { class: 't t-light' },
+        el('thead', null, el('tr', null, ['Indikator', 'Bulan ini (1–' + p.d + ')', 'Bulan lalu (periode sama)', 'Perubahan'].map(function (t, i) { return el('th', { class: i ? 'n' : null, text: t }); }))),
+        el('tbody', null,
+          row('Sales', cur.sales, pre && pre.sales, fRpShort),
+          row('Transaksi', cur.trx, pre && pre.trx, fNum, ' (' + Math.round(cur.trx / Math.max(1, cur.hari)) + '/hari)'),
+          row('Basket size', cur.basket, pre && pre.basket, fRpShort),
+          row('UPT', cur.upt, pre && pre.upt, fDec),
+          el('tr', null, el('td', { text: 'CR (traffic SOH)' }), el('td', { class: 'n', text: cur.cr == null ? 'belum ada data' : fPct(cur.cr) }),
+            el('td', { class: 'n', text: pre && pre.cr != null ? fPct(pre.cr) : '—' }),
+            el('td', { class: 'n ' + (crDiff == null ? '' : crDiff >= 0 ? 'c-good' : 'c-bad'), text: crDiff == null ? '—' : (crDiff >= 0 ? '▲ ' : '▼ ') + (Math.abs(crDiff) * 100).toFixed(1) + ' poin' })),
+          area && area.total ? el('tr', null, el('td', { text: 'Ach. kumulatif vs Jateng 01' }), el('td', { class: 'n', text: area.toko ? fPct(area.toko.achKum) : '—' }),
+            el('td', { class: 'n', text: 'area ' + fPct(area.total.achKum) }), el('td', { class: 'n', text: area.peringkat ? 'peringkat ' + area.peringkat + '/' + area.jumlah : '—' })) : null)));
+      var tblNote = el('p', { class: 'note', text: (area && area.tanggal ? 'Data area dari laporan regional per ' + area.tanggal + '. ' : '') + 'Bulan lalu dihitung 1–' + dParts(pt).d + ' ' + BUL3[dParts(pt).m - 1] + '.' });
+
+      /* ---------- problem, data dicek, corrective action ---------- */
+      var probs = [], cek = [], acts = [];
+      var sev = function (level, text) { probs.push({ level: level, text: text }); };
+      if (sm.kum.ach != null && sm.kum.ach < 1) sev(sm.kum.ach < 0.85 ? 'Tinggi' : sm.kum.ach < 0.95 ? 'Sedang' : 'Rendah',
+        'Pencapaian kumulatif ' + fPct(sm.kum.ach) + ', kurang ' + fRpShort(-sm.kum.diff) + ' dari target s/d tanggal ' + p.d + '.');
+      var cTrx = pre ? chg(cur.trx, pre.trx) : null, cBs = pre ? chg(cur.basket, pre.basket) : null, cUpt = pre ? chg(cur.upt, pre.upt) : null;
+      if (cTrx != null && cTrx <= -0.05) sev(cTrx <= -0.15 ? 'Tinggi' : 'Sedang', 'Jumlah transaksi turun ' + fPct(-cTrx) + ' vs bulan lalu (' + cur.trx + ' vs ' + pre.trx + '): masalah traffic atau konversi.');
+      if (cBs != null && cBs <= -0.05) sev(cBs <= -0.15 ? 'Tinggi' : 'Sedang', 'Basket size turun ' + fPct(-cBs) + ' (' + fRpShort(cur.basket) + ' vs ' + fRpShort(pre.basket) + ').');
+      if (cUpt != null && cUpt <= -0.05) sev('Sedang', 'UPT turun ' + fPct(-cUpt) + ' (' + fDec(cur.upt) + ' vs ' + fDec(pre.upt) + '): pembelian per transaksi makin sedikit.');
+      if (crDiff != null && crDiff <= -0.05) sev('Sedang', 'CR turun ' + (Math.abs(crDiff) * 100).toFixed(1) + ' poin (' + fPct(cur.cr) + ' vs ' + fPct(pre.cr) + ').');
+      else if (cur.cr != null && cur.cr < 0.5) sev('Sedang', 'CR ' + fPct(cur.cr) + ': kurang dari separuh pengunjung yang belanja.');
+      if (sm.daily.ach != null && sm.daily.ach < 0.95) sev('Rendah', 'Pencapaian harian ' + dShort(tanggal) + ' ' + fPct(sm.daily.ach) + ' (' + fRpShort(sm.daily.sales) + ' dari ' + fRpShort(sm.daily.target) + ').');
+      var tipis = [];
+      if (stok) tipis = stok.detail.filter(function (x) { return stokStatus(x) === 'Tipis'; }).sort(function (a, b) { return (b.sales[dParts(tanggal).m - 1] || 0) - (a.sales[dParts(tanggal).m - 1] || 0); });
+      if (tipis.length) sev(tipis.length >= 3 ? 'Sedang' : 'Rendah', tipis.length + ' subkategori stoknya tipis (di bawah 2 bulan penjualan): ' + tipis.slice(0, 4).map(function (x) { return titleCase(x.mc4); }).join(', ') + '.');
+      var shareDrop = [];
+      if (lap && lapPrev && lap.kategori.length && lapPrev.kategori.length) {
+        var K = mode === 'bruto' ? 2 : 3;
+        var share = function (L) { var t = 0, m = {}; L.kategori.forEach(function (x) { m[x[0]] = (m[x[0]] || 0) + x[K]; t += x[K]; }); Object.keys(m).forEach(function (k) { m[k] = t ? m[k] / t : 0; }); return m; };
+        var a = share(lap), b = share(lapPrev);
+        Object.keys(b).forEach(function (k) { var d = (a[k] || 0) - b[k]; if (d <= -0.03) shareDrop.push({ k: k, a: a[k] || 0, b: b[k], d: d }); });
+        shareDrop.sort(function (x, y) { return x.d - y.d; });
+        if (shareDrop.length) sev('Rendah', 'Kontribusi ' + shareDrop.slice(0, 2).map(function (x) { return titleCase(x.k) + ' turun ' + (Math.abs(x.d) * 100).toFixed(1) + ' poin (' + fPct(x.b) + ' → ' + fPct(x.a) + ')'; }).join(', ') + ' vs bulan lalu.');
+      }
+
+      if ((cTrx != null && cTrx < 0) || crDiff != null) cek.push(el('li', null, 'Cek data ', el('b', { text: 'traffic / pengunjung' }), ' di DAILY REPORT (people counter) untuk memastikan yang turun pengunjungnya atau konversinya.' + (cur.cr != null ? ' CR bulan ini ' + fPct(cur.cr) + '.' : '')));
+      if (tipis.length) cek.push(el('li', null, 'Cek stok ', el('b', { text: 'subkategori tipis' }), ': ' + tipis.slice(0, 5).map(function (x) { return titleCase(x.mc4) + ' (' + fNum(x.qty) + ' pcs, rasio ' + fDec(x.rasio) + ')'; }).join(', ') + '.'));
+      if (lap && lap.jam.length) {
+        var K2 = mode === 'bruto' ? 2 : 3, byH = {}, byD = {}, perDate = {};
+        lap.jam.forEach(function (x) { byH[x[1]] = (byH[x[1]] || 0) + x[K2]; perDate[x[0]] = (perDate[x[0]] || 0) + x[K2]; });
+        Object.keys(perDate).forEach(function (t) { var w = weekday(t); (byD[w] = byD[w] || []).push(perDate[t]); });
+        var peakH = Object.keys(byH).sort(function (a, b) { return byH[b] - byH[a]; })[0];
+        var avgD = Object.keys(byD).map(function (w) { return { w: Number(w), v: byD[w].reduce(function (s, x) { return s + x; }, 0) / byD[w].length }; }).sort(function (a, b) { return a.v - b.v; });
+        if (peakH != null && avgD.length) cek.push(el('li', null, 'Jam paling ramai pukul ', el('b', { text: pad2(peakH) + '.00' }), ', hari paling sepi ', el('b', { text: HARI[avgD[0].w] }), ': cocokkan jadwal shift & jumlah RA di lantai.'));
+      }
+      if (shareDrop.length) cek.push(el('li', null, 'Bandingkan ', el('b', { text: 'stok display vs gudang' }), ' untuk kategori yang kontribusinya turun (' + shareDrop.slice(0, 3).map(function (x) { return titleCase(x.k); }).join(', ') + ') di menu Monitoring Stok.'));
+      if (lap && lap.retur.length) cek.push(el('li', null, 'Ada ', el('b', { text: lap.retur.length + ' baris retur/tukar' }), ' bulan ini, cek alasannya di menu Customer & Retur.'));
+      if (lap && lap.ra.length) {
+        var K3 = mode === 'bruto' ? 2 : 3, ras = {};
+        lap.ra.forEach(function (x) { var o = ras[x[0]] || (ras[x[0]] = { s: 0, q: 0, t: 0 }); o.s += x[K3]; o.q += x[4]; o.t += x[5]; });
+        var list = Object.keys(ras).filter(function (k) { return ras[k].t >= 10; }).map(function (k) { return { n: k, upt: ras[k].q / ras[k].t, bs: ras[k].s / ras[k].t }; }).sort(function (a, b) { return a.upt - b.upt; });
+        if (list.length >= 2 && cur.upt && list[0].upt < cur.upt * 0.92) cek.push(el('li', null, 'UPT terendah: ', el('b', { text: titleCase(list[0].n) }), ' (' + fDec(list[0].upt) + ' vs rata-rata toko ' + fDec(cur.upt) + ').'));
+      }
+      if (!cek.length) cek.push(el('li', { text: 'Tidak ada data yang perlu dicek khusus.' }));
+
+      var nAct = 0, act = function () { nAct++; var li = el('li'); add(li, Array.prototype.slice.call(arguments)); acts.push(li); };
+      if ((cTrx != null && cTrx <= -0.05) || (crDiff != null && crDiff < 0)) act('Aktifkan ', el('b', { text: 'traffic builder' }), ': broadcast WA ke member, promo jam sepi, dan aktivasi di depan toko pada jam ramai.');
+      if ((crDiff != null && crDiff < 0) || (cur.cr != null && cur.cr < 0.6)) act('Jalankan ', el('b', { text: 'greeting & approach' }), ' aktif: setiap pengunjung disapa < 30 detik; Store Head pantau konversi per shift.');
+      if ((cBs != null && cBs <= -0.05) || (cUpt != null && cUpt <= -0.05)) act('Dorong ', el('b', { text: 'add-on & bundling' }), ' di kasir (aksesoris, headwear, kaus kaki) untuk menaikkan UPT dan basket size.');
+      if (tipis.length) act('Ajukan ', el('b', { text: 'transfer antar toko / repeat order' }), ' untuk subkategori yang stoknya tipis.');
+      if (needDay != null && needDay > 0) {
+        var bs = cur.basket || 1;
+        act('Kejar ', el('b', { text: fRpShort(needDay) + '/hari' }), ' selama ' + sisa + ' hari tersisa (≈ ' + Math.ceil(needDay / bs) + ' transaksi/hari dengan basket saat ini; sekarang rata-rata ' + Math.round(cur.trx / Math.max(1, cur.hari)) + ').');
+      }
+      if (!acts.length) act('Pertahankan performa: pencapaian sudah sesuai target.');
+
+      var aiText = [
+        'Analisa PICA toko EIGER ' + CFG.STORE + ' (' + CFG.STORE_NAME + '), tanggal ' + dShort(tanggal) + ', ' + (mode === 'netto' ? 'Netto' : 'Bruto') + '.',
+        'Target bulan: ' + rpPlain(sm.monthly.target) + '. Sales kumulatif 1-' + p.d + ': ' + rpPlain(cur.sales) + ' (ach kumulatif ' + pctDot(sm.kum.ach) + ', ach bulanan ' + pctDot(sm.monthly.ach) + ').',
+        'Harian: sales ' + rpPlain(sm.daily.sales) + ' vs target ' + rpPlain(sm.daily.target) + ' (' + pctDot(sm.daily.ach) + ').',
+        'Bulan ini vs bulan lalu periode sama: transaksi ' + cur.trx + ' vs ' + (pre ? pre.trx : '-') + ', basket ' + numPlain(cur.basket) + ' vs ' + (pre ? numPlain(pre.basket) : '-') + ', UPT ' + (cur.upt ? cur.upt.toFixed(2) : '-') + ' vs ' + (pre && pre.upt ? pre.upt.toFixed(2) : '-') + ', CR ' + pctDot(cur.cr) + ' vs ' + (pre ? pctDot(pre.cr) : '-') + '.',
+        'Butuh per hari: ' + (needDay != null ? rpPlain(needDay) : '-') + ' selama ' + sisa + ' hari.',
+        'Masalah terdeteksi: ' + (probs.length ? probs.map(function (x) { return '[' + x.level + '] ' + x.text; }).join(' ') : 'tidak ada.'),
+        'Tolong buat analisa PICA yang lebih dalam (problem, penyebab, corrective action dengan PIC dan tenggat) untuk tim toko retail outdoor.'
+      ].join('\n');
+
+      body.replaceChildren(
+        cards,
+        hideable('ind', 'Indikator · ' + CFG.STORE_NAME, 'Kumulatif 1–' + p.d + ' ' + BULAN[p.m - 1], [tbl, tblNote]),
+        el('div', { class: 'grid grid-2' },
+          hideable('prob', 'Problem identification', 'otomatis dari data', probs.length ? el('ul', { class: 'pica-list' }, probs.map(function (x) {
+            return el('li', null, el('span', { class: 'sev sev-' + x.level, text: x.level }), el('span', { text: x.text }));
+          })) : el('p', { class: 'muted', text: 'Tidak ada masalah besar yang terdeteksi.' })),
+          hideable('cek', 'Data yang perlu dicek Store Head', null, el('ul', { class: 'pica-bullets' }, cek))),
+        hideable('act', 'Corrective action', 'saran awal berdasarkan masalah di atas', el('ol', { class: 'pica-ol' }, acts)),
+        hari ? waCard(mon, hari) : null,
+        hideable('ai', 'Analisa AI', 'analisa lebih dalam & corrective action yang disesuaikan', el('div', { class: 'ai-box' },
+          el('b', { text: 'Analisa dengan Claude' }),
+          el('p', { class: 'muted', text: '1) Klik Salin data untuk Claude · 2) Klik Buka claude.ai · 3) Tempel di kolom chat lalu kirim. Yang disalin hanya angka, tanpa nama customer.' }),
+          el('div', { class: 'wa-actions' },
+            el('button', { class: 'btn btn-primary', type: 'button', onclick: function () { copyText(aiText).then(function () { toast('Data disalin untuk Claude'); }, function () { toast('Gagal menyalin', true); }); } }, icon('spark'), 'Salin data untuk Claude'),
+            el('a', { class: 'btn btn-ghost', href: 'https://claude.ai/new', target: '_blank', rel: 'noopener' }, 'Buka claude.ai ↗')))));
+    }
+    load();
+  }
+
   Object.assign(VIEWS, {
     beranda: viewBeranda, monitoring: viewMonitoring, trend: viewTrend, ra: viewRA, produk: viewProduk, customer: viewCustomer,
     stok: viewStok, kas: viewKas, 'kas-rekap': viewKasRekap, unggah: viewUnggah,
     jadwal: viewJadwal, request: viewRequest, tukar: viewTukar, simpanan: viewSimpanan,
-    akun: viewAkun, admin: viewAdmin, aktivitas: viewAktivitas
+    akun: viewAkun, admin: viewAdmin, aktivitas: viewAktivitas, pica: viewPica
   });
   render();
 })();
