@@ -4,11 +4,28 @@ Web hub untuk tim EIGER Store A. Yani Kertasuro Sukoharjo (2299): monitoring sal
 
 ## Isi
 
-- **Login per orang.** Anggota tim mendaftar sendiri, lalu admin menyetujui. Akun pertama yang mendaftar otomatis menjadi admin.
-- **Monitoring Sales.** Achievement bulanan, kumulatif, dan harian (Bruto/Netto), plus UPT dan basket. Rumusnya sama dengan Integrated Hub Jateng 01.
-- **Unggah DSR.** File *Item DSR Report* (.xlsx) dari sistem. Data dicocokkan per nomor invoice: invoice yang sudah ada diganti, invoice baru ditambah, jadi tidak pernah dobel.
-- **Cek Kas Till.** Hitung uang di laci per pecahan, catat perubahan kas dengan keterangan, lalu cocokkan dengan modal till + penjualan tunai sistem. Riwayat tiap hitungan tersimpan. Modal till diatur admin.
-- **Jadwal.** Dibaca langsung dari sheet JADWAL KARTASURA JAYA (tab periode berjalan).
+Menu dikelompokkan per kategori (di HP berupa dropdown, di komputer berupa sidebar):
+
+- **Sales**: Monitoring Sales (rumus sama dengan Integrated Hub Jateng 01), Sales Trend (per jam & per hari), RA Performance (per sales person), Produk & Promo (kategori, Pareto 80/20, terlaris, kontribusi promo), Customer & Retur.
+- **Inventory**: Monitoring Stok dari sheet SOH (rasio stok, display, status Tipis/Lambat).
+- **Kas**: Cek Kas per pos (Till, Floating Cash, Store Safe, Petty Cash) dan Rekap Selisih per orang.
+- **Data**: Unggah DSR (*Item DSR Report* .xlsx). Data dicocokkan per nomor invoice, jadi tidak pernah dobel.
+- **Tim**: Jadwal, Request Jadwal (batas tanggal 21), Tukar Shift (rekan menerima, lalu admin menyetujui), Simpanan OFF, Akun, Admin, Aktivitas.
+
+Login per orang: anggota tim mendaftar sendiri, lalu admin menyetujui. Akun pertama otomatis menjadi admin.
+
+### Jadwal di sheet
+
+- Request dan tukar shift yang disetujui ditulis ke sheet **JADWAL KARTASURA JAYA** dengan warna ungu.
+- Hanya tab **OKT-NOV 2026 dan sesudahnya** yang diubah. Tab lama tidak pernah disentuh.
+- Kalau tab periode berikutnya belum ada, tab baru dibuat otomatis dari tab periode sebelumnya saat request pertama disetujui.
+- Batas request untuk periode 24 s/d 23 adalah tanggal 21 bulan mulainya, pukul 23.59. Admin tetap bisa menambahkan.
+
+### Teknis
+
+- Ringkasan harian disimpan di tab `ringkasan` dan laporan disimpan sementara (cache), jadi halaman cepat dibuka.
+- Cadangan otomatis setiap Senin dini hari ke folder Drive **Cadangan Hub 2299** (8 cadangan terakhir disimpan).
+- Semua aksi penting tercatat di tab `aktivitas`.
 
 ## Rumus sales
 
@@ -38,4 +55,4 @@ Data customer yang disimpan hanya kode acak dan nama untuk rekap belanja. Nomor 
 6. GitHub: **Settings → Pages → Deploy from a branch → main / root**.
 7. Buka web, lalu daftar sebagai akun pertama (otomatis admin).
 
-Kalau `Code.gs` diubah: **Deploy → Manage deployments → Edit → Version: New version → Deploy**. URL-nya tetap sama.
+Kalau `Code.gs` diubah: tempel kode baru, jalankan `setup` sekali (untuk izin baru dan cadangan mingguan), lalu **Terapkan → Kelola deployment → Edit → Versi baru → Terapkan**. URL-nya tetap sama.

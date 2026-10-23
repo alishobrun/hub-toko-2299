@@ -16,12 +16,20 @@ const CFG = {
   TARGET_SHEET_ID: '1c40J7AkgKP7xAzK3ssRismLy9WbM1lWrJKOvzb80lX0',
   // Sheet "JADWAL KARTASURA JAYA"
   JADWAL_SHEET_ID: '1FkeGbkWhAJHLQEhuKNerL9qbhycOA3s8VaNwQd2fbcc',
+  // Sheet SOH toko (stok)
+  SOH_SHEET_ID: '1C5iIPzR1nuG0_LIsT5BseIuSLoLcLAeunRmhVxKR0uo',
+  // Tab jadwal yang boleh diubah web: periode yang mulai tanggal ini atau sesudahnya (OKT-NOV 2026)
+  JADWAL_MIN_START: '2026-10-24',
+  REQUEST_DEADLINE_DAY: 21,
+  REQUEST_COLOR: '#B4A7D6',
+  BACKUP_FOLDER: 'Cadangan Hub 2299',
+  BACKUP_KEEP: 8,
   SESSION_DAYS: 30,
   HASH_ROUNDS: 300
 };
 
 const TABS = {
-  users: ['username', 'nama', 'hash', 'salt', 'role', 'status', 'dibuat', 'disetujui_oleh', 'login_terakhir'],
+  users: ['username', 'nama', 'hash', 'salt', 'role', 'status', 'dibuat', 'disetujui_oleh', 'login_terakhir', 'nama_jadwal'],
   sessions: ['token', 'username', 'kedaluwarsa'],
   dsr: ['invoice', 'order_no', 'tanggal', 'jam', 'status', 'tipe', 'sku', 'nama_sku', 'kat3', 'kat4', 'brand',
     'qty', 'harga', 'sales_person', 'gross', 'promo_value', 'promo_name', 'coupon', 'discount', 'net',
@@ -30,12 +38,19 @@ const TABS = {
   targets: ['bulan', 'target', 'sumber', 'diperbarui'],
   bobot: ['tanggal', 'harian', 'kumulatif'],
   kas: ['id', 'tanggal', 'waktu', 'username', 'nama', 'pecahan', 'total_fisik', 'modal', 'penjualan_tunai',
-    'masuk', 'keluar', 'perubahan', 'seharusnya', 'selisih', 'catatan'],
-  settings: ['key', 'value', 'diperbarui', 'oleh']
+    'masuk', 'keluar', 'perubahan', 'seharusnya', 'selisih', 'catatan', 'pos'],
+  settings: ['key', 'value', 'diperbarui', 'oleh'],
+  ringkasan: ['tanggal', 'bruto', 'netto', 'qty', 'trx'],
+  aktivitas: ['waktu', 'username', 'aksi', 'detail'],
+  request_jadwal: ['id', 'dibuat', 'username', 'nama', 'tanggal', 'jenis', 'alasan', 'pakai_simpanan', 'status',
+    'diputus_oleh', 'diputus_pada', 'catatan_admin', 'tertulis'],
+  tukar_shift: ['id', 'dibuat', 'pemohon', 'nama_pemohon', 'rekan', 'nama_rekan', 'tanggal', 'shift_pemohon', 'shift_rekan',
+    'alasan', 'status', 'diputus_oleh', 'diputus_pada', 'tertulis'],
+  simpanan_off: ['id', 'dibuat', 'username', 'nama', 'tanggal_masuk', 'keterangan', 'status', 'diambil_tanggal', 'dicatat_oleh']
 };
 
 const PECAHAN = [100000, 50000, 20000, 10000, 5000, 2000, 1000, 500, 200, 100];
-const SETTING_DEFAULTS = { modal_till: 600000 };
+const SETTING_DEFAULTS = { modal_till: 600000, floating_cash: 2400000 };
 
 // Kolom yang disimpan sebagai teks (supaya tanggal/kode tidak diubah Sheets)
 const NUM_COLS = {
@@ -44,7 +59,8 @@ const NUM_COLS = {
   targets: ['target'],
   bobot: ['harian', 'kumulatif'],
   kas: ['total_fisik', 'modal', 'penjualan_tunai', 'masuk', 'keluar', 'seharusnya', 'selisih'],
-  settings: ['value']
+  settings: ['value'],
+  ringkasan: ['bruto', 'netto', 'qty', 'trx']
 };
 const DSR_FIELDS = TABS.dsr.slice(0, TABS.dsr.length - 1); // tanpa upload_id
 
@@ -64,6 +80,8 @@ function setup() {
     const s = ss.getSheetByName(n);
     if (s && ss.getSheets().length > 1 && s.getLastRow() === 0) ss.deleteSheet(s);
   });
+  pasangCadanganMingguan_();
+  rebuildRingkasan_();
   const r = syncTarget_();
   Logger.log('Setup selesai. Target: ' + JSON.stringify(r));
   return r;
@@ -113,6 +131,7 @@ const API = {
         role: first ? 'admin' : 'staf', status: first ? 'aktif' : 'menunggu',
         dibuat: now_(), disetujui_oleh: first ? '(admin pertama)' : '', login_terakhir: ''
       });
+      log_(username, 'daftar', nama);
       return { status: first ? 'aktif' : 'menunggu', role: first ? 'admin' : 'staf' };
     });
   },
@@ -131,6 +150,7 @@ const API = {
       keep.push({ token: token, username: username, kedaluwarsa: exp });
       writeAll_('sessions', keep);
       updateRow_('users', 'username', username, { login_terakhir: now });
+      log_(username, 'login', '');
     });
     return { token: token, user: publicUser_(u) };
   },
@@ -167,7 +187,8 @@ const API = {
     return read_('users').map(function (u) {
       return {
         username: u.username, nama: u.nama, role: u.role, status: u.status,
-        dibuat: String(u.dibuat), disetujui_oleh: String(u.disetujui_oleh), login_terakhir: String(u.login_terakhir)
+        dibuat: String(u.dibuat), disetujui_oleh: String(u.disetujui_oleh), login_terakhir: String(u.login_terakhir),
+        nama_jadwal: String(u.nama_jadwal || '')
       };
     });
   },
@@ -184,6 +205,7 @@ const API = {
       if (req.status === 'nonaktif') {
         writeAll_('sessions', read_('sessions').filter(function (s) { return s.username !== target; }));
       }
+      log_(a.username, 'status akun', target + ' → ' + req.status);
       return true;
     });
   },
@@ -197,6 +219,7 @@ const API = {
     return withLock_(function () {
       if (!updateRow_('users', 'username', target, { hash: hash_(temp, salt), salt: salt })) throw new Error('User tidak ditemukan');
       writeAll_('sessions', read_('sessions').filter(function (s) { return s.username !== target; }));
+      log_(a.username, 'reset password', target);
       return { password: temp };
     });
   },
@@ -244,7 +267,12 @@ const API = {
     });
     return withLock_(function () {
       const res = mergeDsr_(read_('dsr'), rows, uploadId_(u.username));
-      if (res.changed) writeAll_('dsr', res.all);
+      if (res.changed) {
+        writeAll_('dsr', res.all);
+        writeAll_('ringkasan', aggregateDaily_(res.all));
+        bumpVersion_();
+      }
+      log_(u.username, 'unggah DSR', res.dari + ' s/d ' + res.sampai + ': ' + res.baru + ' baru, ' + res.diperbarui + ' diperbarui');
       append_('uploads', {
         id: res.id, waktu: now_(), username: u.username, nama_file: String(req.fileName || '').slice(0, 120),
         dari: res.dari, sampai: res.sampai, baris: rows.length,
@@ -266,13 +294,12 @@ const API = {
       const d = String(b.tanggal);
       if (d.slice(0, 7) === bulan) bobot[d] = { harian: Number(b.harian), kumulatif: Number(b.kumulatif) };
     });
-    const rows = read_('dsr').filter(function (r) { return String(r.tanggal).slice(0, 7) === bulan; });
     return {
       tanggal: tanggal, bulan: bulan, dataSampai: latest,
       store: CFG.STORE, storeName: CFG.STORE_NAME,
       target: t ? Number(t.target) : null, targetSumber: t ? String(t.sumber) : null,
       bobot: bobot,
-      harian: aggregateDaily_(rows)
+      harian: ringkasan_().filter(function (r) { return r.tanggal.slice(0, 7) === bulan; })
     };
   },
 
@@ -299,6 +326,7 @@ const API = {
       if (ex) { ex.value = val; ex.diperbarui = now_(); ex.oleh = a.username; }
       else rows.push({ key: key, value: val, diperbarui: now_(), oleh: a.username });
       writeAll_('settings', rows);
+      log_(a.username, 'ubah pengaturan', key + ' = ' + val);
       return settings_();
     });
   },
@@ -314,7 +342,8 @@ const API = {
       if (n) clean[p] = n;
       fisik += n * p;
     });
-    const tunai = Number(req.penjualanTunai || 0);
+    const pos = POS_KAS.indexOf(req.pos) >= 0 ? req.pos : 'till';
+    const tunai = pos === 'till' ? Number(req.penjualanTunai || 0) : 0;
     if (!isFinite(tunai) || tunai < 0) throw new Error('Penjualan tunai tidak valid');
     const perubahan = (req.perubahan || []).map(function (x, i) {
       const jenis = x && x.jenis === 'masuk' ? 'masuk' : 'keluar';
@@ -326,36 +355,66 @@ const API = {
     });
     const masuk = perubahan.filter(function (x) { return x.jenis === 'masuk'; }).reduce(function (s, x) { return s + x.jumlah; }, 0);
     const keluar = perubahan.filter(function (x) { return x.jenis === 'keluar'; }).reduce(function (s, x) { return s + x.jumlah; }, 0);
-    const modal = settings_().modal_till;
-    const seharusnya = modal + tunai + masuk - keluar;
-    const selisih = fisik - seharusnya;
+    const set = settings_();
+    // Till: modal + tunai ± perubahan · Floating Cash: standar ± perubahan · Store Safe & Petty Cash: dicatat saja
+    const modal = pos === 'till' ? set.modal_till : pos === 'floating' ? set.floating_cash : null;
+    const seharusnya = modal == null ? null : modal + tunai + masuk - keluar;
+    const selisih = seharusnya == null ? null : fisik - seharusnya;
     const catatan = String(req.catatan || '').trim().slice(0, 300);
-    if (selisih !== 0 && !catatan) throw new Error('Ada selisih, isi catatan penjelasannya dulu');
+    if (selisih && !catatan) throw new Error('Ada selisih, isi catatan penjelasannya dulu');
     const now = new Date();
     const rec = {
-      id: Utilities.formatDate(now, CFG.TZ, 'yyyyMMdd-HHmmss') + '-' + u.username,
+      id: Utilities.formatDate(now, CFG.TZ, 'yyyyMMdd-HHmmss') + '-' + pos + '-' + u.username,
       tanggal: Utilities.formatDate(now, CFG.TZ, 'yyyy-MM-dd'), waktu: now_(),
       username: u.username, nama: u.nama, pecahan: JSON.stringify(clean), total_fisik: fisik,
-      modal: modal, penjualan_tunai: Math.round(tunai), masuk: masuk, keluar: keluar,
-      perubahan: JSON.stringify(perubahan), seharusnya: seharusnya, selisih: selisih, catatan: catatan
+      modal: modal == null ? '' : modal, penjualan_tunai: Math.round(tunai), masuk: masuk, keluar: keluar,
+      perubahan: JSON.stringify(perubahan), seharusnya: seharusnya == null ? '' : seharusnya,
+      selisih: selisih == null ? '' : selisih, catatan: catatan, pos: pos
     };
-    withLock_(function () { append_('kas', rec); });
+    withLock_(function () {
+      append_('kas', rec);
+      log_(u.username, 'cek kas ' + POS_NAMA[pos], 'fisik ' + fisik + (selisih == null ? '' : ', selisih ' + selisih));
+    });
     return kasOut_(rec);
   },
 
   kasList: function (req) {
     auth_(req);
     const tgl = /^\d{4}-\d{2}-\d{2}$/.test(String(req.tanggal || '')) ? String(req.tanggal) : Utilities.formatDate(new Date(), CFG.TZ, 'yyyy-MM-dd');
-    const all = read_('kas');
+    const pos = POS_KAS.indexOf(req.pos) >= 0 ? req.pos : 'till';
+    const all = read_('kas').filter(function (r) { return (String(r.pos || '') || 'till') === pos; });
     const days = {};
     all.forEach(function (r) { days[String(r.tanggal)] = 1; });
     return {
-      tanggal: tgl,
+      tanggal: tgl, pos: pos,
       tanggalTersedia: Object.keys(days).sort().reverse().slice(0, 60),
       list: all.filter(function (r) { return String(r.tanggal) === tgl; }).map(kasOut_).reverse()
     };
+  },
+
+  kasRekap: function (req) {
+    auth_(req);
+    const bulan = /^\d{4}-\d{2}$/.test(String(req.bulan || '')) ? String(req.bulan) : Utilities.formatDate(new Date(), CFG.TZ, 'yyyy-MM');
+    const by = {};
+    const months = {};
+    read_('kas').forEach(function (r) {
+      months[String(r.tanggal).slice(0, 7)] = 1;
+      if (String(r.tanggal).slice(0, 7) !== bulan) return;
+      const pos = String(r.pos || '') || 'till';
+      const k = r.username + '|' + pos;
+      const o = by[k] || (by[k] = { username: r.username, nama: r.nama, pos: pos, hitungan: 0, adaSelisih: 0, kurang: 0, lebih: 0 });
+      o.hitungan++;
+      if (r.selisih !== '' && Number(r.selisih) !== 0) {
+        o.adaSelisih++;
+        if (Number(r.selisih) < 0) o.kurang += -Number(r.selisih); else o.lebih += Number(r.selisih);
+      }
+    });
+    return { bulan: bulan, bulanTersedia: Object.keys(months).sort().reverse(), list: Object.keys(by).map(function (k) { return by[k]; }) };
   }
 };
+
+const POS_KAS = ['till', 'safe', 'floating', 'petty'];
+const POS_NAMA = { till: 'Till', safe: 'Store Safe', floating: 'Floating Cash', petty: 'Petty Cash' };
 
 function settings_() {
   const out = {};
@@ -368,11 +427,13 @@ function kasOut_(r) {
   let pec = {}, per = [];
   try { pec = JSON.parse(String(r.pecahan || '{}')); } catch (e) {}
   try { per = JSON.parse(String(r.perubahan || '[]')); } catch (e) {}
+  const nn = function (v) { return v === '' || v == null ? null : Number(v); };
   return {
     id: String(r.id), tanggal: String(r.tanggal), waktu: String(r.waktu), username: r.username, nama: r.nama,
-    pecahan: pec, totalFisik: Number(r.total_fisik), modal: Number(r.modal), penjualanTunai: Number(r.penjualan_tunai),
-    masuk: Number(r.masuk), keluar: Number(r.keluar), perubahan: per,
-    seharusnya: Number(r.seharusnya), selisih: Number(r.selisih), catatan: String(r.catatan || '')
+    pos: String(r.pos || '') || 'till',
+    pecahan: pec, totalFisik: Number(r.total_fisik), modal: nn(r.modal), penjualanTunai: Number(r.penjualan_tunai) || 0,
+    masuk: Number(r.masuk) || 0, keluar: Number(r.keluar) || 0, perubahan: per,
+    seharusnya: nn(r.seharusnya), selisih: nn(r.selisih), catatan: String(r.catatan || '')
   };
 }
 
@@ -644,9 +705,20 @@ function sh_(n) {
     s.getRange(1, 1, 1, h.length).setValues([h]).setFontWeight('bold').setBackground('#0B1F5C').setFontColor('#FFFFFF');
     s.setFrozenRows(1);
     formatCols_(s, n, 1, s.getMaxRows());
+  } else if (!HEADER_OK_[n] && TABS[n]) {
+    // kolom baru ditambahkan di ujung setelah pembaruan kode: perbarui baris judul
+    const h = TABS[n];
+    const cur = s.getRange(1, 1, 1, h.length).getValues()[0].map(String);
+    if (cur.join('|') !== h.join('|')) {
+      if (s.getMaxColumns() < h.length) s.insertColumnsAfter(s.getMaxColumns(), h.length - s.getMaxColumns());
+      s.getRange(1, 1, 1, h.length).setValues([h]).setFontWeight('bold').setBackground('#0B1F5C').setFontColor('#FFFFFF');
+      formatCols_(s, n, 2, Math.max(1, s.getMaxRows() - 1));
+    }
   }
+  HEADER_OK_[n] = true;
   return s;
 }
+const HEADER_OK_ = {};
 
 function formatCols_(sh, name, startRow, count) {
   if (count < 1) return;
@@ -698,4 +770,629 @@ function updateRow_(n, keyCol, keyVal, patch) {
   Object.keys(patch).forEach(function (k) { rows[i][k] = patch[k]; });
   s.getRange(i + 2, 1, 1, h.length).setValues([h.map(function (k) { return rows[i][k] == null ? '' : rows[i][k]; })]);
   return true;
+}
+
+/* =====================================================================
+ * TAHAP 2: laporan sales, customer, stok, jadwal (request / tukar /
+ * simpanan OFF), aktivitas, cadangan
+ * ===================================================================== */
+
+Object.assign(API, {
+  /* ---------- laporan sales per bulan ---------- */
+  laporan: function (req) {
+    auth_(req);
+    const bulan = /^\d{4}-\d{2}$/.test(String(req.bulan || '')) ? String(req.bulan) : latestDate_().slice(0, 7);
+    return cached_('lap_' + bulan, 600, function () {
+      const rows = read_('dsr').filter(function (r) { return String(r.tanggal).slice(0, 7) === bulan; });
+      const out = laporan_(rows);
+      out.bulan = bulan;
+      out.dataSampai = latestDate_();
+      out.bulanTersedia = bulanTersedia_();
+      return out;
+    });
+  },
+
+  customer: function (req) {
+    auth_(req);
+    return cached_('cust', 900, function () { return customer_(read_('dsr'), latestDate_()); });
+  },
+
+  stok: function (req) {
+    auth_(req);
+    const c = CacheService.getScriptCache();
+    const hit = c.get('stok');
+    if (hit && !req.segar) return JSON.parse(hit);
+    const out = readSoh_();
+    try { c.put('stok', JSON.stringify(out), 1800); } catch (e) {}
+    return out;
+  },
+
+  /* ---------- aktivitas ---------- */
+  aktivitas: function (req) {
+    auth_(req, true);
+    const names = namesMap_();
+    return read_('aktivitas').slice(-300).reverse().map(function (r) {
+      return { waktu: String(r.waktu), username: r.username, nama: names[r.username] || r.username, aksi: r.aksi, detail: String(r.detail || '') };
+    });
+  },
+
+  /* ---------- nama di jadwal ---------- */
+  tim: function (req) {
+    const u = auth_(req);
+    const j = readJadwal_(today_());
+    const staf = j.staf.map(function (s) { return s.nama; });
+    return {
+      namaJadwal: staf,
+      users: read_('users').filter(function (x) { return x.status === 'aktif'; }).map(function (x) {
+        return { username: x.username, nama: x.nama, namaJadwal: resolveNamaJadwal_(x, staf) };
+      }),
+      saya: u.username
+    };
+  },
+
+  setNamaJadwal: function (req) {
+    const a = auth_(req, true);
+    const target = cleanUser_(req.username);
+    const nj = String(req.namaJadwal || '').trim();
+    return withLock_(function () {
+      if (!updateRow_('users', 'username', target, { nama_jadwal: nj })) throw new Error('User tidak ditemukan');
+      log_(a.username, 'nama jadwal', target + ' → ' + (nj || '(otomatis)'));
+      return true;
+    });
+  },
+
+  /* ---------- request jadwal ---------- */
+  reqList: function (req) {
+    const u = auth_(req);
+    const all = read_('request_jadwal').map(reqOut_);
+    const today = today_();
+    const cur = periodOf_(today);
+    const next = periodOf_(addDays_(cur.end, 1));
+    const sisa = simpananSaldo_(u.username);
+    return {
+      saya: all.filter(function (r) { return r.username === u.username; }).reverse(),
+      semua: u.role === 'admin' ? all.slice().reverse() : null,
+      periode: { sekarang: periodInfo_(cur), berikut: periodInfo_(next) },
+      simpananSaya: sisa,
+      bolehKapanSaja: u.role === 'admin'
+    };
+  },
+
+  reqCreate: function (req) {
+    const u = auth_(req);
+    const tgl = String(req.tanggal || '');
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(tgl)) throw new Error('Tanggal tidak valid');
+    const jenis = String(req.jenis || '').toUpperCase();
+    if (JENIS_REQUEST.indexOf(jenis) < 0) throw new Error('Jenis request tidak dikenal');
+    const alasan = String(req.alasan || '').trim().slice(0, 200);
+    if (!alasan) throw new Error('Alasan wajib diisi');
+    const p = periodOf_(tgl);
+    if (p.start < CFG.JADWAL_MIN_START) throw new Error('Periode ini sudah ditutup dan tidak bisa diubah');
+    if (tgl < today_()) throw new Error('Tanggal sudah lewat');
+    if (u.role !== 'admin' && now_() > deadlineOf_(p)) throw new Error('Batas request periode ' + p.label + ' sudah lewat (tanggal ' + CFG.REQUEST_DEADLINE_DAY + ' pukul 23.59)');
+    const pakai = !!req.pakaiSimpanan && jenis === 'OFF';
+    if (pakai && simpananSaldo_(u.username) < 1) throw new Error('Simpanan OFF Anda kosong');
+    return withLock_(function () {
+      const all = read_('request_jadwal');
+      if (all.some(function (r) { return r.username === u.username && String(r.tanggal) === tgl && (r.status === 'menunggu' || r.status === 'disetujui'); })) {
+        throw new Error('Anda sudah punya request di tanggal itu');
+      }
+      const rec = {
+        id: Utilities.formatDate(new Date(), CFG.TZ, 'yyyyMMddHHmmss') + '-' + u.username,
+        dibuat: now_(), username: u.username, nama: u.nama, tanggal: tgl, jenis: jenis, alasan: alasan,
+        pakai_simpanan: pakai ? 'ya' : '', status: 'menunggu', diputus_oleh: '', diputus_pada: '', catatan_admin: '', tertulis: ''
+      };
+      append_('request_jadwal', rec);
+      log_(u.username, 'request jadwal', jenis + ' ' + tgl);
+      return { request: reqOut_(rec), peringatan: reqWarnings_(all.concat([rec]), rec, p) };
+    });
+  },
+
+  reqCancel: function (req) {
+    const u = auth_(req);
+    return withLock_(function () {
+      const r = read_('request_jadwal').filter(function (x) { return String(x.id) === String(req.id); })[0];
+      if (!r) throw new Error('Request tidak ditemukan');
+      if (r.username !== u.username) throw new Error('Hanya pemilik yang bisa membatalkan');
+      if (r.status !== 'menunggu') throw new Error('Request yang sudah diputuskan tidak bisa dibatalkan');
+      updateRow_('request_jadwal', 'id', r.id, { status: 'dibatalkan', diputus_pada: now_() });
+      log_(u.username, 'batal request', r.jenis + ' ' + r.tanggal);
+      return true;
+    });
+  },
+
+  reqDecide: function (req) {
+    const a = auth_(req, true);
+    const setuju = req.keputusan === 'setuju';
+    return withLock_(function () {
+      const r = read_('request_jadwal').filter(function (x) { return String(x.id) === String(req.id); })[0];
+      if (!r) throw new Error('Request tidak ditemukan');
+      if (r.status !== 'menunggu') throw new Error('Request ini sudah diputuskan');
+      const patch = { status: setuju ? 'disetujui' : 'ditolak', diputus_oleh: a.username, diputus_pada: now_(), catatan_admin: String(req.catatan || '').slice(0, 200) };
+      let info = '';
+      if (setuju) {
+        try {
+          const user = read_('users').filter(function (x) { return x.username === r.username; })[0];
+          const w = writeShift_(user, String(r.tanggal), String(r.jenis));
+          patch.tertulis = 'ya · tab ' + w.tab;
+          info = 'Ditulis ke tab ' + w.tab + (w.tabBaru ? ' (tab baru dibuat)' : '');
+        } catch (e) {
+          patch.tertulis = 'gagal: ' + e.message;
+          info = 'Disetujui, tapi belum tertulis ke sheet: ' + e.message;
+        }
+        if (String(r.pakai_simpanan) === 'ya') pakaiSimpanan_(r.username, String(r.tanggal));
+      }
+      updateRow_('request_jadwal', 'id', r.id, patch);
+      log_(a.username, setuju ? 'setujui request' : 'tolak request', r.nama + ' ' + r.jenis + ' ' + r.tanggal);
+      return { info: info };
+    });
+  },
+
+  /* ---------- tukar shift ---------- */
+  tukarList: function (req) {
+    const u = auth_(req);
+    const all = read_('tukar_shift').map(tukarOut_).reverse();
+    return {
+      saya: all.filter(function (t) { return t.pemohon === u.username || t.rekan === u.username; }),
+      semua: u.role === 'admin' ? all : null
+    };
+  },
+
+  tukarCreate: function (req) {
+    const u = auth_(req);
+    const tgl = String(req.tanggal || '');
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(tgl)) throw new Error('Tanggal tidak valid');
+    if (tgl < today_()) throw new Error('Tanggal sudah lewat');
+    const p = periodOf_(tgl);
+    if (p.start < CFG.JADWAL_MIN_START) throw new Error('Periode ini sudah ditutup dan tidak bisa diubah');
+    const rekanU = cleanUser_(req.rekan);
+    if (rekanU === u.username) throw new Error('Pilih rekan lain');
+    const users = read_('users');
+    const rekan = users.filter(function (x) { return x.username === rekanU && x.status === 'aktif'; })[0];
+    if (!rekan) throw new Error('Rekan tidak ditemukan');
+    const alasan = String(req.alasan || '').trim().slice(0, 200);
+    if (!alasan) throw new Error('Alasan wajib diisi');
+    const sh1 = shiftOn_(u, tgl), sh2 = shiftOn_(rekan, tgl);
+    if (!sh1 || !sh2) throw new Error('Shift di tanggal itu belum ada di jadwal');
+    if (sh1 === sh2) throw new Error('Shift Anda dan rekan sama (' + sh1 + '), tidak perlu ditukar');
+    return withLock_(function () {
+      const rec = {
+        id: Utilities.formatDate(new Date(), CFG.TZ, 'yyyyMMddHHmmss') + '-' + u.username,
+        dibuat: now_(), pemohon: u.username, nama_pemohon: u.nama, rekan: rekan.username, nama_rekan: rekan.nama,
+        tanggal: tgl, shift_pemohon: sh1, shift_rekan: sh2, alasan: alasan, status: 'menunggu_rekan',
+        diputus_oleh: '', diputus_pada: '', tertulis: ''
+      };
+      append_('tukar_shift', rec);
+      log_(u.username, 'ajukan tukar shift', tgl + ' dengan ' + rekan.username);
+      return tukarOut_(rec);
+    });
+  },
+
+  tukarRespond: function (req) {
+    const u = auth_(req);
+    return withLock_(function () {
+      const t = read_('tukar_shift').filter(function (x) { return String(x.id) === String(req.id); })[0];
+      if (!t) throw new Error('Pengajuan tidak ditemukan');
+      if (t.rekan !== u.username) throw new Error('Hanya rekan yang diajak yang bisa menjawab');
+      if (t.status !== 'menunggu_rekan') throw new Error('Pengajuan ini sudah dijawab');
+      updateRow_('tukar_shift', 'id', t.id, { status: req.terima ? 'menunggu_admin' : 'ditolak_rekan', diputus_pada: req.terima ? '' : now_() });
+      log_(u.username, req.terima ? 'terima tukar shift' : 'tolak tukar shift', t.tanggal + ' dari ' + t.pemohon);
+      return true;
+    });
+  },
+
+  tukarCancel: function (req) {
+    const u = auth_(req);
+    return withLock_(function () {
+      const t = read_('tukar_shift').filter(function (x) { return String(x.id) === String(req.id); })[0];
+      if (!t) throw new Error('Pengajuan tidak ditemukan');
+      if (t.pemohon !== u.username) throw new Error('Hanya pemohon yang bisa membatalkan');
+      if (['menunggu_rekan', 'menunggu_admin'].indexOf(t.status) < 0) throw new Error('Pengajuan ini sudah selesai');
+      updateRow_('tukar_shift', 'id', t.id, { status: 'dibatalkan', diputus_pada: now_() });
+      return true;
+    });
+  },
+
+  tukarDecide: function (req) {
+    const a = auth_(req, true);
+    const setuju = req.keputusan === 'setuju';
+    return withLock_(function () {
+      const t = read_('tukar_shift').filter(function (x) { return String(x.id) === String(req.id); })[0];
+      if (!t) throw new Error('Pengajuan tidak ditemukan');
+      if (t.status !== 'menunggu_admin') throw new Error(t.status === 'menunggu_rekan' ? 'Rekan belum menerima pengajuan ini' : 'Pengajuan ini sudah diputuskan');
+      const patch = { status: setuju ? 'disetujui' : 'ditolak', diputus_oleh: a.username, diputus_pada: now_() };
+      let info = '';
+      if (setuju) {
+        const users = read_('users');
+        const up = users.filter(function (x) { return x.username === t.pemohon; })[0];
+        const ur = users.filter(function (x) { return x.username === t.rekan; })[0];
+        const d = String(t.tanggal);
+        const n1 = shiftOn_(up, d), n2 = shiftOn_(ur, d);
+        if (n1 !== String(t.shift_pemohon) || n2 !== String(t.shift_rekan)) {
+          throw new Error('Jadwal di sheet sudah berubah sejak diajukan (sekarang ' + n1 + ' / ' + n2 + '). Tolak lalu minta diajukan ulang.');
+        }
+        const w = writeShift_(up, d, String(t.shift_rekan));
+        writeShift_(ur, d, String(t.shift_pemohon));
+        patch.tertulis = 'ya · tab ' + w.tab;
+        info = 'Shift ditukar di tab ' + w.tab;
+      }
+      updateRow_('tukar_shift', 'id', t.id, patch);
+      log_(a.username, setuju ? 'setujui tukar shift' : 'tolak tukar shift', t.nama_pemohon + ' ↔ ' + t.nama_rekan + ' ' + t.tanggal);
+      return { info: info };
+    });
+  },
+
+  /* ---------- simpanan OFF ---------- */
+  simpananList: function (req) {
+    const u = auth_(req);
+    const all = read_('simpanan_off').map(simpananOut_).reverse();
+    return { saya: all.filter(function (s) { return s.username === u.username; }), semua: u.role === 'admin' ? all : null, saldo: simpananSaldo_(u.username) };
+  },
+
+  simpananAdd: function (req) {
+    const a = auth_(req, true);
+    const target = cleanUser_(req.username);
+    const user = read_('users').filter(function (x) { return x.username === target; })[0];
+    if (!user) throw new Error('User tidak ditemukan');
+    const tgl = String(req.tanggalMasuk || '');
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(tgl)) throw new Error('Tanggal tidak valid');
+    const ket = String(req.keterangan || '').trim().slice(0, 200);
+    if (!ket) throw new Error('Keterangan wajib diisi');
+    return withLock_(function () {
+      const rec = { id: Utilities.formatDate(new Date(), CFG.TZ, 'yyyyMMddHHmmss') + '-' + target, dibuat: now_(), username: target, nama: user.nama,
+        tanggal_masuk: tgl, keterangan: ket, status: 'tersedia', diambil_tanggal: '', dicatat_oleh: a.username };
+      append_('simpanan_off', rec);
+      log_(a.username, 'tambah simpanan OFF', user.nama + ' ' + tgl);
+      return simpananOut_(rec);
+    });
+  },
+
+  simpananSet: function (req) {
+    const a = auth_(req, true);
+    return withLock_(function () {
+      const s = read_('simpanan_off').filter(function (x) { return String(x.id) === String(req.id); })[0];
+      if (!s) throw new Error('Data tidak ditemukan');
+      const patch = req.status === 'diambil'
+        ? { status: 'diambil', diambil_tanggal: /^\d{4}-\d{2}-\d{2}$/.test(String(req.tanggal || '')) ? String(req.tanggal) : today_() }
+        : req.status === 'batal' ? { status: 'batal' } : { status: 'tersedia', diambil_tanggal: '' };
+      updateRow_('simpanan_off', 'id', s.id, patch);
+      log_(a.username, 'simpanan OFF ' + patch.status, s.nama + ' ' + s.tanggal_masuk);
+      return true;
+    });
+  }
+});
+
+const JENIS_REQUEST = ['OFF', 'CT', 'PD', 'SB', 'MD', 'MC', 'SC', 'NS'];
+const BULAN_PENDEK = ['JAN', 'FEB', 'MAR', 'APR', 'MEI', 'JUN', 'JUL', 'AGS', 'SEP', 'OKT', 'NOV', 'DES'];
+const BULAN_PANJANG = ['JANUARI', 'FEBRUARI', 'MARET', 'APRIL', 'MEI', 'JUNI', 'JULI', 'AGUSTUS', 'SEPTEMBER', 'OKTOBER', 'NOVEMBER', 'DESEMBER'];
+const HARI_KODE = ['MG', 'SN', 'SL', 'RB', 'KM', 'JM', 'SB'];
+
+/* ---------- laporan ---------- */
+function laporan_(rows) {
+  const jam = {}, ra = {}, kat = {}, prod = {}, promo = {}, retur = [];
+  rows.forEach(function (r) {
+    if (!isSalesLine_(r)) return;
+    const d = String(r.tanggal), h = Number(String(r.jam).slice(0, 2)) || 0;
+    const g = Number(r.gross) || 0, n = Number(r.net) || 0, q = Number(r.qty) || 0, inv = String(r.invoice);
+    const J = jam[d + '|' + h] || (jam[d + '|' + h] = { t: d, h: h, b: 0, n: 0, inv: {} });
+    J.b += g; J.n += n; J.inv[inv] = 1;
+    const sp = String(r.sales_person || '').trim() || '(tanpa nama)';
+    const R = ra[sp + '|' + d] || (ra[sp + '|' + d] = { p: sp, t: d, b: 0, n: 0, q: 0, inv: {} });
+    R.b += g; R.n += n; R.q += q; R.inv[inv] = 1;
+    const k3 = String(r.kat3 || '').trim() || 'LAINNYA', k4 = String(r.kat4 || '').trim() || '-';
+    const K = kat[k3 + '|' + k4] || (kat[k3 + '|' + k4] = { k3: k3, k4: k4, b: 0, n: 0, q: 0 });
+    K.b += g; K.n += n; K.q += q;
+    const sku = String(r.sku);
+    const P = prod[sku] || (prod[sku] = { sku: sku, nama: String(r.nama_sku), k3: k3, k4: k4, b: 0, n: 0, q: 0 });
+    P.b += g; P.n += n; P.q += q;
+    const pn = String(r.promo_name || '').trim() || '(tanpa promo)';
+    const M = promo[pn] || (promo[pn] = { b: 0, n: 0, q: 0, inv: {} });
+    M.b += g; M.n += n; M.q += q; M.inv[inv] = 1;
+    if (q < 0) retur.push([d, String(r.jam).slice(0, 5), inv, String(r.nama_sku), q, Math.round(g), Math.round(n), sp, String(r.status || '')]);
+  });
+  const R0 = function (x) { return Math.round(x); };
+  const prods = Object.keys(prod).map(function (k) { return prod[k]; });
+  const pareto = function (key) {
+    const list = prods.map(function (p) { return p[key]; }).filter(function (v) { return v > 0; }).sort(function (a, b) { return b - a; });
+    const total = list.reduce(function (s, v) { return s + v; }, 0);
+    let acc = 0, i = 0;
+    while (i < list.length && acc < total * 0.8) { acc += list[i]; i++; }
+    return { n80: i, total: list.length };
+  };
+  return {
+    jam: Object.keys(jam).map(function (k) { const x = jam[k]; return [x.t, x.h, R0(x.b), R0(x.n), Object.keys(x.inv).length]; }),
+    ra: Object.keys(ra).map(function (k) { const x = ra[k]; return [x.p, x.t, R0(x.b), R0(x.n), x.q, Object.keys(x.inv).length]; }),
+    kategori: Object.keys(kat).map(function (k) { const x = kat[k]; return [x.k3, x.k4, R0(x.b), R0(x.n), x.q]; }),
+    produk: prods.sort(function (a, b) { return b.n - a.n; }).slice(0, 100).map(function (x) { return [x.sku, x.nama, x.k3, x.k4, x.q, R0(x.b), R0(x.n)]; }),
+    pareto: { netto: pareto('n'), bruto: pareto('b') },
+    promo: Object.keys(promo).map(function (k) { const x = promo[k]; return [k, R0(x.b), R0(x.n), x.q, Object.keys(x.inv).length]; }),
+    retur: retur
+  };
+}
+
+function customer_(rows, latest) {
+  const by = {};
+  rows.forEach(function (r) {
+    const key = String(r.cust_key || '');
+    if (!key || !isSalesLine_(r)) return;
+    const o = by[key] || (by[key] = { nama: '', n: 0, b: 0, inv: {}, first: '', last: '' });
+    const nm = String(r.cust_name || '').trim();
+    if (nm) o.nama = nm;
+    o.n += Number(r.net) || 0; o.b += Number(r.gross) || 0;
+    o.inv[String(r.invoice)] = 1;
+    const d = String(r.tanggal);
+    if (!o.first || d < o.first) o.first = d;
+    if (!o.last || d > o.last) o.last = d;
+  });
+  const list = Object.keys(by).map(function (k) {
+    const o = by[k];
+    return [o.nama || '(tanpa nama)', Math.round(o.n), Math.round(o.b), Object.keys(o.inv).length, o.first, o.last];
+  });
+  const cutoff = addDays_(latest, -60);
+  return {
+    dataSampai: latest,
+    jumlah: list.length,
+    berulang: list.filter(function (x) { return x[3] >= 2; }).length,
+    top: list.slice().sort(function (a, b) { return b[1] - a[1]; }).slice(0, 100),
+    lama: list.filter(function (x) { return x[3] >= 2 && x[5] < cutoff; }).sort(function (a, b) { return b[1] - a[1]; }).slice(0, 60),
+    batasLama: cutoff
+  };
+}
+
+function bulanTersedia_() {
+  const m = {};
+  ringkasan_().forEach(function (r) { m[r.tanggal.slice(0, 7)] = 1; });
+  return Object.keys(m).sort().reverse();
+}
+
+/* ---------- ringkasan harian (supaya cepat) ---------- */
+function ringkasan_() {
+  let rows = read_('ringkasan');
+  if (!rows.length && sh_('dsr').getLastRow() > 1) rows = rebuildRingkasan_();
+  return rows.map(function (r) { return { tanggal: String(r.tanggal), bruto: Number(r.bruto), netto: Number(r.netto), qty: Number(r.qty), trx: Number(r.trx) }; });
+}
+function rebuildRingkasan_() {
+  const agg = aggregateDaily_(read_('dsr'));
+  writeAll_('ringkasan', agg);
+  bumpVersion_();
+  return agg;
+}
+
+/* ---------- cache ---------- */
+function bumpVersion_() {
+  const p = PropertiesService.getScriptProperties();
+  p.setProperty('ver', String(Number(p.getProperty('ver') || 0) + 1));
+}
+function cached_(key, seconds, fn) {
+  const ver = PropertiesService.getScriptProperties().getProperty('ver') || '0';
+  const c = CacheService.getScriptCache();
+  const k = key + '_v' + ver;
+  const hit = c.get(k);
+  if (hit) return JSON.parse(hit);
+  const out = fn();
+  try { c.put(k, JSON.stringify(out), seconds); } catch (e) { /* terlalu besar untuk cache */ }
+  return out;
+}
+
+/* ---------- stok SOH ---------- */
+function numId_(s) {
+  s = String(s == null ? '' : s).trim();
+  if (!s || /[a-z]/i.test(s) || s.charAt(0) === '#') return null;
+  const n = Number(s.replace('%', '').replace(/\./g, '').replace(',', '.'));
+  return isNaN(n) ? null : n;
+}
+function readSoh_() {
+  const sh = SpreadsheetApp.openById(CFG.SOH_SHEET_ID).getSheetByName('SOH');
+  if (!sh) throw new Error('Tab SOH tidak ditemukan di sheet stok');
+  const top = sh.getRange('B2:AE9').getDisplayValues();
+  const det = sh.getRange('B13:AE' + Math.max(14, sh.getLastRow())).getDisplayValues();
+  if (String(top[0][1]).trim() !== 'MC Lv. 3') throw new Error('Susunan tab SOH berubah (judul MC Lv. 3 tidak ditemukan)');
+  const bulan = ['jan', 'feb', 'mar', 'apr', 'mei', 'jun', 'jul', 'agu', 'sep', 'okt', 'nov', 'des'];
+  const row = function (r, withMc4) {
+    const o = withMc4 ? { mc3: String(r[0]).trim(), mc4: String(r[1]).trim() } : { mc3: String(r[1]).trim() };
+    o.qty = numId_(r[2]); o.varian = numId_(r[3]); o.sku = numId_(r[4]); o.generic = numId_(r[5]);
+    o.display = numId_(r[9]); o.rasio = numId_(r[17]);
+    o.sales = bulan.map(function (b, i) { return numId_(r[18 + i]) || 0; });
+    return o;
+  };
+  return {
+    update: String(top[0][0]).trim(),
+    kategori: top.slice(1).filter(function (r) { return String(r[1]).trim(); }).map(function (r) { return row(r, false); }),
+    detail: det.slice(1).filter(function (r) { return String(r[0]).trim() && String(r[1]).trim(); }).map(function (r) { return row(r, true); })
+  };
+}
+
+/* ---------- aktivitas ---------- */
+function log_(username, aksi, detail) {
+  try { append_('aktivitas', { waktu: now_(), username: username || 'sistem', aksi: aksi, detail: String(detail || '').slice(0, 300) }); } catch (e) {}
+}
+function namesMap_() {
+  const m = {};
+  read_('users').forEach(function (u) { m[u.username] = u.nama; });
+  return m;
+}
+
+/* ---------- cadangan mingguan ---------- */
+function cadangan() {
+  const ss = SpreadsheetApp.getActive();
+  const it = DriveApp.getFoldersByName(CFG.BACKUP_FOLDER);
+  const folder = it.hasNext() ? it.next() : DriveApp.createFolder(CFG.BACKUP_FOLDER);
+  const name = 'Cadangan DB Hub 2299 ' + Utilities.formatDate(new Date(), CFG.TZ, 'yyyy-MM-dd HHmm');
+  DriveApp.getFileById(ss.getId()).makeCopy(name, folder);
+  const files = [];
+  const fi = folder.getFiles();
+  while (fi.hasNext()) { const f = fi.next(); if (f.getName().indexOf('Cadangan DB Hub 2299') === 0) files.push(f); }
+  files.sort(function (a, b) { return b.getDateCreated() - a.getDateCreated(); });
+  files.slice(CFG.BACKUP_KEEP).forEach(function (f) { f.setTrashed(true); });
+  log_('sistem', 'cadangan', name);
+  return name;
+}
+function pasangCadanganMingguan_() {
+  ScriptApp.getProjectTriggers().forEach(function (t) { if (t.getHandlerFunction() === 'cadangan') ScriptApp.deleteTrigger(t); });
+  ScriptApp.newTrigger('cadangan').timeBased().onWeekDay(ScriptApp.WeekDay.MONDAY).atHour(3).create();
+}
+
+/* ---------- periode jadwal (24 s/d 23) ---------- */
+function today_() { return Utilities.formatDate(new Date(), CFG.TZ, 'yyyy-MM-dd'); }
+function addDays_(iso, n) {
+  const p = iso.split('-').map(Number);
+  const d = new Date(Date.UTC(p[0], p[1] - 1, p[2] + n));
+  return d.getUTCFullYear() + '-' + pad_(d.getUTCMonth() + 1) + '-' + pad_(d.getUTCDate());
+}
+function periodOf_(iso) {
+  const p = iso.split('-').map(Number);
+  let y = p[0], m = p[1];
+  if (p[2] < 24) { m--; if (m < 1) { m = 12; y--; } }
+  let y2 = y, m2 = m + 1;
+  if (m2 > 12) { m2 = 1; y2++; }
+  return {
+    start: y + '-' + pad_(m) + '-24', end: y2 + '-' + pad_(m2) + '-23', m1: m, m2: m2, y1: y, y2: y2,
+    label: BULAN_PENDEK[m - 1] + '-' + BULAN_PENDEK[m2 - 1] + ' ' + y2
+  };
+}
+function deadlineOf_(p) { return p.start.slice(0, 8) + pad_(CFG.REQUEST_DEADLINE_DAY) + ' 23:59:59'; }
+function periodInfo_(p) {
+  return { mulai: p.start, selesai: p.end, label: p.label, batas: deadlineOf_(p), terbuka: now_() <= deadlineOf_(p) && p.start >= CFG.JADWAL_MIN_START, bisaDiubah: p.start >= CFG.JADWAL_MIN_START };
+}
+
+/* ---------- baca / tulis sheet jadwal ---------- */
+function normName_(s) { return String(s || '').toUpperCase().replace(/[^A-Z ]/g, ' ').replace(/\s+/g, ' ').trim(); }
+function resolveNamaJadwal_(user, staf) {
+  if (!user) return '';
+  if (String(user.nama_jadwal || '').trim()) return String(user.nama_jadwal).trim();
+  const n = normName_(user.nama);
+  if (!n) return '';
+  const exact = staf.filter(function (s) { return normName_(s) === n; })[0];
+  if (exact) return exact;
+  const part = staf.filter(function (s) { const x = normName_(s); return x.indexOf(n) === 0 || n.indexOf(x) === 0; });
+  return part.length === 1 ? part[0] : '';
+}
+
+function findTab_(ss, p) {
+  const sheets = ss.getSheets();
+  for (let i = sheets.length - 1; i >= 0; i--) {
+    const s = sheets[i];
+    const ms = monthsFromName_(s.getName());
+    if (ms.length < 2 || ms[0] !== p.m1 || ms[1] !== p.m2) continue;
+    const v = s.getRange('B2:AJ6').getDisplayValues();
+    const parsed = parseJadwal_(v, ms, s.getName(), p.start);
+    if (parsed.tanggal[0] === p.start) return s;
+  }
+  return null;
+}
+
+function dayCols_(sh) {
+  const row = sh.getRange(2, 1, 1, sh.getLastColumn()).getDisplayValues()[0];
+  const cols = [];
+  for (let c = 2; c < row.length; c++) {
+    const d = Number(String(row[c]).trim());
+    if (d >= 1 && d <= 31 && String(row[c]).trim() !== '') cols.push(c + 1); else if (cols.length) break;
+  }
+  return cols; // nomor kolom (1-based)
+}
+
+function createTab_(ss, p) {
+  if (p.start < CFG.JADWAL_MIN_START) throw new Error('Periode ' + p.label + ' sudah ditutup');
+  const prev = periodOf_(addDays_(p.start, -1));
+  const src = findTab_(ss, prev);
+  if (!src) throw new Error('Tab periode sebelumnya (' + prev.label + ') tidak ditemukan untuk dijadikan contoh');
+  const days = [];
+  for (let d = p.start; d <= p.end; d = addDays_(d, 1)) days.push(d);
+  let name = BULAN_PENDEK[p.m1 - 1] + '-' + BULAN_PENDEK[p.m2 - 1];
+  if (ss.getSheetByName(name)) name += ' ' + p.y2;
+  const sh = src.copyTo(ss).setName(name);
+  ss.setActiveSheet(sh);
+  ss.moveActiveSheet(ss.getNumSheets());
+  let cols = dayCols_(sh);
+  if (!cols.length) throw new Error('Baris tanggal di tab contoh tidak terbaca');
+  const diff = days.length - cols.length;
+  const last = cols[cols.length - 1];
+  if (diff > 0) sh.insertColumnsBefore(last, diff);          // di dalam rentang, rumus total ikut melebar
+  if (diff < 0) sh.deleteColumns(last + diff + 1, -diff);
+  cols = [];
+  for (let i = 0; i < days.length; i++) cols.push(3 + i);
+  sh.getRange(1, 1).setValue(BULAN_PANJANG[p.m1 - 1] + '-' + BULAN_PANJANG[p.m2 - 1] + ' ' + p.y2);
+  sh.getRange(2, 3, 1, days.length).setValues([days.map(function (d) { return Number(d.slice(8)); })]);
+  sh.getRange(4, 3, 1, days.length).setValues([days.map(function (d) {
+    const q = d.split('-').map(Number);
+    return HARI_KODE[new Date(Date.UTC(q[0], q[1] - 1, q[2])).getUTCDay()];
+  })]);
+  const names = sh.getRange(5, 2, Math.max(1, sh.getLastRow() - 4), 1).getDisplayValues();
+  let n = 0;
+  while (n < names.length && String(names[n][0]).trim()) n++;
+  if (n) sh.getRange(5, 3, n, days.length).clearContent().setBackground(null);
+  return sh;
+}
+
+function writeShift_(user, iso, code) {
+  const p = periodOf_(iso);
+  if (p.start < CFG.JADWAL_MIN_START) throw new Error('Periode ' + p.label + ' sudah ditutup');
+  const ss = SpreadsheetApp.openById(CFG.JADWAL_SHEET_ID);
+  let sh = findTab_(ss, p), baru = false;
+  if (!sh) { sh = createTab_(ss, p); baru = true; }
+  const names = sh.getRange(5, 2, Math.max(1, sh.getLastRow() - 4), 1).getDisplayValues().map(function (r) { return String(r[0]).trim(); });
+  const staf = [];
+  for (let i = 0; i < names.length && names[i]; i++) staf.push(names[i]);
+  const nj = resolveNamaJadwal_(user, staf);
+  const ri = nj ? staf.map(normName_).indexOf(normName_(nj)) : -1;
+  if (ri < 0) throw new Error('Nama ' + (user ? user.nama : '?') + ' tidak ada di tab ' + sh.getName() + '. Atur "Nama di jadwal" di menu Admin.');
+  const cols = dayCols_(sh);
+  const dayRow = sh.getRange(2, 1, 1, sh.getLastColumn()).getDisplayValues()[0];
+  const want = Number(iso.slice(8));
+  const ci = cols.filter(function (c) { return Number(dayRow[c - 1]) === want; })[0];
+  if (!ci) throw new Error('Tanggal ' + iso + ' tidak ada di tab ' + sh.getName());
+  sh.getRange(5 + ri, ci).setValue(code).setBackground(CFG.REQUEST_COLOR);
+  return { tab: sh.getName(), tabBaru: baru };
+}
+
+function shiftOn_(user, iso) {
+  const j = readJadwalPeriode_(iso);
+  if (!j) return '';
+  const nj = resolveNamaJadwal_(user, j.staf.map(function (s) { return s.nama; }));
+  const s = j.staf.filter(function (x) { return normName_(x.nama) === normName_(nj); })[0];
+  const i = j.tanggal.indexOf(iso);
+  return s && i >= 0 ? String(s.shift[i] || '') : '';
+}
+
+function readJadwalPeriode_(iso) {
+  const p = periodOf_(iso);
+  const ss = SpreadsheetApp.openById(CFG.JADWAL_SHEET_ID);
+  const sh = findTab_(ss, p);
+  if (!sh) return null;
+  return parseJadwal_(sh.getRange('B2:AJ16').getDisplayValues(), monthsFromName_(sh.getName()), sh.getName(), p.start);
+}
+
+/* ---------- request helpers ---------- */
+function reqOut_(r) {
+  return { id: String(r.id), dibuat: String(r.dibuat), username: r.username, nama: r.nama, tanggal: String(r.tanggal), jenis: r.jenis,
+    alasan: r.alasan, pakaiSimpanan: String(r.pakai_simpanan) === 'ya', status: r.status, diputusOleh: r.diputus_oleh,
+    diputusPada: String(r.diputus_pada || ''), catatanAdmin: String(r.catatan_admin || ''), tertulis: String(r.tertulis || '') };
+}
+function reqWarnings_(all, rec, p) {
+  const w = [];
+  const inP = function (r) { return String(r.tanggal) >= p.start && String(r.tanggal) <= p.end && (r.status === 'menunggu' || r.status === 'disetujui'); };
+  if (rec.jenis === 'OFF') {
+    const mine = all.filter(function (r) { return inP(r) && r.username === rec.username && r.jenis === 'OFF'; }).length;
+    if (mine > 4) w.push('Ini request OFF ke-' + mine + ' di periode ' + p.label + ' (jatah biasanya 4).');
+    const same = all.filter(function (r) { return inP(r) && String(r.tanggal) === String(rec.tanggal) && r.jenis === 'OFF' && r.username !== rec.username; }).length;
+    if (same >= 1) w.push(same + ' orang lain juga minta OFF di tanggal ini.');
+  }
+  return w;
+}
+function tukarOut_(t) {
+  return { id: String(t.id), dibuat: String(t.dibuat), pemohon: t.pemohon, namaPemohon: t.nama_pemohon, rekan: t.rekan, namaRekan: t.nama_rekan,
+    tanggal: String(t.tanggal), shiftPemohon: t.shift_pemohon, shiftRekan: t.shift_rekan, alasan: t.alasan, status: t.status,
+    diputusOleh: t.diputus_oleh, diputusPada: String(t.diputus_pada || ''), tertulis: String(t.tertulis || '') };
+}
+function simpananOut_(s) {
+  return { id: String(s.id), dibuat: String(s.dibuat), username: s.username, nama: s.nama, tanggalMasuk: String(s.tanggal_masuk),
+    keterangan: s.keterangan, status: s.status, diambilTanggal: String(s.diambil_tanggal || ''), dicatatOleh: s.dicatat_oleh };
+}
+function simpananSaldo_(username) {
+  return read_('simpanan_off').filter(function (s) { return s.username === username && s.status === 'tersedia'; }).length;
+}
+function pakaiSimpanan_(username, tanggal) {
+  const s = read_('simpanan_off').filter(function (x) { return x.username === username && x.status === 'tersedia'; })
+    .sort(function (a, b) { return String(a.tanggal_masuk) < String(b.tanggal_masuk) ? -1 : 1; })[0];
+  if (s) updateRow_('simpanan_off', 'id', s.id, { status: 'diambil', diambil_tanggal: tanggal });
 }
