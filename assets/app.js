@@ -14,7 +14,7 @@
       return orig.apply(this, args);
     };
   });
-  var S = { token: null, user: null, menunggu: 0, mode: 'bruto', fmt: 'penuh', mon: null, jadwal: null, info: null };
+  var S = { notif: null, badges: { admin: 0, request: 0, tukar: 0 }, token: null, user: null, menunggu: 0, mode: 'bruto', fmt: 'penuh', mon: null, jadwal: null, info: null };
 
   /* ---------- util ---------- */
   var store = {
@@ -142,28 +142,33 @@
     sunset: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 17a5 5 0 0 0-10 0M12 3v6M8.5 6.5 12 3l3.5 3.5M2 21h20M4.2 12.2l1.4 1.4M18.4 13.6l1.4-1.4M2 17h2M20 17h2"/></svg>',
     coffee: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9h13v5a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5z"/><path d="M17 10h1.5a2.5 2.5 0 0 1 0 5H17M8 2.5v3M12 2.5v3"/></svg>',
     arrow: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>',
+    bell: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 1 1 12 0c0 7 3 8 3 8H3s3-1 3-8"/><path d="M10.3 21a1.9 1.9 0 0 0 3.4 0"/></svg>',
+    chev: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>',
+    grid: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><rect x="14" y="14" width="7" height="7" rx="2"/></svg>',
+    alert: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 2 20h20z"/><path d="M12 10v4M12 17h.01"/></svg>',
+    info: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg>',
     store: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16"><path d="M3 9l1.5-5h15L21 9M4 9v11h16V9M3 9h18M9 20v-6h6v6"/></svg>'
   };
   function icon(name, cls) { return el('span', { class: 'ic' + (cls ? ' ' + cls : ''), html: IC[name], 'aria-hidden': 'true' }); }
 
   /* ---------- router & menu ---------- */
   var GROUPS = [
-    { id: 'beranda', label: 'Beranda', icon: 'home', items: [{ icon: 'home', id: 'beranda', label: 'Beranda' }] },
-    { id: 'sales', label: 'Sales', icon: 'chart', items: [
+    { id: 'beranda', label: 'Beranda', icon: 'home', color: '#F26B3A', items: [{ icon: 'home', id: 'beranda', label: 'Beranda' }] },
+    { id: 'sales', label: 'Sales', icon: 'chart', color: '#4C8DFF', items: [
       { icon: 'gauge', id: 'monitoring', label: 'Monitoring Sales', desc: 'Achievement, UPT & basket' },
       { icon: 'clip', id: 'pica', label: 'Analisa PICA', desc: 'Problem & corrective action, salin WA' },
       { icon: 'trend', id: 'trend', label: 'Sales Trend', desc: 'Per jam & per hari' },
       { icon: 'award', id: 'ra', label: 'RA Performance', desc: 'Sales per orang' },
       { icon: 'tag', id: 'produk', label: 'Produk & Promo', desc: 'Kategori, terlaris & promo' },
       { icon: 'heart', id: 'customer', label: 'Customer & Retur', desc: 'Member & barang kembali' }] },
-    { id: 'inventory', label: 'Inventory', icon: 'box', items: [
+    { id: 'inventory', label: 'Inventory', icon: 'box', color: '#14B8A6', items: [
       { icon: 'box', id: 'stok', label: 'Monitoring Stok', desc: 'Stok, rasio & display dari SOH' }] },
-    { id: 'kasg', label: 'Kas', icon: 'cash', items: [
+    { id: 'kasg', label: 'Kas', icon: 'cash', color: '#22C55E', items: [
       { icon: 'cash', id: 'kas', label: 'Cek Kas', desc: 'Till, Store Safe, Floating, Petty' },
       { icon: 'scale', id: 'kas-rekap', label: 'Rekap Selisih', desc: 'Selisih kas per orang' }] },
-    { id: 'data', label: 'Data', icon: 'upload', items: [
+    { id: 'data', label: 'Data', icon: 'upload', color: '#A78BFA', items: [
       { icon: 'upload', id: 'unggah', label: 'Unggah DSR', desc: 'Perbarui data penjualan' }] },
-    { id: 'tim', label: 'Tim', icon: 'users', items: [
+    { id: 'tim', label: 'Tim', icon: 'users', color: '#FB923C', items: [
       { icon: 'cal', id: 'jadwal', label: 'Jadwal', desc: 'Shift tim per periode' },
       { icon: 'inbox', id: 'request', label: 'Request Jadwal', desc: 'Ajukan OFF, cuti atau shift' },
       { icon: 'swap', id: 'tukar', label: 'Tukar Shift', desc: 'Tukar shift dengan rekan' },
@@ -193,49 +198,78 @@
     if (m.r.admin && !isAdmin()) m = routeOf('beranda');
     if (!S.meChecked) { S.meChecked = true; refreshMe(); }
     app.replaceChildren(shell(m));
+    loadNotif(false); startNotifPolling();
     VIEWS[m.r.id]($('#view'));
     window.scrollTo(0, 0);
   }
 
   var menuEl = null;
-  function closeMenu() { if (menuEl) { menuEl.remove(); menuEl = null; } document.querySelectorAll('.tabs a[aria-expanded=true]').forEach(function (a) { a.setAttribute('aria-expanded', 'false'); }); }
-  document.addEventListener('click', function (e) { if (menuEl && !e.target.closest('.menu-pop') && !e.target.closest('.tabs a')) closeMenu(); });
+  function closeMenu() {
+    if (menuEl) { var m = menuEl; menuEl = null; m.classList.add('closing'); setTimeout(function () { m.remove(); }, 180); }
+    document.body.classList.remove('no-scroll');
+    closeBell();
+  }
+  document.addEventListener('click', function (e) {
+    if (bellEl && !e.target.closest('.bell-pop') && !e.target.closest('.bell-btn')) closeBell();
+  });
   window.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeMenu(); });
 
   function visibleItems(g) { return g.items.filter(function (x) { return !x.admin || isAdmin(); }); }
+  function badgeCount(id) { var b = S.badges || {}; return id === 'admin' ? b.admin : id === 'request' ? b.request : id === 'tukar' ? b.tukar : 0; }
+  function groupCount(g) { return visibleItems(g).reduce(function (n, x) { return n + (badgeCount(x.id) || 0); }, 0); }
+  function badgeEl(n, cls) { return el('span', { class: 'nbadge' + (cls ? ' ' + cls : ''), 'data-n': n || 0, text: n > 99 ? '99+' : String(n || '') }); }
+  function getFold() { try { return JSON.parse(store.get('fold') || '[]'); } catch (e) { return []; } }
+
+  // Menu bawah di HP
+  var BOTTOM = [
+    { id: 'beranda', label: 'Beranda', icon: 'home', groups: ['beranda'] },
+    { id: 'monitoring', label: 'Sales', icon: 'chart', groups: ['sales'] },
+    { id: 'kas', label: 'Kas', icon: 'cash', groups: ['kasg'] },
+    { id: 'jadwal', label: 'Jadwal', icon: 'cal', routes: ['jadwal', 'request', 'tukar', 'simpanan'], badge: ['request', 'tukar'] },
+    { id: '_menu', label: 'Menu', icon: 'grid', badge: ['admin'] }
+  ];
 
   function shell(m) {
-    var badge = function (id) { return id === 'admin' && S.menunggu ? el('span', { class: 'badge', text: S.menunggu }) : null; };
-    var side = el('nav', null, GROUPS.map(function (g) {
+    var fold = getFold();
+    var side = el('nav', { class: 'snav' }, GROUPS.map(function (g) {
       var items = visibleItems(g);
-      if (g.id === 'beranda') return el('a', { href: '#/beranda', 'aria-current': m.r.id === 'beranda' ? 'page' : null }, icon(g.icon), 'Beranda');
-      return el('div', { class: 'side-group' + (g === m.g ? ' open' : '') },
-        el('div', { class: 'side-head' }, icon(g.icon), g.label),
-        items.map(function (x) { return el('a', { href: '#/' + x.id, class: 'sub', 'aria-current': x.id === m.r.id ? 'page' : null }, icon(x.icon), el('span', { text: x.label }), badge(x.id)); }));
+      if (g.id === 'beranda') {
+        return el('a', { href: '#/beranda', class: 'snav-home', style: '--c:' + g.color, 'aria-current': m.r.id === 'beranda' ? 'page' : null },
+          el('span', { class: 'tile' }, icon(g.icon)), el('span', { class: 'lbl', text: 'Beranda' }));
+      }
+      var folded = fold.indexOf(g.id) >= 0 && g !== m.g;
+      var grp = el('div', { class: 'snav-group' + (folded ? ' folded' : '') + (g === m.g ? ' cur' : ''), style: '--c:' + g.color });
+      var head = el('button', { type: 'button', class: 'snav-head', 'aria-expanded': String(!folded), onclick: function () {
+        var f = getFold(), i = f.indexOf(g.id);
+        if (grp.classList.toggle('folded')) { if (i < 0) f.push(g.id); } else if (i >= 0) f.splice(i, 1);
+        head.setAttribute('aria-expanded', String(!grp.classList.contains('folded')));
+        store.set('fold', JSON.stringify(f));
+      } }, el('span', { class: 'dotc' }), el('span', { class: 'lbl', text: g.label }), badgeEl(groupCount(g), 'grp'), el('span', { class: 'chev' }, icon('chev')));
+      var list = el('div', { class: 'snav-items' }, el('div', { class: 'snav-in' }, items.map(function (x) {
+        return el('a', { href: '#/' + x.id, class: 'snav-item', 'data-id': x.id, 'aria-current': x.id === m.r.id ? 'page' : null },
+          el('span', { class: 'tile' }, icon(x.icon)), el('span', { class: 'lbl', text: x.label }), badgeEl(badgeCount(x.id)));
+      })));
+      grp.append(head, list);
+      return grp;
     }));
-    var tabs = el('nav', { class: 'tabs' }, GROUPS.map(function (g) {
-      var single = g.id === 'beranda';
-      var a = el('a', { href: single ? '#/beranda' : '#', class: g === m.g ? 'active' : null, 'aria-current': g === m.g ? 'page' : null,
-        'aria-haspopup': single ? null : 'true', 'aria-expanded': single ? null : 'false' },
-        g.label, single ? null : el('span', { class: 'caret', text: '▾' }), g.id === 'tim' && S.menunggu && isAdmin() ? el('span', { class: 'dot' }) : null);
-      if (!single) a.addEventListener('click', function (e) {
-        e.preventDefault();
-        var open = a.getAttribute('aria-expanded') === 'true';
-        closeMenu();
-        if (open) return;
-        a.setAttribute('aria-expanded', 'true');
-        menuEl = el('div', { class: 'menu-pop', role: 'menu' }, visibleItems(g).map(function (x) {
-          return el('a', { href: '#/' + x.id, role: 'menuitem', class: x.id === m.r.id ? 'on' : null },
-            el('span', { class: 'mp-ic' }, icon(x.icon)),
-            el('span', { class: 'mp-txt' }, el('b', null, x.label, badge(x.id)), x.desc ? el('span', { text: x.desc }) : null));
-        }));
-        $('.topbar').appendChild(menuEl);
-      });
+
+    var bottom = el('nav', { class: 'bnav', 'aria-label': 'Menu utama' }, BOTTOM.map(function (b) {
+      var on = b.id === '_menu' ? !BOTTOM.some(function (x) { return x.id !== '_menu' && bottomOn(x, m); }) : bottomOn(b, m);
+      var cnt = (b.badge || []).reduce(function (n, k) { return n + (badgeCount(k) || 0); }, 0);
+      var g = b.groups ? GROUPS.filter(function (x) { return x.id === b.groups[0]; })[0] : b.routes ? GROUPS.filter(function (x) { return x.id === 'tim'; })[0] : null;
+      var a = el('a', { href: b.id === '_menu' ? '#' : '#/' + b.id, class: 'bnav-a' + (on ? ' on' : ''), 'data-b': b.id, style: '--c:' + (g ? g.color : (on ? m.g.color : '#94A3B8')), 'aria-current': on ? 'page' : null },
+        el('span', { class: 'bnav-ic' }, icon(b.icon), badgeEl(cnt, 'dot')), el('span', { class: 'bnav-l', text: b.label }));
+      if (b.id === '_menu') a.addEventListener('click', function (e) { e.preventDefault(); openSheet(m); });
       return a;
     }));
+
     var refreshBtn = el('button', { class: 'icon-btn', title: 'Muat ulang data', 'aria-label': 'Muat ulang data', html: IC.refresh, onclick: function () {
-      S.mon = null; S.jadwal = null; S.info = null; S.lap = {}; S.cust = null; S.stok = null; S.tim = null; render(); toast('Data dimuat ulang');
+      S.mon = null; S.jadwal = null; S.info = null; S.lap = {}; S.cust = null; S.stok = null; S.tim = null; loadNotif(true); render(); toast('Data dimuat ulang');
     } });
+    var bell = el('button', { class: 'bell-btn', type: 'button', title: 'Notifikasi', 'aria-label': 'Notifikasi', onclick: function (e) { e.stopPropagation(); bellEl ? closeBell() : openBell(); } },
+      icon('bell'), badgeEl(S.notif ? S.notif.unread : 0, 'bell-n'));
+    var crumb = m.r.id === 'beranda' ? el('span', { class: 'crumb' }, el('b', { text: 'Beranda' }))
+      : el('span', { class: 'crumb', style: '--c:' + m.g.color }, el('span', { class: 'crumb-g' }, el('span', { class: 'dotc' }), m.g.label), el('span', { class: 'crumb-sep', text: '›' }), el('b', { text: m.r.label }));
     return el('div', { class: 'shell' },
       el('aside', { class: 'side' },
         el('div', { class: 'brand' }, el('div', { class: 'logo-plate' }, el('img', { src: 'assets/logo.png', alt: 'Eigerindo MPI' })),
@@ -246,19 +280,174 @@
         el('header', { class: 'topbar' },
           el('div', { class: 'topbar-in' },
             el('a', { class: 'brand-sm', href: '#/beranda', 'aria-label': 'Beranda' }, el('img', { src: 'assets/logo.png', alt: 'Eigerindo MPI' })),
-            el('span', { class: 'page-title', text: m.r.id === 'beranda' ? '' : m.r.label }),
+            el('span', { class: 'page-title' }, crumb),
             el('span', { class: 'user-name', text: S.user ? S.user.nama : '' }),
             el('span', { class: 'chip' }, icon('store'), CFG.STORE),
+            bell,
             refreshBtn,
             el('button', { class: 'btn-out', text: 'Keluar', onclick: logout })),
-          tabs),
+          m.r.id === 'beranda' ? null : el('div', { class: 'm-crumb', style: '--c:' + m.g.color },
+            el('span', { class: 'tile' }, icon(m.r.icon)), el('div', null, el('small', { text: m.g.label }), el('b', { text: m.r.label })))),
         el('main', { class: 'view', id: 'view' }),
-        el('footer', { class: 'credit' }, APP + ' · Dibuat oleh ', el('b', { text: 'Ali Muhammad Shobrun' }))));
+        el('footer', { class: 'credit' }, APP + ' · Dibuat oleh ', el('b', { text: 'Ali Muhammad Shobrun' }))),
+      bottom);
+  }
+  function bottomOn(b, m) {
+    if (b.id === '_menu') return false;
+    if (b.routes) return b.routes.indexOf(m.r.id) >= 0;
+    return b.groups.indexOf(m.g.id) >= 0;
+  }
+
+  function openSheet(m) {
+    closeMenu();
+    document.body.classList.add('no-scroll');
+    var panel = el('div', { class: 'sheet', role: 'dialog', 'aria-label': 'Semua menu' },
+      el('div', { class: 'sheet-grip' }),
+      el('div', { class: 'sheet-head' }, el('b', { text: 'Semua menu' }), el('button', { class: 'sheet-x', 'aria-label': 'Tutup', html: IC.x, onclick: closeMenu })),
+      el('div', { class: 'sheet-body' }, GROUPS.filter(function (g) { return g.id !== 'beranda'; }).map(function (g) {
+        return el('section', { class: 'sheet-g', style: '--c:' + g.color },
+          el('h4', null, el('span', { class: 'dotc' }), g.label),
+          el('div', { class: 'sheet-grid' }, visibleItems(g).map(function (x) {
+            var n = badgeCount(x.id);
+            return el('a', { href: '#/' + x.id, class: 'sheet-tile' + (x.id === m.r.id ? ' on' : '') },
+              el('span', { class: 'tile' }, icon(x.icon), n ? badgeEl(n, 'tile-n') : null), el('span', { class: 'lbl', text: x.label }));
+          })));
+      })));
+    menuEl = el('div', { class: 'sheet-wrap', onclick: function (e) { if (e.target === menuEl) closeMenu(); } }, panel);
+    document.body.appendChild(menuEl);
+  }
+
+  /* ---------- notifikasi (lonceng) ---------- */
+  var bellEl = null, notifTimer = null, notifAt = 0;
+  function loadNotif(force) {
+    if (!S.token) return Promise.resolve(null);
+    if (!force && S.notif && Date.now() - notifAt < 60000) { paintBadges(); return Promise.resolve(S.notif); }
+    notifAt = Date.now();
+    return api('notif').then(function (d) {
+      S.notif = d; S.badges = d.badges || S.badges; S.menunggu = (d.badges || {}).admin || 0;
+      paintBadges();
+      if (bellEl) drawBell();
+      return d;
+    }).catch(function () { return null; });
+  }
+  function startNotifPolling() {
+    if (notifTimer) return;
+    notifTimer = setInterval(function () { if (S.token && document.visibilityState === 'visible') loadNotif(true); }, 180000);
+    document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible' && Date.now() - notifAt > 60000) loadNotif(true); });
+  }
+  function setBadge(node, n) { if (!node) return; node.setAttribute('data-n', n || 0); node.textContent = n ? (n > 99 ? '99+' : String(n)) : ''; }
+  function paintBadges() {
+    setBadge($('.bell-n'), S.notif ? S.notif.unread : 0);
+    document.querySelectorAll('.snav-item').forEach(function (a) { setBadge(a.querySelector('.nbadge'), badgeCount(a.getAttribute('data-id'))); });
+    document.querySelectorAll('.snav-group').forEach(function (gEl, i) {
+      var g = GROUPS.filter(function (x) { return x.id !== 'beranda'; })[i];
+      if (g) setBadge(gEl.querySelector('.nbadge.grp'), groupCount(g));
+    });
+    document.querySelectorAll('.bnav-a').forEach(function (a) {
+      var b = BOTTOM.filter(function (x) { return x.id === a.getAttribute('data-b'); })[0];
+      if (b) setBadge(a.querySelector('.nbadge'), (b.badge || []).reduce(function (n, k) { return n + (badgeCount(k) || 0); }, 0));
+    });
+  }
+  function closeBell() { if (bellEl) { var b = bellEl; bellEl = null; b.classList.add('closing'); setTimeout(function () { b.remove(); }, 160); } }
+  function openBell() {
+    closeBell();
+    bellEl = el('div', { class: 'bell-pop', role: 'dialog', 'aria-label': 'Notifikasi' });
+    $('.topbar').appendChild(bellEl);
+    drawBell();
+    loadNotif(true);
+  }
+  var NJ = { request: 'inbox', simpanan: 'bookmark', tukar: 'swap', akun: 'user', kas: 'cash', dsr: 'upload', sheet: 'file', batal: 'x', batas: 'alert' };
+  function relTime(w) {
+    var t = Date.parse(String(w).replace(' ', 'T') + '+07:00');
+    if (isNaN(t)) return '';
+    var s = (Date.now() - t) / 1000;
+    if (s < 60) return 'baru saja';
+    if (s < 3600) return Math.floor(s / 60) + ' mnt lalu';
+    if (s < 86400) return Math.floor(s / 3600) + ' jam lalu';
+    if (s < 172800) return 'kemarin';
+    return dShort(String(w).slice(0, 10));
+  }
+  function drawBell() {
+    if (!bellEl) return;
+    var d = S.notif;
+    var head = el('div', { class: 'bell-head' }, el('b', { text: 'Notifikasi' }),
+      d && d.items.some(function (x) { return !x.live && !x.dibaca; }) ? el('button', { class: 'link-btn', text: 'Tandai semua dibaca', onclick: function (e) {
+        e.stopPropagation();
+        d.items.forEach(function (x) { if (!x.live) x.dibaca = true; });
+        d.unread = d.items.filter(function (x) { return x.live; }).length;
+        paintBadges(); drawBell();
+        api('notifRead', { semua: true }).catch(function () {});
+      } }) : null);
+    if (!d) { bellEl.replaceChildren(head, el('div', { class: 'skel', style: 'margin:12px;height:80px' })); return; }
+    var aksi = d.items.filter(function (x) { return x.live && x.level === 'aksi'; });
+    var cek = d.items.filter(function (x) { return x.level === 'cek' && (x.live || !x.dibaca); });
+    var lain = d.items.filter(function (x) { return aksi.indexOf(x) < 0 && cek.indexOf(x) < 0; }).slice(0, 25);
+    function sec(title, arr, cls) {
+      if (!arr.length) return null;
+      return el('div', { class: 'bell-sec ' + cls }, el('div', { class: 'bell-sec-h' }, title, el('span', { text: arr.length })), arr.map(item));
+    }
+    function item(x) {
+      var unread = x.live || !x.dibaca;
+      var row = el('div', { class: 'nitem lv-' + x.level + (unread ? ' unread' : ''), tabindex: '0', role: 'button' },
+        el('span', { class: 'nitem-ic' }, icon(NJ[x.jenis] || (x.level === 'ok' ? 'check' : 'info'))),
+        el('div', { class: 'nitem-b' },
+          el('b', { text: x.judul }),
+          x.isi ? el('p', { text: x.isi }) : null,
+          el('small', { text: relTime(x.waktu) }),
+          x.aksi ? actions(x) : null),
+        unread && !x.live ? el('span', { class: 'udot' }) : null);
+      var openIt = function (e) {
+        if (e.target.closest('button')) return;
+        if (!x.live && !x.dibaca) { x.dibaca = true; d.unread = Math.max(0, d.unread - (x.level === 'info' ? 0 : 1)); paintBadges(); api('notifRead', { ids: [x.id] }).catch(function () {}); }
+        closeBell();
+        if (x.link) { if (location.hash === x.link) render(); else location.hash = x.link; }
+      };
+      row.addEventListener('click', openIt);
+      row.addEventListener('keydown', function (e) { if (e.key === 'Enter') openIt(e); });
+      return row;
+    }
+    function actions(x) {
+      var t = x.aksi.tipe;
+      var yes = t === 'ajak' ? 'Terima' : 'Setujui';
+      var call = function (ok) {
+        if (t === 'req') return api('reqDecide', { id: x.aksi.id, keputusan: ok ? 'setuju' : 'tolak' });
+        if (t === 'tukar') return api('tukarDecide', { id: x.aksi.id, keputusan: ok ? 'setuju' : 'tolak' });
+        if (t === 'akun') return api('setUserStatus', { username: x.aksi.id, status: ok ? 'aktif' : 'nonaktif' });
+        if (t === 'ajak') return api('tukarRespond', { id: x.aksi.id, terima: ok });
+      };
+      var box = el('div', { class: 'nitem-act' });
+      var bYes = el('button', { class: 'btn btn-primary btn-sm', text: yes });
+      var bNo = el('button', { class: 'btn btn-ghost btn-sm', text: 'Tolak' });
+      var armed = false, armT;
+      function run(ok) {
+        bYes.disabled = bNo.disabled = true;
+        (ok ? bYes : bNo).textContent = 'Memproses…';
+        call(ok).then(function (r) {
+          toast((ok ? (t === 'ajak' ? 'Diterima' : 'Disetujui') : 'Ditolak') + (r && r.info ? ' · ' + r.info : ''));
+          S.jadwal = null; S.tim = null;
+          loadNotif(true).then(function () { if (/^(request|tukar|admin|jadwal|beranda)$/.test(current())) render(); });
+        }).catch(function (err) { toast(err.message, true); bYes.disabled = bNo.disabled = false; bYes.textContent = yes; bNo.textContent = 'Tolak'; });
+      }
+      bYes.addEventListener('click', function (e) { e.stopPropagation(); run(true); });
+      bNo.addEventListener('click', function (e) {
+        e.stopPropagation();
+        if (!armed) { armed = true; bNo.textContent = 'Yakin tolak?'; bNo.classList.add('danger'); armT = setTimeout(function () { armed = false; bNo.textContent = 'Tolak'; bNo.classList.remove('danger'); }, 3000); return; }
+        clearTimeout(armT); run(false);
+      });
+      box.append(bYes, bNo);
+      return box;
+    }
+    var body = el('div', { class: 'bell-body' },
+      sec('Perlu keputusan', aksi, 's-aksi'),
+      sec('Perlu dicek', cek, 's-cek'),
+      sec('Terbaru', lain, 's-lain'),
+      !aksi.length && !cek.length && !lain.length ? el('div', { class: 'bell-empty' }, el('span', { class: 'tile' }, icon('bell')), el('b', { text: 'Semua beres' }), el('p', { text: 'Belum ada notifikasi.' })) : null);
+    bellEl.replaceChildren(head, body);
   }
 
   function logout() {
     var t = S.token;
-    setSession(null, null);
+    setSession(null, null); S.notif = null; S.badges = { admin: 0, request: 0, tukar: 0 };
     if (t) api('logout', { token: t }).catch(function () {});
     location.hash = '#/login';
     render();
@@ -355,19 +544,10 @@
   }
   function refreshMe() {
     api('me').then(function (u) {
-      var changed = !S.user || S.user.role !== u.role || S.menunggu !== (u.menunggu || 0);
+      var changed = !S.user || S.user.role !== u.role;
       S.user = { username: u.username, nama: u.nama, role: u.role };
-      S.menunggu = u.menunggu || 0;
       store.set('user', JSON.stringify(S.user));
-      if (changed) {
-        var nav = document.querySelectorAll('a[href="#/admin"]');
-        if (!nav.length && S.user.role === 'admin') render();
-        nav.forEach(function (a) {
-          var b = a.querySelector('.badge');
-          if (S.menunggu && !b) a.appendChild(el('span', { class: 'badge', text: S.menunggu }));
-          else if (b) { if (S.menunggu) b.textContent = S.menunggu; else b.remove(); }
-        });
-      }
+      if (changed) render();
     }).catch(function () {});
   }
 
@@ -1752,7 +1932,7 @@
         };
         var pending = users.filter(function (u) { return u.status === 'menunggu'; });
         var others = users.filter(function (u) { return u.status !== 'menunggu'; });
-        S.menunggu = pending.length;
+        S.menunggu = pending.length; S.badges.admin = pending.length; paintBadges();
         box.replaceChildren(
           el('div', { class: 'card' }, el('h3', { text: 'Menunggu persetujuan' + (pending.length ? ' (' + pending.length + ')' : '') }),
             pending.length ? el('ul', { class: 'list' }, pending.map(function (u) {

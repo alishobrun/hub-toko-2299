@@ -19,6 +19,7 @@ Login per orang: anggota tim mendaftar sendiri, lalu admin menyetujui. Akun pert
 - Request dan tukar shift yang disetujui ditulis ke sheet **JADWAL KARTASURA JAYA** dengan warna ungu.
 - Hanya tab **OKT-NOV 2026 dan sesudahnya** yang diubah. Tab lama tidak pernah disentuh.
 - Kalau tab periode berikutnya belum ada, tab baru dibuat otomatis dari tab periode sebelumnya saat request pertama disetujui.
+- Lonceng notifikasi: admin melihat request, tukar shift, akun baru (bisa langsung disetujui), selisih kas, DSR, dan status tulis sheet. Tim melihat hasil request dan ajakan tukar shift.
 - Batas request untuk periode 24 s/d 23 adalah tanggal 21 bulan mulainya, pukul 23.59. Admin tetap bisa menambahkan.
 
 ### Teknis

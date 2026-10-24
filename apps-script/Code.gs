@@ -47,7 +47,8 @@ const TABS = {
   tukar_shift: ['id', 'dibuat', 'pemohon', 'nama_pemohon', 'rekan', 'nama_rekan', 'tanggal', 'shift_pemohon', 'shift_rekan',
     'alasan', 'status', 'diputus_oleh', 'diputus_pada', 'tertulis'],
   simpanan_off: ['id', 'dibuat', 'username', 'nama', 'tanggal_masuk', 'keterangan', 'status', 'diambil_tanggal', 'dicatat_oleh'],
-  traffic: ['tanggal', 'traffic', 'diperbarui']
+  traffic: ['tanggal', 'traffic', 'diperbarui'],
+  notifikasi: ['id', 'waktu', 'untuk', 'level', 'jenis', 'judul', 'isi', 'link', 'dibaca']
 };
 
 const PECAHAN = [100000, 50000, 20000, 10000, 5000, 2000, 1000, 500, 200, 100];
@@ -94,7 +95,7 @@ function setup() {
 /* ===================== HTTP ===================== */
 
 function doGet() {
-  return json_({ ok: true, app: 'Hub Toko ' + CFG.STORE });
+  return json_({ ok: true, app: 'Basecamp ' + CFG.STORE });
 }
 
 function doPost(e) {
@@ -277,6 +278,8 @@ const API = {
         bumpVersion_();
       }
       log_(u.username, 'unggah DSR', res.dari + ' s/d ' + res.sampai + ': ' + res.baru + ' baru, ' + res.diperbarui + ' diperbarui');
+      if (u.role !== 'admin') notif_('admin', 'info', 'dsr', 'DSR diunggah oleh ' + u.nama,
+        'Data ' + res.dari + ' s/d ' + res.sampai + ' · ' + res.baru + ' invoice baru, ' + res.diperbarui + ' diperbarui', '#/unggah');
       append_('uploads', {
         id: res.id, waktu: now_(), username: u.username, nama_file: String(req.fileName || '').slice(0, 120),
         dari: res.dari, sampai: res.sampai, baris: rows.length,
@@ -380,6 +383,8 @@ const API = {
     withLock_(function () {
       append_('kas', rec);
       log_(u.username, 'cek kas ' + POS_NAMA[pos], 'fisik ' + fisik + (selisih == null ? '' : ', selisih ' + selisih));
+      if (selisih) notif_('admin', 'cek', 'kas', 'Selisih ' + POS_NAMA[pos] + ' ' + (selisih > 0 ? 'lebih' : 'kurang') + ' Rp' + rupiah_(Math.abs(selisih)),
+        u.nama + ' · ' + rec.waktu.slice(11, 16) + (catatan ? ' · ' + catatan : ''), '#/kas-rekap');
     });
     return kasOut_(rec);
   },
@@ -903,6 +908,7 @@ Object.assign(API, {
       if (r.status !== 'menunggu') throw new Error('Request yang sudah diputuskan tidak bisa dibatalkan');
       updateRow_('request_jadwal', 'id', r.id, { status: 'dibatalkan', diputus_pada: now_() });
       log_(u.username, 'batal request', r.jenis + ' ' + r.tanggal);
+      notif_('admin', 'info', 'batal', u.nama + ' membatalkan request', r.jenis + ' · ' + tglPendek_(r.tanggal), '#/request');
       return true;
     });
   },
@@ -930,6 +936,13 @@ Object.assign(API, {
       }
       updateRow_('request_jadwal', 'id', r.id, patch);
       log_(a.username, setuju ? 'setujui request' : 'tolak request', r.nama + ' ' + r.jenis + ' ' + r.tanggal);
+      const lbl = (String(r.pakai_simpanan) === 'ya' ? 'OFF (simpanan)' : r.jenis) + ' ' + tglPendek_(r.tanggal);
+      if (r.username !== a.username) notif_(r.username, setuju ? 'ok' : 'tolak', 'request', 'Request ' + lbl + (setuju ? ' disetujui' : ' ditolak'),
+        patch.catatan_admin ? 'Catatan admin: ' + patch.catatan_admin : (setuju ? 'Jadwal kamu sudah diperbarui.' : ''), '#/request');
+      if (setuju) {
+        if (String(patch.tertulis).indexOf('gagal') === 0) notif_('admin', 'cek', 'sheet', 'Gagal menulis ke sheet jadwal', r.nama + ' · ' + lbl + ' · ' + String(patch.tertulis).replace(/^gagal:\s*/, ''), '#/request');
+        else notif_('admin', 'info', 'sheet', 'Jadwal tertulis ke sheet', r.nama + ' · ' + lbl + ' · ' + String(patch.tertulis).replace(/^ya · /, ''), '#/jadwal');
+      }
       return { info: info };
     });
   },
@@ -983,6 +996,8 @@ Object.assign(API, {
       if (t.status !== 'menunggu_rekan') throw new Error('Pengajuan ini sudah dijawab');
       updateRow_('tukar_shift', 'id', t.id, { status: req.terima ? 'menunggu_admin' : 'ditolak_rekan', diputus_pada: req.terima ? '' : now_() });
       log_(u.username, req.terima ? 'terima tukar shift' : 'tolak tukar shift', t.tanggal + ' dari ' + t.pemohon);
+      notif_(t.pemohon, req.terima ? 'ok' : 'tolak', 'tukar', u.nama + (req.terima ? ' menerima' : ' menolak') + ' tukar shift',
+        tglPendek_(t.tanggal) + (req.terima ? ' · menunggu persetujuan admin' : ''), '#/tukar');
       return true;
     });
   },
@@ -995,6 +1010,8 @@ Object.assign(API, {
       if (t.pemohon !== u.username) throw new Error('Hanya pemohon yang bisa membatalkan');
       if (['menunggu_rekan', 'menunggu_admin'].indexOf(t.status) < 0) throw new Error('Pengajuan ini sudah selesai');
       updateRow_('tukar_shift', 'id', t.id, { status: 'dibatalkan', diputus_pada: now_() });
+      notif_('admin', 'info', 'batal', u.nama + ' membatalkan tukar shift', 'Dengan ' + t.nama_rekan + ' · ' + tglPendek_(t.tanggal), '#/tukar');
+      if (t.status === 'menunggu_rekan') notif_(t.rekan, 'info', 'batal', u.nama + ' membatalkan ajakan tukar shift', tglPendek_(t.tanggal), '#/tukar');
       return true;
     });
   },
@@ -1024,6 +1041,11 @@ Object.assign(API, {
       }
       updateRow_('tukar_shift', 'id', t.id, patch);
       log_(a.username, setuju ? 'setujui tukar shift' : 'tolak tukar shift', t.nama_pemohon + ' ↔ ' + t.nama_rekan + ' ' + t.tanggal);
+      [t.pemohon, t.rekan].forEach(function (un) {
+        if (un !== a.username) notif_(un, setuju ? 'ok' : 'tolak', 'tukar', 'Tukar shift ' + tglPendek_(t.tanggal) + (setuju ? ' disetujui' : ' ditolak'),
+          t.nama_pemohon + ' (' + t.shift_pemohon + ') ↔ ' + t.nama_rekan + ' (' + t.shift_rekan + ')', '#/tukar');
+      });
+      if (setuju) notif_('admin', 'info', 'sheet', 'Tukar shift tertulis ke sheet', t.nama_pemohon + ' ↔ ' + t.nama_rekan + ' · ' + tglPendek_(t.tanggal), '#/jadwal');
       return { info: info };
     });
   },
@@ -1049,6 +1071,7 @@ Object.assign(API, {
         tanggal_masuk: tgl, keterangan: ket, status: 'tersedia', diambil_tanggal: '', dicatat_oleh: a.username };
       append_('simpanan_off', rec);
       log_(a.username, 'tambah simpanan OFF', user.nama + ' ' + tgl);
+      if (target !== a.username) notif_(target, 'ok', 'simpanan', 'Simpanan OFF bertambah', 'Dari ' + tglPendek_(tgl) + ' · ' + ket, '#/simpanan');
       return simpananOut_(rec);
     });
   },
@@ -1529,3 +1552,128 @@ function readArea_() {
     toko: me, peringkat: me ? stores.indexOf(me) + 1 : null, jumlah: stores.length
   };
 }
+
+
+/* =====================================================================
+ * TAHAP 4: notifikasi (lonceng)
+ *  - "Perlu keputusan" dihitung langsung dari data (selalu sesuai keadaan).
+ *  - Kejadian lain dicatat di tab notifikasi; untuk = username atau 'admin'.
+ * ===================================================================== */
+
+Object.assign(API, {
+  notif: function (req) {
+    const u = auth_(req);
+    const admin = u.role === 'admin';
+    const today = today_();
+    const items = [];
+    const badges = { admin: 0, request: 0, tukar: 0 };
+
+    const reqs = read_('request_jadwal');
+    const tukar = read_('tukar_shift');
+
+    if (admin) {
+      const users = read_('users').filter(function (x) { return x.status === 'menunggu'; });
+      reqs.filter(function (r) { return r.status === 'menunggu'; }).forEach(function (r) {
+        const simp = String(r.pakai_simpanan) === 'ya';
+        items.push({ id: 'live-req-' + r.id, live: true, level: 'aksi', jenis: simp ? 'simpanan' : 'request', waktu: String(r.dibuat),
+          judul: r.nama + (simp ? ' pakai simpanan OFF' : ' minta ' + r.jenis), isi: tglPendek_(r.tanggal) + ' · ' + String(r.alasan || ''),
+          link: '#/request', aksi: { tipe: 'req', id: String(r.id) } });
+      });
+      tukar.filter(function (t) { return t.status === 'menunggu_admin'; }).forEach(function (t) {
+        items.push({ id: 'live-tukar-' + t.id, live: true, level: 'aksi', jenis: 'tukar', waktu: String(t.dibuat),
+          judul: 'Tukar shift ' + t.nama_pemohon + ' ↔ ' + t.nama_rekan, isi: tglPendek_(t.tanggal) + ' · ' + t.shift_pemohon + ' ↔ ' + t.shift_rekan + ' · sudah diterima rekan',
+          link: '#/tukar', aksi: { tipe: 'tukar', id: String(t.id) } });
+      });
+      users.forEach(function (x) {
+        items.push({ id: 'live-user-' + x.username, live: true, level: 'aksi', jenis: 'akun', waktu: String(x.dibuat),
+          judul: 'Akun baru: ' + x.nama, isi: '@' + x.username + ' menunggu disetujui', link: '#/admin', aksi: { tipe: 'akun', id: x.username } });
+      });
+      badges.admin = users.length;
+      badges.request = reqs.filter(function (r) { return r.status === 'menunggu'; }).length;
+      badges.tukar = tukar.filter(function (t) { return t.status === 'menunggu_admin'; }).length;
+
+      // batas request periode berikutnya sudah dekat
+      const nx = periodOf_(addDays_(periodOf_(today).end, 1));
+      const batas = deadlineOf_(nx).slice(0, 10);
+      const pend = reqs.filter(function (r) { return r.status === 'menunggu' && String(r.tanggal) >= nx.start && String(r.tanggal) <= nx.end; }).length;
+      if (pend && today >= addDays_(batas, -4) && today < nx.start) {
+        const sisa = Math.round((Date.parse(batas) - Date.parse(today)) / 864e5);
+        items.push({ id: 'live-batas-' + nx.start, live: true, level: 'cek', jenis: 'batas', waktu: today + ' 00:00:00',
+          judul: pend + ' request ' + nx.label + ' belum diputuskan',
+          isi: sisa > 0 ? 'Batas request ' + tglPendek_(batas) + ' (' + sisa + ' hari lagi)' : sisa === 0 ? 'Batas request hari ini' : 'Batas request sudah lewat, periode mulai ' + tglPendek_(nx.start),
+          link: '#/request' });
+      }
+
+      // DSR kemarin belum masuk (setelah jam 11)
+      const jam = Number(Utilities.formatDate(new Date(), CFG.TZ, 'H'));
+      const kemarin = addDays_(today, -1);
+      const latest = latestDate_();
+      if (jam >= 11 && latest < kemarin) {
+        items.push({ id: 'live-dsr-' + today, live: true, level: 'cek', jenis: 'dsr', waktu: today + ' 11:00:00',
+          judul: 'DSR kemarin belum diunggah', isi: 'Data terakhir sampai ' + tglPendek_(latest), link: '#/unggah' });
+      }
+    } else {
+      tukar.filter(function (t) { return t.status === 'menunggu_rekan' && t.rekan === u.username; }).forEach(function (t) {
+        items.push({ id: 'live-ajak-' + t.id, live: true, level: 'aksi', jenis: 'tukar', waktu: String(t.dibuat),
+          judul: t.nama_pemohon + ' mengajak tukar shift', isi: tglPendek_(t.tanggal) + ' · kamu ' + t.shift_rekan + ' → ' + t.shift_pemohon + ' · ' + String(t.alasan || ''),
+          link: '#/tukar', aksi: { tipe: 'ajak', id: String(t.id) } });
+      });
+      badges.tukar = items.length;
+    }
+
+    // catatan kejadian (60 hari terakhir, maks 60)
+    const batasLama = addDays_(today, -60);
+    const log = read_('notifikasi').filter(function (n) {
+      const to = String(n.untuk);
+      return (to === u.username || (admin && to === 'admin')) && String(n.waktu).slice(0, 10) >= batasLama;
+    }).slice(-60).reverse().map(function (n) {
+      const dib = String(n.dibaca || '').split(',').indexOf(u.username) >= 0;
+      return { id: String(n.id), live: false, level: String(n.level), jenis: String(n.jenis), waktu: String(n.waktu),
+        judul: String(n.judul), isi: String(n.isi), link: String(n.link), dibaca: dib };
+    });
+
+    const live = items.sort(function (a, b) { return a.level === b.level ? (a.waktu < b.waktu ? 1 : -1) : (a.level === 'aksi' ? -1 : 1); });
+    const unread = live.length + log.filter(function (n) { return !n.dibaca && n.level !== 'info'; }).length;
+    return { items: live.concat(log), unread: unread, badges: badges, waktu: now_() };
+  },
+
+  notifRead: function (req) {
+    const u = auth_(req);
+    const ids = req.semua ? null : (req.ids || []).map(String);
+    return withLock_(function () {
+      const all = read_('notifikasi');
+      let n = 0;
+      all.forEach(function (x) {
+        const to = String(x.untuk);
+        if (!(to === u.username || (u.role === 'admin' && to === 'admin'))) return;
+        if (ids && ids.indexOf(String(x.id)) < 0) return;
+        const list = String(x.dibaca || '').split(',').filter(String);
+        if (list.indexOf(u.username) >= 0) return;
+        list.push(u.username);
+        x.dibaca = list.join(',');
+        n++;
+      });
+      if (n) writeAll_('notifikasi', all);
+      return { ditandai: n };
+    });
+  }
+});
+
+/** Catat notifikasi. Dipanggil di dalam withLock_ yang sudah berjalan. */
+function notif_(untuk, level, jenis, judul, isi, link) {
+  try {
+    append_('notifikasi', {
+      id: Utilities.formatDate(new Date(), CFG.TZ, 'yyyyMMddHHmmss') + '-' + Math.random().toString(36).slice(2, 7),
+      waktu: now_(), untuk: untuk, level: level, jenis: jenis,
+      judul: String(judul || '').slice(0, 140), isi: String(isi || '').slice(0, 300), link: link || '', dibaca: ''
+    });
+    const s = sh_('notifikasi');
+    if (s.getLastRow() > 1500) s.deleteRows(2, 500); // simpan yang terbaru saja
+  } catch (e) { Logger.log('notif gagal: ' + e); }
+}
+function tglPendek_(iso) {
+  const p = String(iso).slice(0, 10).split('-').map(Number);
+  if (p.length < 3 || !p[0]) return String(iso);
+  return p[2] + ' ' + ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'][p[1] - 1];
+}
+function rupiah_(n) { return String(Math.round(Number(n) || 0)).replace(/\B(?=(\d{3})+(?!\d))/g, '.'); }
