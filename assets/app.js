@@ -2913,10 +2913,10 @@
           el('button', { class: 'btn btn-ghost btn-sm', onclick: function (e) { e.target.disabled = true; loadMasterCard(true); } }, icon('refresh'), 'Cek file baru')),
           el('p', { class: 'note', style: 'margin-top:0', text: 'Diambil otomatis dari folder Drive MASTER ARTIKEL (dicek tiap hari). Dipakai untuk label NEW, season dan collection.' }),
           L ? el('div', { class: 'kv-row' }, el('span', { text: 'Terpasang' }), el('b', { text: L.folder + ' · ' + L.nama + ' · ' + fNum(L.varian) + ' varian · ' + fTime(L.waktu) })) : el('div', { class: 'kv-row' }, el('span', { text: 'Terpasang' }), el('b', { text: 'belum ada' })),
-          P ? el('div', { class: 'kv-row' }, el('span', { text: 'File baru' }), el('b', { class: 'c-warn', text: P.folder + ' · ' + P.nama + ' (' + (P.size / 1048576).toFixed(1) + ' MB)' })) : null,
+          P ? el('div', { class: 'kv-row' }, el('span', { text: 'File baru' }), el('b', { class: 'c-warn', text: P.folder + ' · ' + P.nama + ' (' + (P.size / 1048576).toFixed(1) + ' MB)' + (P.ready ? ' · siap dimuat' : ' · sedang disiapkan, ±2 menit') })) : null,
           m.proses ? el('p', { class: 'muted', text: 'Sedang dimuat oleh ' + m.proses.nama + '…' }) : null,
           m.error ? el('p', { class: 'c-bad', style: 'font-size:13px', text: 'Gagal terakhir ' + fTime(m.error.waktu) + ': ' + m.error.pesan }) : null,
-          P && m.admin ? el('button', { class: 'btn btn-primary', onclick: function () { masterSync(true); } }, icon('download'), 'Muat master sekarang') : null,
+          P && P.ready && m.admin ? el('button', { class: 'btn btn-primary', onclick: function () { masterSync(true); } }, icon('download'), 'Muat master sekarang') : null,
           P && !m.admin ? el('p', { class: 'muted', text: 'Akan dimuat otomatis saat admin membuka web di komputer.' }) : null);
       }).catch(function (err) { mcard.replaceChildren(el('h3', { text: 'Master artikel' }), errBox(err)); });
     }
@@ -2945,7 +2945,14 @@
       function next() {
         if (i >= c.chunks) return Promise.resolve();
         masterProgress('Master artikel: mengambil file ' + (i + 1) + '/' + c.chunks + '…', 0.05 + 0.45 * i / c.chunks);
-        return api('masterChunk', { id: file.id, i: i }).then(function (r) { parts.push(MasterXlsx.b64ToBytes(r.data)); i++; return next(); });
+        var tries = 0;
+        function get() {
+          return api('masterChunk', { id: file.id, i: i }).then(function (r) {
+            if (!r || typeof r.data !== 'string') throw new Error('Respons potongan file kosong');
+            return r;
+          }).catch(function (err) { if (++tries < 3) return new Promise(function (ok) { setTimeout(ok, 1500 * tries); }).then(get); throw err; });
+        }
+        return get().then(function (r) { parts.push(MasterXlsx.b64ToBytes(r.data)); i++; return next(); });
       }
       return next().then(function () {
         var n = parts.reduce(function (s, p) { return s + p.length; }, 0), u8 = new Uint8Array(n), o = 0;
@@ -2982,7 +2989,7 @@
     if (S.masterAutoDone || !isAdmin() || window.innerWidth < 960) return;
     S.masterAutoDone = true;
     setTimeout(function () {
-      api('masterStatus').then(function (m) { if (m.pending && !m.proses) masterSync(false); }).catch(function () {});
+      api('masterStatus').then(function (m) { if (m.pending && m.pending.ready && !m.proses) masterSync(false); }).catch(function () {});
     }, 4000);
   }
 

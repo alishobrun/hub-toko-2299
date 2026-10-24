@@ -22,7 +22,8 @@ const CFG = {
   JADWAL_MIN_START: '2026-10-24',
   // Folder "MASTER ARTIKEL 2026" (subfolder per bulan berisi file Excel master artikel)
   MASTER_FOLDER_ID: '191L_XnHi-Z6bLlbgkA4vGpKBSU_7XXDf',
-  MASTER_CHUNK: 3 * 1024 * 1024,
+  MASTER_CHUNK: 2 * 1024 * 1024, // potongan teks base64 (kelipatan 4)
+  MASTER_CACHE_FOLDER: 'Cache Master Artikel Basecamp 2299',
   NA_HARI: 60,          // New Arrival: dibuat (Created On) maksimal 60 hari lalu
   BARU_TOKO_HARI: 30,   // Baru di toko: pertama kali ada stok maksimal 30 hari lalu
   REQUEST_DEADLINE_DAY: 21,
@@ -1803,7 +1804,8 @@ Object.assign(API, {
   masterStatus: function (req) {
     const u = auth_(req);
     const cek = prop_('master_cek');
-    if (req.cekSekarang || !cek || Date.now() - Number(cek) > 12 * 3600e3) { try { cekMaster(); } catch (e) { Logger.log(e); } }
+    const pend0 = prop_('master_pending');
+    if (req.cekSekarang || !cek || Date.now() - Number(cek) > 12 * 3600e3 || (pend0 && !pend0.ready)) { try { cekMaster(); } catch (e) { Logger.log(e); } }
     const proc = prop_('master_proc');
     return {
       loaded: prop_('master_loaded'), pending: prop_('master_pending'), error: prop_('master_error'),
@@ -1816,6 +1818,7 @@ Object.assign(API, {
     return withLock_(function () {
       const pend = prop_('master_pending');
       if (!pend) throw new Error('Tidak ada master artikel baru untuk dimuat');
+      if (!pend.ready) throw new Error('File master sedang disiapkan, coba lagi beberapa menit lagi');
       const proc = prop_('master_proc');
       if (proc && proc.by !== u.username && Date.now() - proc.at < 15 * 60e3) throw new Error('Sedang dimuat oleh ' + proc.nama);
       prop_('master_proc', { by: u.username, nama: u.nama, at: Date.now(), id: pend.id });
@@ -1823,7 +1826,7 @@ Object.assign(API, {
       read_('bin').forEach(function (o) { set[String(o.generic || String(o.sku).slice(0, 9))] = 1; });
       const sh = sh_('dsr'), last = sh.getLastRow();
       if (last > 1) sh.getRange(2, TABS.dsr.indexOf('sku') + 1, last - 1, 1).getValues().forEach(function (r) { const k = String(r[0]); if (k) set[k.slice(0, 9)] = 1; });
-      return { file: pend, chunks: Math.ceil(pend.size / CFG.MASTER_CHUNK), generics: Object.keys(set), naHari: CFG.NA_HARI };
+      return { file: pend, chunks: pend.parts.length, generics: Object.keys(set), naHari: CFG.NA_HARI };
     });
   },
 
@@ -1831,21 +1834,9 @@ Object.assign(API, {
     auth_(req, true);
     const pend = prop_('master_pending');
     if (!pend || pend.id !== req.id) throw new Error('File master sudah berganti, muat ulang halaman');
-    const i = Number(req.i) || 0, a = i * CFG.MASTER_CHUNK, z = Math.min(pend.size, a + CFG.MASTER_CHUNK) - 1;
-    // Ambil sepotong file saja (Range) supaya hemat memori; cadangan: baca utuh lalu potong
-    try {
-      const res = UrlFetchApp.fetch('https://www.googleapis.com/drive/v3/files/' + pend.id + '?alt=media&supportsAllDrives=true', {
-        headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken(), Range: 'bytes=' + a + '-' + z }, muteHttpExceptions: true
-      });
-      if (res.getResponseCode() === 206 || res.getResponseCode() === 200) {
-        let part = res.getContent();
-        if (res.getResponseCode() === 200) part = part.slice(a, z + 1);
-        return { i: i, size: pend.size, data: Utilities.base64Encode(part) };
-      }
-      Logger.log('Range gagal: ' + res.getResponseCode() + ' ' + res.getContentText().slice(0, 200));
-    } catch (e) { Logger.log('Range gagal: ' + e); }
-    const bytes = DriveApp.getFileById(pend.id).getBlob().getBytes();
-    return { i: i, size: bytes.length, data: Utilities.base64Encode(bytes.slice(a, z + 1)) };
+    const i = Number(req.i) || 0;
+    if (!pend.parts || !pend.parts[i]) throw new Error('Potongan file tidak ditemukan');
+    return { i: i, data: DriveApp.getFileById(pend.parts[i]).getBlob().getDataAsString() };
   },
 
   masterSave: function (req) {
@@ -1860,6 +1851,7 @@ Object.assign(API, {
       const n = sh_('master').getLastRow() - 1;
       prop_('master_loaded', { id: pend.id, nama: pend.nama, folder: pend.folder, modified: pend.modified, waktu: now_(), oleh: u.nama, varian: n, sig: pend.sig, artikel: Number(req.artikel) || 0 });
       prop_('master_pending', null); prop_('master_proc', null); prop_('master_error', null);
+      hapusCacheMaster_();
       bumpVersion_();
       log_(u.username, 'muat master artikel', pend.nama + ' · ' + n + ' varian');
       notif_('admin', 'info', 'master', 'Master artikel diperbarui', pend.nama + ' · ' + rupiah_(n) + ' varian dimuat', '#/stokart');
@@ -1916,12 +1908,54 @@ function cekMaster() {
   if (loaded && loaded.sig === f.sig) { prop_('master_pending', null); return f; }
   const pend = prop_('master_pending');
   if (!pend || pend.sig !== f.sig) {
+    f.ready = false;
     prop_('master_pending', f);
-    withLock_(function () {
-      notif_('admin', 'info', 'master', 'Master artikel baru tersedia', f.folder + ' · ' + f.nama + ' · dimuat otomatis saat admin membuka web di komputer', '#/unggahbin');
-    });
+    // file besar disiapkan di latar (pemicu sekali jalan) supaya web tidak menunggu lama
+    ScriptApp.getProjectTriggers().forEach(function (t) { if (t.getHandlerFunction() === 'siapkanMaster') ScriptApp.deleteTrigger(t); });
+    ScriptApp.newTrigger('siapkanMaster').timeBased().after(30 * 1000).create();
+  } else if (!pend.ready && Date.now() - Number(prop_('master_siap_mulai') || 0) > 15 * 60e3 &&
+    !ScriptApp.getProjectTriggers().some(function (t) { return t.getHandlerFunction() === 'siapkanMaster'; })) {
+    ScriptApp.newTrigger('siapkanMaster').timeBased().after(30 * 1000).create();
   }
   return f;
+}
+
+/** Pemicu latar: ubah file master jadi potongan teks kecil di folder cache Drive. */
+function siapkanMaster() {
+  ScriptApp.getProjectTriggers().forEach(function (t) { if (t.getHandlerFunction() === 'siapkanMaster') ScriptApp.deleteTrigger(t); });
+  const pend = prop_('master_pending');
+  if (!pend || pend.ready) return;
+  prop_('master_siap_mulai', Date.now());
+  try {
+    hapusCacheMaster_();
+    const b64 = Utilities.base64Encode(DriveApp.getFileById(pend.id).getBlob().getBytes());
+    const folder = folderCacheMaster_();
+    const parts = [];
+    for (let a = 0, i = 0; a < b64.length; a += CFG.MASTER_CHUNK, i++) {
+      parts.push(folder.createFile('master_' + i + '.txt', b64.slice(a, a + CFG.MASTER_CHUNK), MimeType.PLAIN_TEXT).getId());
+    }
+    const cur = prop_('master_pending');
+    if (!cur || cur.sig !== pend.sig) return;
+    cur.ready = true; cur.parts = parts;
+    prop_('master_pending', cur);
+    prop_('master_error', null);
+    withLock_(function () {
+      notif_('admin', 'info', 'master', 'Master artikel baru siap dimuat', cur.folder + ' · ' + cur.nama + ' · dimuat otomatis saat admin membuka web di komputer', '#/unggahbin');
+    });
+  } catch (e) {
+    prop_('master_error', { waktu: now_(), pesan: 'Gagal menyiapkan file: ' + e.message });
+    withLock_(function () { notif_('admin', 'cek', 'master', 'Master artikel gagal disiapkan', String(e.message || e).slice(0, 200), '#/unggahbin'); });
+  }
+}
+function folderCacheMaster_() {
+  const it = DriveApp.getFoldersByName(CFG.MASTER_CACHE_FOLDER);
+  return it.hasNext() ? it.next() : DriveApp.createFolder(CFG.MASTER_CACHE_FOLDER);
+}
+function hapusCacheMaster_() {
+  try {
+    const it = folderCacheMaster_().getFiles();
+    while (it.hasNext()) it.next().setTrashed(true);
+  } catch (e) { Logger.log('cache master: ' + e); }
 }
 function pasangCekMaster_() {
   ScriptApp.getProjectTriggers().forEach(function (t) { if (t.getHandlerFunction() === 'cekMaster') ScriptApp.deleteTrigger(t); });
