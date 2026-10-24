@@ -63,7 +63,7 @@ const TABS = {
 };
 
 const PECAHAN = [100000, 50000, 20000, 10000, 5000, 2000, 1000, 500, 200, 100];
-const SETTING_DEFAULTS = { modal_till: 600000, floating_cash: 2400000 };
+const SETTING_DEFAULTS = { modal_till: 600000, floating_cash: 2400000, target_upt: 2, target_basket: 0 };
 
 // Kolom yang disimpan sebagai teks (supaya tanggal/kode tidak diubah Sheets)
 const NUM_COLS = {
@@ -1478,7 +1478,7 @@ Object.assign(API, {
 });
 
 function hari_(rows) {
-  const o = { bruto: 0, netto: 0, qty: 0, inv: {}, ea: [0, 0], wholesale: [0, 0], empDisc: 0, promo: 0, coupon: 0, prod: {}, ra: {} };
+  const o = { bruto: 0, netto: 0, qty: 0, inv: {}, ea: [0, 0], wholesale: [0, 0], empDisc: 0, promo: 0, coupon: 0, prod: {}, ra: {}, vr: {} };
   rows.forEach(function (r) {
     if (!isSalesLine_(r)) return;
     const g = Number(r.gross) || 0, n = Number(r.net) || 0, q = Number(r.qty) || 0;
@@ -1491,6 +1491,9 @@ function hari_(rows) {
     o.coupon += Number(r.coupon) || 0;
     const P = o.prod[String(r.sku)] || (o.prod[String(r.sku)] = { nama: String(r.nama_sku), q: 0, b: 0, n: 0 });
     P.q += q; P.b += g; P.n += n;
+    const vk = varianKey_(r.sku, r.nama_sku), parts = String(r.nama_sku).split(',');
+    const V = o.vr[vk] || (o.vr[vk] = { nama: (parts.length >= 3 ? parts.slice(0, parts.length - 2).join(',').trim() + ' ' + parts[parts.length - 2].trim() : String(r.nama_sku)), q: 0, b: 0, n: 0 });
+    V.q += q; V.b += g; V.n += n;
     const sp = String(r.sales_person || '').trim() || '(tanpa nama)';
     const R = o.ra[sp] || (o.ra[sp] = { b: 0, n: 0, inv: {} });
     R.b += g; R.n += n; R.inv[String(r.invoice)] = 1;
@@ -1503,7 +1506,9 @@ function hari_(rows) {
     produk: Object.keys(o.prod).map(function (k) { const x = o.prod[k]; return [x.nama, x.q, R0(x.b), R0(x.n)]; })
       .sort(function (a, b) { return b[3] - a[3]; }).slice(0, 5),
     ra: Object.keys(o.ra).map(function (k) { const x = o.ra[k]; return [k, R0(x.b), R0(x.n), Object.keys(x.inv).length]; })
-      .sort(function (a, b) { return b[2] - a[2]; })
+      .sort(function (a, b) { return b[2] - a[2]; }),
+    varian: Object.keys(o.vr).map(function (k) { const x = o.vr[k]; return [k, x.nama, x.q, R0(x.b), R0(x.n)]; })
+      .sort(function (a, b) { return b[4] - a[4]; }).slice(0, 15)
   };
 }
 
@@ -1960,4 +1965,66 @@ function hapusCacheMaster_() {
 function pasangCekMaster_() {
   ScriptApp.getProjectTriggers().forEach(function (t) { if (t.getHandlerFunction() === 'cekMaster') ScriptApp.deleteTrigger(t); });
   ScriptApp.newTrigger('cekMaster').timeBased().everyDays(1).atHour(6).create();
+}
+
+
+/* =====================================================================
+ * TAHAP 6: Briefing pagi (sales kemarin, posisi bulan, fokus otomatis)
+ * ===================================================================== */
+const PARTAI_MIN_QTY = 15; // invoice ≥ 15 pcs / wholesale tidak dihitung untuk UPT & basket
+
+Object.assign(API, {
+  briefing: function (req) {
+    auth_(req);
+    const today = today_();
+    const kemarin = /^\d{4}-\d{2}-\d{2}$/.test(String(req.tanggal || '')) ? String(req.tanggal) : addDays_(today, -1);
+    const latest = latestDate_();
+    syncTrafficIfNeeded_();
+    const out = cached_('brief_' + kemarin, 600, function () {
+      const all = read_('dsr');
+      const rowsK = all.filter(function (r) { return String(r.tanggal) === kemarin; });
+      const h = hari_(rowsK);
+      return { hari: h, kpi: kpiBriefing_(all, kemarin) };
+    });
+    const tr = read_('traffic').filter(function (x) { return String(x.tanggal) === kemarin; })[0];
+    out.hari.traffic = tr && tr.traffic !== '' ? Number(tr.traffic) : null;
+    out.kemarin = kemarin; out.today = today; out.dataSampai = latest;
+    out.target = { upt: settings_().target_upt, basket: settings_().target_basket };
+    return out;
+  }
+});
+
+/** UPT & basket bulan berjalan (1..tgl), bulan lalu periode sama, dan rekor bulanan; tanpa pembelian partai/wholesale. */
+function kpiBriefing_(rows, tgl) {
+  const inv = {};
+  rows.forEach(function (r) {
+    if (!isSalesLine_(r)) return;
+    const k = String(r.invoice);
+    const o = inv[k] || (inv[k] = { t: String(r.tanggal), q: 0, b: 0, n: 0, ws: false });
+    o.q += Number(r.qty) || 0; o.b += Number(r.gross) || 0; o.n += Number(r.net) || 0;
+    if (String(r.tipe || '').toLowerCase().indexOf('wholesale') >= 0) o.ws = true;
+  });
+  const d = Number(tgl.slice(8, 10));
+  const ym = tgl.slice(0, 7);
+  const p = ym.split('-').map(Number);
+  const lm = (p[1] === 1 ? (p[0] - 1) + '-12' : p[0] + '-' + pad_(p[1] - 1));
+  const acc = function () { return { q: 0, b: 0, n: 0, t: 0, partai: 0 }; };
+  const cur = acc(), last = acc(), months = {};
+  Object.keys(inv).forEach(function (k) {
+    const o = inv[k];
+    const m = o.t.slice(0, 7), day = Number(o.t.slice(8, 10));
+    const partai = o.ws || o.q >= PARTAI_MIN_QTY;
+    const add = function (A) { if (partai) { A.partai++; return; } A.q += o.q; A.b += o.b; A.n += o.n; A.t++; };
+    if (m === ym && day <= d) add(cur);
+    if (m === lm && day <= d) add(last);
+    if (m <= ym) { months[m] = months[m] || acc(); if (m < ym || day <= d) add(months[m]); }
+  });
+  const fin = function (A) { return { upt: A.t ? A.q / A.t : null, basketB: A.t ? A.b / A.t : null, basketN: A.t ? A.n / A.t : null, trx: A.t, partai: A.partai }; };
+  const best = { upt: null, basketB: null, basketN: null };
+  Object.keys(months).forEach(function (m) {
+    const f = fin(months[m]);
+    if (f.trx < 50) return; // bulan dengan data terlalu sedikit diabaikan
+    ['upt', 'basketB', 'basketN'].forEach(function (k) { if (f[k] != null && (!best[k] || f[k] > best[k].nilai)) best[k] = { nilai: f[k], bulan: m }; });
+  });
+  return { bulanIni: fin(cur), bulanLalu: fin(last), bulanLaluKey: lm, rekor: best, partaiMin: PARTAI_MIN_QTY };
 }

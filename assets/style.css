@@ -801,3 +801,12 @@ input.hb-search:focus{border-color:var(--navy-700);box-shadow:0 0 0 3px rgba(22,
 .toolbar2 .sel{max-width:100%}
 @media (max-width:599px){.toolbar2 .sel{flex:1 1 calc(50% - 6px);min-width:0}}
 @media (max-width:599px){.seg.seg-tabs{display:grid;grid-template-columns:1fr 1fr;gap:4px}.seg.seg-tabs button{padding:10px 6px;font-size:13.5px}}
+.brief-fokus{width:100%;border:1px solid var(--line-2);border-radius:12px;padding:12px;font:inherit;font-size:14px;line-height:1.5;resize:vertical;min-height:150px}
+.brief-checks{display:grid;gap:2px}
+.brief-checks .check{margin-top:8px}
+.warn-box{background:var(--warn-50);border-color:#F3DDA0;color:#7A5300;margin-bottom:14px}
+.warn-box a{font-weight:700}
+@media (min-width:960px){.quick{grid-template-columns:repeat(5,1fr)}}
+@media (max-width:759px){.quick a:first-child{grid-column:1/-1}}
+.wa-pre.brief-pre{max-height:680px}
+.brief-fokus{min-height:230px}
