@@ -138,6 +138,10 @@
     plus: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>',
     minus: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M5 12h14"/></svg>',
     x: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>',
+    sun: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>',
+    sunset: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 17a5 5 0 0 0-10 0M12 3v6M8.5 6.5 12 3l3.5 3.5M2 21h20M4.2 12.2l1.4 1.4M18.4 13.6l1.4-1.4M2 17h2M20 17h2"/></svg>',
+    coffee: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9h13v5a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5z"/><path d="M17 10h1.5a2.5 2.5 0 0 1 0 5H17M8 2.5v3M12 2.5v3"/></svg>',
+    arrow: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>',
     store: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16"><path d="M3 9l1.5-5h15L21 9M4 9v11h16V9M3 9h18M9 20v-6h6v6"/></svg>'
   };
   function icon(name, cls) { return el('span', { class: 'ic' + (cls ? ' ' + cls : ''), html: IC[name], 'aria-hidden': 'true' }); }
@@ -268,7 +272,7 @@
   }
   function brandBlock() {
     return el('div', { class: 'auth-brand' }, el('img', { class: 'auth-logo', src: 'assets/logo.png', alt: 'Eigerindo MPI' }),
-      el('div', null, el('h1', { text: APP }), el('p', { text: (CFG.TAGLINE || 'Store Management') + ' · EIGER ' + CFG.STORE_NAME })));
+      el('div', null, el('h1', { text: APP }), el('p', { text: 'EIGER ' + CFG.STORE_NAME })));
   }
 
   /* ---------- login & daftar ---------- */
@@ -463,7 +467,7 @@
     var kpis = el('div', { class: 'grid grid-3' }, el('div', { class: 'skel' }), el('div', { class: 'skel' }), el('div', { class: 'skel' }));
     v.append(kpis);
     var row = el('div', { class: 'grid grid-2 section' });
-    var duty = el('div', { class: 'card' }, el('h3', { text: 'Bertugas hari ini' }), el('p', { class: 'sub', text: dLong(todayJkt()) }), el('div', { class: 'skel' }));
+    var duty = el('a', { class: 'card duty-card', href: '#/jadwal', title: 'Buka jadwal lengkap' }, el('h3', { text: 'Bertugas hari ini' }), el('p', { class: 'sub', text: dLong(todayJkt()) }), el('div', { class: 'skel' }));
     var chartCard = el('div', { class: 'card' }, el('h3', { text: 'Sales harian bulan ini' }), el('p', { class: 'sub', text: 'Batang = sales, garis putus-putus = target harian' }), el('div', { class: 'skel' }));
     row.append(chartCard, duty);
     v.append(row);
@@ -497,22 +501,77 @@
     }).catch(function (err) { kpis.replaceChildren(errBox(err)); chartCard.lastChild.replaceWith(el('div', { class: 'empty', text: '—' })); });
 
     loadJadwal().then(function (j) {
-      duty.replaceChildren(el('h3', { text: 'Bertugas hari ini' }), el('p', { class: 'sub', text: dLong(j.hariIni || todayJkt()) + (j.tab ? ' · tab ' + j.tab : '') }), dutyBlock(j, j.hariIni || todayJkt()));
+      var hi = j.hariIni || todayJkt();
+      duty.replaceChildren(
+        el('div', { class: 'duty-head' },
+          el('div', null, el('h3', { text: 'Bertugas hari ini' }), el('p', { class: 'sub', text: dLong(hi) + (j.tab ? ' · tab ' + j.tab : '') })),
+          el('span', { class: 'duty-link' }, 'Jadwal lengkap', icon('arrow'))),
+        dutyBlock(j, hi), dutyBesok(j, addDays(hi, 1)));
     }).catch(function (err) { duty.lastChild.replaceWith(errBox(err)); });
   }
 
   var SHIFT_NAME = { PD: 'Pagi (PD)', NS: 'NS', MC: 'MC', MD: 'Middle (MD)', SC: 'SC', SB: 'Siang (SB)', OFF: 'Libur', CT: 'Cuti' };
+  var SHIFT_SHORT = { PD: 'Pagi', SB: 'Siang', MD: 'Middle', OFF: 'Libur', CT: 'Cuti' };
   var SHIFT_ORDER = ['PD', 'NS', 'MC', 'MD', 'SC', 'SB', 'OFF', 'CT'];
+  var AV_COLORS = ['#2F6FDB', '#E0703A', '#1E9E74', '#8B5CF6', '#D9467A', '#0E9AA7', '#B7791F', '#4B5BD6'];
+  function shiftTone(c) { return c === 'PD' ? 'pagi' : c === 'SB' ? 'siang' : (c === 'MD' || c === 'MC' || c === 'NS' || c === 'SC') ? 'middle' : 'off'; }
+  function shiftIcon(c) { var t = shiftTone(c); return t === 'pagi' ? 'sun' : t === 'siang' ? 'sunset' : t === 'middle' ? 'sun' : 'coffee'; }
+  function shortName(n) { return titleCase(String(n).replace(/\s+/g, ' ').trim()).split(' ').slice(0, 2).join(' '); }
+  function initials(n) { var w = String(n).replace(/[^A-Za-z\s]/g, '').trim().split(/\s+/); return ((w[0] || '')[0] || '').toUpperCase() + ((w[1] || '')[0] || '').toUpperCase(); }
+  function avColor(n) { var h = 0; String(n).split('').forEach(function (ch) { h = (h * 31 + ch.charCodeAt(0)) >>> 0; }); return AV_COLORS[h % AV_COLORS.length]; }
+  function isMe(n) {
+    if (!S.user) return false;
+    var a = String(n).toUpperCase().replace(/[^A-Z\s]/g, '').trim().split(/\s+/);
+    var b = String(S.user.nama || '').toUpperCase().replace(/[^A-Z\s]/g, '').trim().split(/\s+/);
+    if (!a[0] || !b[0] || a[0] !== b[0]) return false;
+    return a.length < 2 || b.length < 2 || a[1] === b[1];
+  }
+  function addDays(d, k) { var p = dParts(d); var x = new Date(Date.UTC(p.y, p.m - 1, p.d + k)); return x.toISOString().slice(0, 10); }
+  function groupShift(j, i) {
+    var by = {};
+    j.staf.forEach(function (s) { var c = String(s.shift[i] || '').trim().toUpperCase() || '—'; (by[c] = by[c] || []).push(s.nama); });
+    var codes = Object.keys(by).sort(function (a, b) { return (SHIFT_ORDER.indexOf(a) + 1 || 50) - (SHIFT_ORDER.indexOf(b) + 1 || 50); });
+    return { by: by, codes: codes };
+  }
   function dutyBlock(j, day) {
     var i = (j.tanggal || []).indexOf(day);
     if (i < 0) return el('div', { class: 'empty', text: 'Tanggal ini tidak ada di tab jadwal terbaru' });
-    var by = {};
-    j.staf.forEach(function (s) { var c = s.shift[i] || '—'; (by[c] = by[c] || []).push(s.nama); });
-    var codes = Object.keys(by).sort(function (a, b) { return (SHIFT_ORDER.indexOf(a) + 1 || 50) - (SHIFT_ORDER.indexOf(b) + 1 || 50); });
-    return el('div', { class: 'duty' }, codes.map(function (c) {
-      return el('div', { class: 'duty-col' + (c === 'OFF' || c === 'CT' ? ' off' : '') },
-        el('h4', { text: SHIFT_NAME[c] || c }), el('ul', null, by[c].map(function (n) { return el('li', { text: titleCase(n) }); })));
-    }));
+    var g = groupShift(j, i);
+    var work = g.codes.filter(function (c) { return shiftTone(c) !== 'off'; });
+    var off = g.codes.filter(function (c) { return shiftTone(c) === 'off'; });
+    var person = function (n) {
+      var me = isMe(n);
+      return el('li', { class: me ? 'me' : null },
+        el('span', { class: 'av', style: 'background:' + avColor(n), text: initials(n) }),
+        el('span', { class: 'nm', text: shortName(n) }),
+        me ? el('span', { class: 'me-tag', text: 'Kamu' }) : null);
+    };
+    return el('div', { class: 'duty-wrap' },
+      work.length ? el('div', { class: 'duty' }, work.map(function (c) {
+        return el('div', { class: 'duty-col t-' + shiftTone(c) },
+          el('div', { class: 'duty-top' },
+            el('span', { class: 'duty-ic' }, icon(shiftIcon(c))),
+            el('h4', { text: SHIFT_NAME[c] || c }),
+            el('span', { class: 'duty-n', text: g.by[c].length + ' orang' })),
+          el('ul', null, g.by[c].map(person)));
+      })) : el('div', { class: 'empty', text: 'Tidak ada yang bertugas' }),
+      off.map(function (c) {
+        return el('div', { class: 'duty-off' },
+          el('span', { class: 'duty-off-k' }, icon('coffee'), SHIFT_SHORT[c] || SHIFT_NAME[c] || c),
+          el('ul', null, g.by[c].map(person)));
+      }));
+  }
+  function dutyBesok(j, day) {
+    var i = (j.tanggal || []).indexOf(day);
+    var box = el('div', { class: 'duty-next' }, el('div', { class: 'duty-next-h' }, el('b', { text: 'Besok' }), el('span', { text: dLong(day) })));
+    if (i < 0) { box.append(el('p', { class: 'muted', text: 'Jadwal besok ada di tab periode berikutnya.' })); return box; }
+    var g = groupShift(j, i);
+    box.append(el('div', { class: 'duty-next-list' }, g.codes.map(function (c) {
+      return el('div', { class: 'dn-row t-' + shiftTone(c) },
+        el('span', { class: 'dn-k' }, icon(shiftIcon(c)), SHIFT_SHORT[c] || c),
+        el('span', { class: 'dn-v', text: g.by[c].map(function (n) { return shortName(n).split(' ')[0]; }).join(', ') }));
+    })));
+    return box;
   }
   function titleCase(s) { return String(s).toLowerCase().replace(/(^|\s)\S/g, function (m) { return m.toUpperCase(); }); }
 

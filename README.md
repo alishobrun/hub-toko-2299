@@ -1,6 +1,6 @@
 # Basecamp 2299
 
-*Pusat kendali tim Kartasura.* Web hub untuk tim EIGER Store A. Yani Kertasuro Sukoharjo (2299): monitoring sales, unggah DSR, dan jadwal shift. Bisa dibuka di HP maupun komputer.
+Web hub untuk tim EIGER Store A. Yani Kertasuro Sukoharjo (2299): monitoring sales, unggah DSR, dan jadwal shift. Bisa dibuka di HP maupun komputer.
 
 ## Isi
 
