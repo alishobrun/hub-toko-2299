@@ -7,7 +7,14 @@ Web hub untuk tim EIGER Store A. Yani Kertasuro Sukoharjo (2299): monitoring sal
 Menu dikelompokkan per kategori (di HP berupa dropdown, di komputer berupa sidebar):
 
 - **Sales**: Monitoring Sales (rumus sama dengan Integrated Hub Jateng 01), Sales Trend (per jam & per hari), RA Performance (per sales person), Produk & Promo (kategori, Pareto 80/20, terlaris, kontribusi promo), Customer & Retur.
-- **Inventory**: Monitoring Stok dari sheet SOH (rasio stok, display, status Tipis/Lambat).
+- **Inventory**:
+  - Monitoring Stok dari sheet SOH (rasio stok, display, status Tipis/Lambat).
+  - Stok Artikel dari data by bin, dengan label **NEW** (Created On ≤ 60 hari, dari master artikel) dan **BARU DI TOKO** (pertama ada stok ≤ 30 hari), plus season & collection.
+  - Cek Display: generic/varian yang ada di gudang tapi belum di Selling Area (zona Sales Area atau bin berawalan S), % terdisplay vs target 95%, display double + rekomendasi pengganti, analisa per MC.
+  - Cari Barang: lokasi bin per SKU dan isi per bin.
+  - Unggah By Bin: file export stock by bin, siapa saja, kapan saja.
+- **Master artikel** diambil otomatis dari folder Drive *MASTER ARTIKEL 2026* (dicek tiap hari jam 6). File baru dibaca di browser admin (komputer) lalu yang disimpan hanya kolom penting per varian.
+- Tombol **Unduh Excel** di Stok, Stok Artikel, Cek Display, Cari Barang, Produk & Promo, RA Performance dan Rekap Kas.
 - **Kas**: Cek Kas per pos (Till, Floating Cash, Store Safe, Petty Cash) dan Rekap Selisih per orang.
 - **Data**: Unggah DSR (*Item DSR Report* .xlsx). Data dicocokkan per nomor invoice, jadi tidak pernah dobel.
 - **Tim**: Jadwal, Request Jadwal (batas tanggal 21), Tukar Shift (rekan menerima, lalu admin menyetujui), Simpanan OFF, Akun, Admin, Aktivitas.

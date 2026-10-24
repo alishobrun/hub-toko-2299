@@ -20,6 +20,11 @@ const CFG = {
   SOH_SHEET_ID: '1C5iIPzR1nuG0_LIsT5BseIuSLoLcLAeunRmhVxKR0uo',
   // Tab jadwal yang boleh diubah web: periode yang mulai tanggal ini atau sesudahnya (OKT-NOV 2026)
   JADWAL_MIN_START: '2026-10-24',
+  // Folder "MASTER ARTIKEL 2026" (subfolder per bulan berisi file Excel master artikel)
+  MASTER_FOLDER_ID: '191L_XnHi-Z6bLlbgkA4vGpKBSU_7XXDf',
+  MASTER_CHUNK: 3 * 1024 * 1024,
+  NA_HARI: 60,          // New Arrival: dibuat (Created On) maksimal 60 hari lalu
+  BARU_TOKO_HARI: 30,   // Baru di toko: pertama kali ada stok maksimal 30 hari lalu
   REQUEST_DEADLINE_DAY: 21,
   REQUEST_COLOR: '#B4A7D6',
   BACKUP_FOLDER: 'Cadangan Hub 2299',
@@ -48,7 +53,12 @@ const TABS = {
     'alasan', 'status', 'diputus_oleh', 'diputus_pada', 'tertulis'],
   simpanan_off: ['id', 'dibuat', 'username', 'nama', 'tanggal_masuk', 'keterangan', 'status', 'diambil_tanggal', 'dicatat_oleh'],
   traffic: ['tanggal', 'traffic', 'diperbarui'],
-  notifikasi: ['id', 'waktu', 'untuk', 'level', 'jenis', 'judul', 'isi', 'link', 'dibaca']
+  notifikasi: ['id', 'waktu', 'untuk', 'level', 'jenis', 'judul', 'isi', 'link', 'dibaca'],
+  bin: ['sku', 'nama', 'generic', 'bin', 'zona', 'lv2', 'lv3', 'lv4', 'brand', 'kategori', 'total', 'available', 'allocated', 'proses'],
+  bin_upload: ['id', 'waktu', 'username', 'nama_file', 'baris', 'sku', 'pcs'],
+  varian_pertama: ['varian', 'generic', 'pertama', 'baseline'],
+  master: ['varian', 'generic', 'nama', 'warna', 'dibuat', 'dibuat_terbaru', 'season', 'collection', 'story', 'gender', 'activity',
+    'lv2', 'lv3', 'lv4', 'dc_status', 'product_status', 'grade', 'harga']
 };
 
 const PECAHAN = [100000, 50000, 20000, 10000, 5000, 2000, 1000, 500, 200, 100];
@@ -63,7 +73,10 @@ const NUM_COLS = {
   bobot: ['harian', 'kumulatif'],
   kas: ['total_fisik', 'modal', 'penjualan_tunai', 'masuk', 'keluar', 'seharusnya', 'selisih'],
   settings: ['value'],
-  ringkasan: ['bruto', 'netto', 'qty', 'trx']
+  ringkasan: ['bruto', 'netto', 'qty', 'trx'],
+  bin: ['total', 'available', 'allocated', 'proses'],
+  bin_upload: ['baris', 'sku', 'pcs'],
+  master: ['harga']
 };
 const DSR_FIELDS = TABS.dsr.filter(function (f) { return f !== 'upload_id'; }); // urutan kolom yang dikirim web
 
@@ -85,6 +98,7 @@ function setup() {
   });
   pasangCadanganMingguan_();
   pasangCatatTraffic_();
+  pasangCekMaster_();
   try { syncTraffic_(); } catch (e) { Logger.log('Traffic: ' + e); }
   rebuildRingkasan_();
   const r = syncTarget_();
@@ -1098,7 +1112,7 @@ const HARI_KODE = ['MG', 'SN', 'SL', 'RB', 'KM', 'JM', 'SB'];
 
 /* ---------- laporan ---------- */
 function laporan_(rows) {
-  const jam = {}, ra = {}, kat = {}, prod = {}, promo = {}, retur = [];
+  const jam = {}, ra = {}, kat = {}, prod = {}, promo = {}, retur = [], vr = {};
   rows.forEach(function (r) {
     if (!isSalesLine_(r)) return;
     const d = String(r.tanggal), h = Number(String(r.jam).slice(0, 2)) || 0;
@@ -1114,6 +1128,9 @@ function laporan_(rows) {
     const sku = String(r.sku);
     const P = prod[sku] || (prod[sku] = { sku: sku, nama: String(r.nama_sku), k3: k3, k4: k4, b: 0, n: 0, q: 0 });
     P.b += g; P.n += n; P.q += q;
+    const vk = varianKey_(sku, r.nama_sku);
+    const V = vr[vk] || (vr[vk] = { b: 0, n: 0, q: 0 });
+    V.b += g; V.n += n; V.q += q;
     const pn = String(r.promo_name || '').trim() || '(tanpa promo)';
     const M = promo[pn] || (promo[pn] = { b: 0, n: 0, q: 0, inv: {} });
     M.b += g; M.n += n; M.q += q; M.inv[inv] = 1;
@@ -1135,7 +1152,8 @@ function laporan_(rows) {
     produk: prods.sort(function (a, b) { return b.n - a.n; }).slice(0, 100).map(function (x) { return [x.sku, x.nama, x.k3, x.k4, x.q, R0(x.b), R0(x.n)]; }),
     pareto: { netto: pareto('n'), bruto: pareto('b') },
     promo: Object.keys(promo).map(function (k) { const x = promo[k]; return [k, R0(x.b), R0(x.n), x.q, Object.keys(x.inv).length]; }),
-    retur: retur
+    retur: retur,
+    varian: Object.keys(vr).map(function (k) { const x = vr[k]; return [k, x.q, R0(x.b), R0(x.n)]; })
   };
 }
 
@@ -1677,3 +1695,235 @@ function tglPendek_(iso) {
   return p[2] + ' ' + ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'][p[1] - 1];
 }
 function rupiah_(n) { return String(Math.round(Number(n) || 0)).replace(/\B(?=(\d{3})+(?!\d))/g, '.'); }
+
+
+/* =====================================================================
+ * TAHAP 5: stok by bin, cek display, master artikel, New Arrival
+ * ===================================================================== */
+
+/** Kunci varian = generic + warna, mis. 910010286.BLK (sama dengan kolom Cross-Site master artikel). */
+function varianKey_(sku, nama) {
+  const s = String(sku || '').trim();
+  const g = s.length > 9 ? s.slice(0, 9) : s;
+  const parts = String(nama || '').split(',');
+  const w = parts.length >= 3 ? parts[parts.length - 2].trim().toUpperCase() : '';
+  return g + (w ? '.' + w : '');
+}
+function prop_(k, v) {
+  const p = PropertiesService.getScriptProperties();
+  if (v === undefined) { const x = p.getProperty(k); try { return x ? JSON.parse(x) : null; } catch (e) { return null; } }
+  if (v === null) p.deleteProperty(k); else p.setProperty(k, JSON.stringify(v));
+}
+function appendRows_(n, objs) {
+  if (!objs.length) return;
+  const s = sh_(n), h = TABS[n];
+  const r = s.getLastRow() + 1;
+  const need = r + objs.length - 1;
+  if (s.getMaxRows() < need) s.insertRowsAfter(s.getMaxRows(), need - s.getMaxRows());
+  formatCols_(s, n, r, objs.length);
+  s.getRange(r, 1, objs.length, h.length).setValues(objs.map(function (o) { return h.map(function (k) { return o[k] == null ? '' : o[k]; }); }));
+}
+
+Object.assign(API, {
+  /* ---------- by bin ---------- */
+  binUpload: function (req) {
+    const u = auth_(req);
+    const rows = req.rows || [];
+    if (!rows.length) throw new Error('File tidak berisi data');
+    const lokasi = String(req.lokasi || '');
+    if (lokasi && lokasi.indexOf(CFG.STORE) < 0) throw new Error('File ini bukan stok toko ' + CFG.STORE + ' (' + lokasi + ')');
+    const F = TABS.bin;
+    const objs = rows.map(function (r, i) {
+      if (!Array.isArray(r) || r.length !== F.length) throw new Error('Format baris ke-' + (i + 1) + ' tidak sesuai. Muat ulang halaman lalu coba lagi.');
+      const o = {};
+      F.forEach(function (k, j) { o[k] = r[j]; });
+      ['total', 'available', 'allocated', 'proses'].forEach(function (k) { o[k] = Number(o[k]) || 0; });
+      o.sku = String(o.sku); o.generic = String(o.generic || '');
+      return o;
+    });
+    return withLock_(function () {
+      writeAll_('bin', objs);
+      const today = today_();
+      const first = read_('varian_pertama');
+      const baseline = first.length === 0;
+      const have = {};
+      first.forEach(function (x) { have[String(x.varian)] = 1; });
+      const add = [];
+      objs.forEach(function (o) {
+        if (!(o.total > 0) || o.zona === 'Damage') return;
+        const k = varianKey_(o.sku, o.nama);
+        if (have[k]) return;
+        have[k] = 1;
+        add.push({ varian: k, generic: k.split('.')[0], pertama: today, baseline: baseline ? 'ya' : '' });
+      });
+      appendRows_('varian_pertama', add);
+      const skus = {};
+      let pcs = 0;
+      objs.forEach(function (o) { skus[o.sku] = 1; pcs += o.total; });
+      append_('bin_upload', { id: uploadId_(u.username), waktu: now_(), username: u.username, nama_file: String(req.fileName || '').slice(0, 120),
+        baris: objs.length, sku: Object.keys(skus).length, pcs: pcs });
+      log_(u.username, 'unggah by bin', objs.length + ' baris, ' + pcs + ' pcs' + (baseline ? '' : ', ' + add.length + ' varian baru di toko'));
+      if (u.role !== 'admin') notif_('admin', 'info', 'dsr', 'Stok by bin diunggah oleh ' + u.nama,
+        rupiah_(pcs) + ' pcs · ' + Object.keys(skus).length + ' SKU' + (baseline ? '' : ' · ' + add.length + ' varian baru masuk toko'), '#/stokart');
+      return { baris: objs.length, sku: Object.keys(skus).length, pcs: pcs, varianBaru: baseline ? 0 : add.length, awal: baseline };
+    }, 120000);
+  },
+
+  binData: function (req) {
+    auth_(req);
+    const ups = read_('bin_upload');
+    const last = ups.length ? ups[ups.length - 1] : null;
+    const F = TABS.bin;
+    const rows = read_('bin').map(function (o) { return F.map(function (k) { return o[k]; }); });
+    const pertama = {};
+    read_('varian_pertama').forEach(function (x) { pertama[String(x.varian)] = x.baseline === 'ya' ? '' : String(x.pertama); });
+    return {
+      upload: last ? { waktu: String(last.waktu), nama: namaUser_(last.username), file: String(last.nama_file), pcs: Number(last.pcs), sku: Number(last.sku) } : null,
+      kolom: F, rows: rows, pertama: pertama, today: today_(), naHari: CFG.NA_HARI, baruHari: CFG.BARU_TOKO_HARI
+    };
+  },
+
+  binUploads: function (req) {
+    auth_(req);
+    const names = namesMap_();
+    return read_('bin_upload').slice(-15).reverse().map(function (r) {
+      return { waktu: String(r.waktu), nama: names[r.username] || r.username, file: String(r.nama_file), baris: Number(r.baris), sku: Number(r.sku), pcs: Number(r.pcs) };
+    });
+  },
+
+  /* ---------- master artikel ---------- */
+  masterMap: function (req) {
+    auth_(req);
+    const F = TABS.master;
+    const out = {};
+    read_('master').forEach(function (o) { out[String(o.varian)] = F.slice(1).map(function (k) { return o[k]; }); });
+    return { kolom: F.slice(1), map: out, info: prop_('master_loaded'), today: today_(), naHari: CFG.NA_HARI };
+  },
+
+  masterStatus: function (req) {
+    const u = auth_(req);
+    const cek = prop_('master_cek');
+    if (req.cekSekarang || !cek || Date.now() - Number(cek) > 12 * 3600e3) { try { cekMaster(); } catch (e) { Logger.log(e); } }
+    const proc = prop_('master_proc');
+    return {
+      loaded: prop_('master_loaded'), pending: prop_('master_pending'), error: prop_('master_error'),
+      proses: proc && Date.now() - proc.at < 15 * 60e3 ? proc : null, admin: u.role === 'admin'
+    };
+  },
+
+  masterClaim: function (req) {
+    const u = auth_(req, true);
+    return withLock_(function () {
+      const pend = prop_('master_pending');
+      if (!pend) throw new Error('Tidak ada master artikel baru untuk dimuat');
+      const proc = prop_('master_proc');
+      if (proc && proc.by !== u.username && Date.now() - proc.at < 15 * 60e3) throw new Error('Sedang dimuat oleh ' + proc.nama);
+      prop_('master_proc', { by: u.username, nama: u.nama, at: Date.now(), id: pend.id });
+      const set = {};
+      read_('bin').forEach(function (o) { set[String(o.generic || String(o.sku).slice(0, 9))] = 1; });
+      const sh = sh_('dsr'), last = sh.getLastRow();
+      if (last > 1) sh.getRange(2, TABS.dsr.indexOf('sku') + 1, last - 1, 1).getValues().forEach(function (r) { const k = String(r[0]); if (k) set[k.slice(0, 9)] = 1; });
+      return { file: pend, chunks: Math.ceil(pend.size / CFG.MASTER_CHUNK), generics: Object.keys(set), naHari: CFG.NA_HARI };
+    });
+  },
+
+  masterChunk: function (req) {
+    auth_(req, true);
+    const pend = prop_('master_pending');
+    if (!pend || pend.id !== req.id) throw new Error('File master sudah berganti, muat ulang halaman');
+    const i = Number(req.i) || 0, a = i * CFG.MASTER_CHUNK, z = Math.min(pend.size, a + CFG.MASTER_CHUNK) - 1;
+    // Ambil sepotong file saja (Range) supaya hemat memori; cadangan: baca utuh lalu potong
+    try {
+      const res = UrlFetchApp.fetch('https://www.googleapis.com/drive/v3/files/' + pend.id + '?alt=media&supportsAllDrives=true', {
+        headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken(), Range: 'bytes=' + a + '-' + z }, muteHttpExceptions: true
+      });
+      if (res.getResponseCode() === 206 || res.getResponseCode() === 200) {
+        let part = res.getContent();
+        if (res.getResponseCode() === 200) part = part.slice(a, z + 1);
+        return { i: i, size: pend.size, data: Utilities.base64Encode(part) };
+      }
+      Logger.log('Range gagal: ' + res.getResponseCode() + ' ' + res.getContentText().slice(0, 200));
+    } catch (e) { Logger.log('Range gagal: ' + e); }
+    const bytes = DriveApp.getFileById(pend.id).getBlob().getBytes();
+    return { i: i, size: bytes.length, data: Utilities.base64Encode(bytes.slice(a, z + 1)) };
+  },
+
+  masterSave: function (req) {
+    const u = auth_(req, true);
+    const pend = prop_('master_pending');
+    if (!pend || pend.id !== req.id) throw new Error('File master sudah berganti, muat ulang halaman');
+    const F = TABS.master;
+    const objs = (req.rows || []).map(function (r) { const o = {}; F.forEach(function (k, j) { o[k] = r[j]; }); o.harga = Number(o.harga) || 0; return o; });
+    return withLock_(function () {
+      if (Number(req.part) === 0) writeAll_('master', objs); else appendRows_('master', objs);
+      if (!req.selesai) return { ok: true };
+      const n = sh_('master').getLastRow() - 1;
+      prop_('master_loaded', { id: pend.id, nama: pend.nama, folder: pend.folder, modified: pend.modified, waktu: now_(), oleh: u.nama, varian: n, sig: pend.sig, artikel: Number(req.artikel) || 0 });
+      prop_('master_pending', null); prop_('master_proc', null); prop_('master_error', null);
+      bumpVersion_();
+      log_(u.username, 'muat master artikel', pend.nama + ' · ' + n + ' varian');
+      notif_('admin', 'info', 'master', 'Master artikel diperbarui', pend.nama + ' · ' + rupiah_(n) + ' varian dimuat', '#/stokart');
+      return { varian: n };
+    }, 120000);
+  },
+
+  masterFail: function (req) {
+    const u = auth_(req, true);
+    const msg = String(req.pesan || '').slice(0, 200);
+    prop_('master_proc', null);
+    prop_('master_error', { waktu: now_(), pesan: msg });
+    notif_('admin', 'cek', 'master', 'Master artikel gagal dimuat', msg, '#/unggahbin');
+    log_(u.username, 'gagal muat master', msg);
+    return true;
+  }
+});
+
+/** Cari file master artikel terbaru di folder MASTER ARTIKEL (subfolder bulan dengan nomor terbesar). */
+function masterLatest_() {
+  const root = DriveApp.getFolderById(CFG.MASTER_FOLDER_ID);
+  let best = null;
+  const it = root.getFolders();
+  while (it.hasNext()) {
+    const f = it.next();
+    const m = String(f.getName()).match(/^(\d+)/);
+    const n = m ? Number(m[1]) : 0;
+    const t = f.getDateCreated().getTime();
+    if (!best || n > best.n || (n === best.n && t > best.t)) best = { f: f, n: n, t: t };
+  }
+  const folders = best ? [best.f, root] : [root];
+  for (let i = 0; i < folders.length; i++) {
+    let file = null;
+    const fi = folders[i].getFiles();
+    while (fi.hasNext()) {
+      const x = fi.next();
+      if (!/\.xlsx?$/i.test(x.getName()) && x.getMimeType() !== MimeType.MICROSOFT_EXCEL) continue;
+      if (!file || x.getLastUpdated() > file.getLastUpdated()) file = x;
+    }
+    if (file) {
+      const mod = Utilities.formatDate(file.getLastUpdated(), CFG.TZ, 'yyyy-MM-dd HH:mm:ss');
+      return { id: file.getId(), nama: file.getName(), folder: folders[i].getName(), modified: mod, size: file.getSize(), sig: file.getId() + '|' + mod };
+    }
+  }
+  return null;
+}
+
+/** Dijalankan tiap hari (dan saat web dibuka bila sudah > 12 jam): tandai bila ada master baru. */
+function cekMaster() {
+  prop_('master_cek', Date.now());
+  const f = masterLatest_();
+  if (!f) return null;
+  const loaded = prop_('master_loaded');
+  if (loaded && loaded.sig === f.sig) { prop_('master_pending', null); return f; }
+  const pend = prop_('master_pending');
+  if (!pend || pend.sig !== f.sig) {
+    prop_('master_pending', f);
+    withLock_(function () {
+      notif_('admin', 'info', 'master', 'Master artikel baru tersedia', f.folder + ' · ' + f.nama + ' · dimuat otomatis saat admin membuka web di komputer', '#/unggahbin');
+    });
+  }
+  return f;
+}
+function pasangCekMaster_() {
+  ScriptApp.getProjectTriggers().forEach(function (t) { if (t.getHandlerFunction() === 'cekMaster') ScriptApp.deleteTrigger(t); });
+  ScriptApp.newTrigger('cekMaster').timeBased().everyDays(1).atHour(6).create();
+}
