@@ -2037,6 +2037,7 @@ function kpiBriefing_(rows, tgl) {
  * Kunci & alamat mesin upload disimpan di Script Properties: UPLOAD_URL, UPLOAD_SECRET.
  * ===================================================================== */
 const DOK_FOLDER_ID = '1qlwAdXg_liYKpyXrOLMwa5NohxpK8xZy';
+const DOK_MUNDUR_HARI = 7; // anggota tim boleh mengunggah untuk tanggal sampai 7 hari ke belakang (admin bebas)
 const DOK_RE = /^(\d{4}-\d{2}-\d{2}) (OPENING|CLOSING) - (.+?) (\d{4})\.(\w+)$/;
 
 Object.assign(API, {
@@ -2048,9 +2049,14 @@ Object.assign(API, {
     const jenis = String(req.jenis || '').toUpperCase();
     if (!/^(OPENING|CLOSING)$/.test(jenis)) throw new Error('Pilih Opening atau Closing');
     const set = settings_();
-    const now = new Date();
+    const now = new Date(), today = today_();
+    let tgl = String(req.tanggal || today);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(tgl)) throw new Error('Tanggal tidak valid');
+    if (tgl > today) throw new Error('Tanggal tidak boleh di masa depan');
+    const batasMundur = u.role === 'admin' ? 366 : DOK_MUNDUR_HARI;
+    if (tgl < addDays_(today, -batasMundur)) throw new Error('Tanggal paling lama ' + batasMundur + ' hari ke belakang');
     const payload = { id: Utilities.getUuid(), u: u.username, n: u.nama, j: jenis, max: Math.round(Number(set.dok_max_mb || 300) * 1048576),
-      exp: Date.now() + 6 * 3600e3, t: Utilities.formatDate(now, CFG.TZ, 'yyyy-MM-dd'), h: Utilities.formatDate(now, CFG.TZ, 'HHmm') };
+      exp: Date.now() + 6 * 3600e3, t: tgl, h: Utilities.formatDate(now, CFG.TZ, 'HHmm') };
     const b = Utilities.base64EncodeWebSafe(JSON.stringify(payload)).replace(/=+$/, '');
     const sig = Utilities.base64EncodeWebSafe(Utilities.computeHmacSha256Signature(b, key)).replace(/=+$/, '');
     return { url: url, tiket: b + '.' + sig, max: payload.max };
@@ -2059,7 +2065,8 @@ Object.assign(API, {
   dokSelesai: function (req) {
     const u = auth_(req);
     const jenis = String(req.jenis || '').toUpperCase();
-    CacheService.getScriptCache().removeAll(['dok_' + today_().slice(0, 7), 'dok_bulan']);
+    const tg = /^\d{4}-\d{2}-\d{2}$/.test(String(req.tanggal || '')) ? String(req.tanggal) : today_();
+    CacheService.getScriptCache().removeAll(['dok_' + tg.slice(0, 7), 'dok_' + today_().slice(0, 7), 'dok_bulan']);
     log_(u.username, 'unggah video ' + jenis.toLowerCase(), String(req.nama || '').slice(0, 120));
     withLock_(function () {
       if (u.role !== 'admin') notif_('admin', 'info', 'video', 'Video ' + jenis.toLowerCase() + ' diunggah oleh ' + u.nama,
@@ -2086,6 +2093,7 @@ Object.assign(API, {
     const set = settings_();
     const p = PropertiesService.getScriptProperties();
     return { bulan: bulan, items: items, bulanTersedia: JSON.parse(bl), today: today_(), sekarang: Utilities.formatDate(new Date(), CFG.TZ, 'HH:mm'),
+      mundur: DOK_MUNDUR_HARI,
       batasOpen: Number(set.dok_batas_open), batasClose: Number(set.dok_batas_close), maxMb: Number(set.dok_max_mb),
       siap: !!(p.getProperty('UPLOAD_URL') && p.getProperty('UPLOAD_SECRET')) };
   },

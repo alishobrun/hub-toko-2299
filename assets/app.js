@@ -3300,10 +3300,10 @@
     });
   }
   /** Unggah video: coba langsung ke Drive (cepat), bila diblokir browser pakai jalur server (cadangan). */
-  function uploadVideo(file, jenis, onProg, ctl) {
+  function uploadVideo(file, jenis, tanggal, onProg, ctl) {
     var ext = (String(file.name).match(/\.(\w{2,5})$/) || [, 'mp4'])[1].toLowerCase();
     var T, sesi, mode = 'langsung', total = file.size;
-    return api('dokTiket', { jenis: jenis }).then(function (t) {
+    return api('dokTiket', { jenis: jenis, tanggal: tanggal }).then(function (t) {
       T = t;
       if (total > t.max) throw new Error('Video ' + Math.round(total / 1048576) + ' MB, maksimal ' + Math.round(t.max / 1048576) + ' MB. Rekam ulang dengan resolusi 720p atau potong videonya.');
       return upPost(t.url, { action: 'start', tiket: t.tiket, size: total, mime: file.type || 'video/mp4', ext: ext });
@@ -3338,7 +3338,7 @@
       }
       return step();
     }).then(function (r) {
-      api('dokSelesai', { jenis: jenis, nama: r.nama, size: r.size }).catch(function () {});
+      api('dokSelesai', { jenis: jenis, tanggal: tanggal, nama: r.nama, size: r.size }).catch(function () {});
       return r;
     });
   }
@@ -3378,7 +3378,7 @@
     v.append(el('div', { class: 'grid grid-up' }, el('div', { class: 'dok-left' }, statusBox, upBox), listBox));
     var bulan = S.dokBulan || '';
     var jenis = Number(new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Jakarta', hour: 'numeric', hour12: false }).format(new Date())) < 15 ? 'OPENING' : 'CLOSING';
-    var busy = false;
+    var busy = false, tanggal = '';
 
     function load() {
       api('dokList', { bulan: bulan }).then(function (d) { bulan = d.bulan; S.dokBulan = bulan; draw(d); }).catch(function (e) { listBox.replaceChildren(errBox(e)); statusBox.replaceChildren(); });
@@ -3390,8 +3390,22 @@
       var drop = el('label', { class: 'drop', for: 'vid-file' }, el('span', { class: 'drop-ic' }, icon('video')),
         el('span', { class: 'drop-txt' }, el('b', { text: 'Pilih atau rekam video' }), el('span', { text: 'Maksimal ' + d.maxMb + ' MB · disarankan 720p, 1–2 menit' })), input);
       var area = el('div');
+      var minD = addDays(d.today, -(isAdmin() ? 366 : (d.mundur || 7)));
+      var dateInp = el('input', { type: 'date', id: 'vid-date', value: tanggal || d.today, max: d.today, min: minD });
+      var dateNote = el('small', { class: 'muted' });
+      function noteDate() {
+        tanggal = dateInp.value || d.today;
+        dateNote.textContent = tanggal === d.today ? 'Hari ini' : dLong(tanggal) + ' · unggah susulan';
+      }
+      dateInp.addEventListener('change', function () {
+        if (!dateInp.value || dateInp.value > d.today) dateInp.value = d.today;
+        if (dateInp.value < minD) { dateInp.value = minD; toast('Tanggal paling lama ' + (isAdmin() ? 366 : (d.mundur || 7)) + ' hari ke belakang', true); }
+        noteDate();
+      });
+      noteDate();
       upBox.replaceChildren(el('h3', { text: 'Unggah video' }),
         el('div', { style: 'margin:10px 0 12px' }, segmented([['OPENING', 'Opening'], ['CLOSING', 'Closing']], jenis, function (x) { jenis = x; })),
+        el('div', { class: 'field dok-date-field' }, el('label', { for: 'vid-date', text: 'Tanggal dokumentasi' }), dateInp, dateNote),
         drop, area);
       input.addEventListener('change', function () {
         var f = input.files[0]; input.value = '';
@@ -3404,10 +3418,11 @@
         var cancel = el('button', { class: 'btn btn-ghost btn-sm', text: 'Batalkan', onclick: function () { ctl.batal = true; cancel.disabled = true; } });
         busy = true;
         area.replaceChildren(el('div', { class: 'file-row' }, el('span', { class: 'file-ic' }, icon('video')),
-          el('div', null, el('b', { text: (jenis === 'OPENING' ? 'Opening' : 'Closing') + ' · ' + f.name }), el('span', { text: fmtMB(f.size) }))),
+          el('div', null, el('b', { text: (jenis === 'OPENING' ? 'Opening' : 'Closing') + ' · ' + dShort(tanggal) + ' · ' + f.name }), el('span', { text: fmtMB(f.size) }))),
           bar, el('div', { class: 'up-row' }, txt, cancel),
           el('p', { class: 'note', text: 'Biarkan halaman ini tetap terbuka sampai selesai.' }));
-        uploadVideo(f, jenis, function (p, mode) {
+        var tgUp = tanggal;
+        uploadVideo(f, jenis, tgUp, function (p, mode) {
           bar.firstChild.style.width = Math.round(p * 100) + '%';
           txt.textContent = 'Mengunggah ' + Math.round(p * 100) + '% · ' + fmtMB(f.size * p) + ' / ' + fmtMB(f.size) + (mode === 'server' ? ' · jalur server' : '');
         }, ctl).then(function (r) {
@@ -3415,6 +3430,7 @@
           area.replaceChildren(el('div', { class: 'done' }, el('span', { class: 'done-ic' }, icon('check')), el('h3', { text: 'Video tersimpan' }),
             el('p', { class: 'muted', text: r.nama })));
           toast('Video ' + jenis.toLowerCase() + ' tersimpan');
+          if (tgUp.slice(0, 7) !== bulan) bulan = tgUp.slice(0, 7);
           setTimeout(load, 800);
         }).catch(function (err) {
           busy = false;
