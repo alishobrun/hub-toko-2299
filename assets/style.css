@@ -704,3 +704,9 @@ body.no-scroll{overflow:hidden}
   .bell-pop{left:8px;right:8px;width:auto;top:calc(100% + 2px);max-height:calc(100vh - 230px - env(safe-area-inset-bottom))}
 }
 @media (max-width:440px){.btn-out{padding:9px 12px}.topbar .icon-btn{width:38px;height:38px}.bell-btn{width:38px;height:38px}}
+
+/* iPhone (Safari): tombol bulat punya padding & baseline bawaan → ikon tidak di tengah */
+.icon-btn,.bell-btn,.sheet-x{padding:0;margin:0;-webkit-appearance:none;appearance:none;line-height:0;font-size:0}
+.icon-btn svg,.bell-btn svg,.sheet-x svg,.ic svg{display:block}
+.bell-btn .ic{display:grid;width:19px;height:19px}
+.bell-btn .nbadge.bell-n{font-size:11px;line-height:1}
