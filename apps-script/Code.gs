@@ -63,7 +63,7 @@ const TABS = {
 };
 
 const PECAHAN = [100000, 50000, 20000, 10000, 5000, 2000, 1000, 500, 200, 100];
-const SETTING_DEFAULTS = { modal_till: 600000, floating_cash: 2400000, target_upt: 2, target_basket: 0 };
+const SETTING_DEFAULTS = { modal_till: 600000, floating_cash: 2400000, target_upt: 2, target_basket: 0, dok_max_mb: 300, dok_batas_open: 630, dok_batas_close: 1350 };
 
 // Kolom yang disimpan sebagai teks (supaya tanggal/kode tidak diubah Sheets)
 const NUM_COLS = {
@@ -1553,7 +1553,7 @@ function syncTraffic_() {
   return { tanggal: tgl, traffic: traffic };
 }
 /** Dipanggil pemicu per jam supaya traffic tiap hari tetap tercatat walau web tidak dibuka. */
-function catatTraffic() { return syncTraffic_(); }
+function catatTraffic() { try { cekDokumentasi_(); } catch (e) { Logger.log('dok: ' + e); } return syncTraffic_(); }
 function pasangCatatTraffic_() {
   ScriptApp.getProjectTriggers().forEach(function (t) { if (t.getHandlerFunction() === 'catatTraffic') ScriptApp.deleteTrigger(t); });
   ScriptApp.newTrigger('catatTraffic').timeBased().everyHours(1).create();
@@ -2027,4 +2027,115 @@ function kpiBriefing_(rows, tgl) {
     ['upt', 'basketB', 'basketN'].forEach(function (k) { if (f[k] != null && (!best[k] || f[k] > best[k].nilai)) best[k] = { nilai: f[k], bulan: m }; });
   });
   return { bulanIni: fin(cur), bulanLalu: fin(last), bulanLaluKey: lm, rekor: best, partaiMin: PARTAI_MIN_QTY };
+}
+
+
+/* =====================================================================
+ * TAHAP 7: Dokumentasi video opening/closing
+ * Video diunggah lewat "mesin upload" di akun pemilik folder (lihat Upload.gs).
+ * Basecamp memberi tiket bertanda tangan, lalu membaca isi folder untuk daftar & status.
+ * Kunci & alamat mesin upload disimpan di Script Properties: UPLOAD_URL, UPLOAD_SECRET.
+ * ===================================================================== */
+const DOK_FOLDER_ID = '1qlwAdXg_liYKpyXrOLMwa5NohxpK8xZy';
+const DOK_RE = /^(\d{4}-\d{2}-\d{2}) (OPENING|CLOSING) - (.+?) (\d{4})\.(\w+)$/;
+
+Object.assign(API, {
+  dokTiket: function (req) {
+    const u = auth_(req);
+    const p = PropertiesService.getScriptProperties();
+    const url = p.getProperty('UPLOAD_URL'), key = p.getProperty('UPLOAD_SECRET');
+    if (!url || !key) throw new Error('Mesin upload belum disambungkan. Hubungi admin.');
+    const jenis = String(req.jenis || '').toUpperCase();
+    if (!/^(OPENING|CLOSING)$/.test(jenis)) throw new Error('Pilih Opening atau Closing');
+    const set = settings_();
+    const now = new Date();
+    const payload = { id: Utilities.getUuid(), u: u.username, n: u.nama, j: jenis, max: Math.round(Number(set.dok_max_mb || 300) * 1048576),
+      exp: Date.now() + 6 * 3600e3, t: Utilities.formatDate(now, CFG.TZ, 'yyyy-MM-dd'), h: Utilities.formatDate(now, CFG.TZ, 'HHmm') };
+    const b = Utilities.base64EncodeWebSafe(JSON.stringify(payload)).replace(/=+$/, '');
+    const sig = Utilities.base64EncodeWebSafe(Utilities.computeHmacSha256Signature(b, key)).replace(/=+$/, '');
+    return { url: url, tiket: b + '.' + sig, max: payload.max };
+  },
+
+  dokSelesai: function (req) {
+    const u = auth_(req);
+    const jenis = String(req.jenis || '').toUpperCase();
+    CacheService.getScriptCache().removeAll(['dok_' + today_().slice(0, 7), 'dok_bulan']);
+    log_(u.username, 'unggah video ' + jenis.toLowerCase(), String(req.nama || '').slice(0, 120));
+    withLock_(function () {
+      if (u.role !== 'admin') notif_('admin', 'info', 'video', 'Video ' + jenis.toLowerCase() + ' diunggah oleh ' + u.nama,
+        String(req.nama || '') + (req.size ? ' · ' + Math.round(req.size / 1048576) + ' MB' : ''), '#/dokumentasi');
+    });
+    return true;
+  },
+
+  dokList: function (req) {
+    auth_(req);
+    const bulan = /^\d{4}-\d{2}$/.test(String(req.bulan || '')) ? String(req.bulan) : today_().slice(0, 7);
+    const c = CacheService.getScriptCache();
+    const hit = c.get('dok_' + bulan);
+    const items = hit ? JSON.parse(hit) : dokBaca_(bulan);
+    if (!hit) { try { c.put('dok_' + bulan, JSON.stringify(items), 120); } catch (e) {} }
+    let bl = c.get('dok_bulan');
+    if (!bl) {
+      const list = [];
+      const it = DriveApp.getFolderById(DOK_FOLDER_ID).getFolders();
+      while (it.hasNext()) { const m = String(it.next().getName()).match(/^(\d{4}-\d{2})/); if (m) list.push(m[1]); }
+      bl = JSON.stringify(list.sort().reverse());
+      try { c.put('dok_bulan', bl, 600); } catch (e) {}
+    }
+    const set = settings_();
+    const p = PropertiesService.getScriptProperties();
+    return { bulan: bulan, items: items, bulanTersedia: JSON.parse(bl), today: today_(), sekarang: Utilities.formatDate(new Date(), CFG.TZ, 'HH:mm'),
+      batasOpen: Number(set.dok_batas_open), batasClose: Number(set.dok_batas_close), maxMb: Number(set.dok_max_mb),
+      siap: !!(p.getProperty('UPLOAD_URL') && p.getProperty('UPLOAD_SECRET')) };
+  },
+
+  /** Admin: sambungkan mesin upload (alamat Web App + kunci dari Upload.gs). */
+  setUpload: function (req) {
+    const a = auth_(req, true);
+    const url = String(req.url || '').trim(), key = String(req.kunci || '').trim();
+    if (!/^https:\/\/script\.google\.com\/macros\/s\/[\w-]+\/exec$/.test(url)) throw new Error('Alamat Web App tidak valid');
+    if (key.length < 32) throw new Error('Kunci tidak valid');
+    PropertiesService.getScriptProperties().setProperties({ UPLOAD_URL: url, UPLOAD_SECRET: key });
+    log_(a.username, 'sambungkan mesin upload', url.slice(0, 60));
+    return true;
+  }
+});
+
+function dokBaca_(bulan) {
+  const root = DriveApp.getFolderById(DOK_FOLDER_ID);
+  const out = [];
+  const it = root.getFolders();
+  while (it.hasNext()) {
+    const f = it.next();
+    if (String(f.getName()).indexOf(bulan) !== 0) continue;
+    const fi = f.getFiles();
+    while (fi.hasNext()) {
+      const x = fi.next(), m = String(x.getName()).match(DOK_RE);
+      if (!m) continue;
+      out.push({ id: x.getId(), nama: x.getName(), tanggal: m[1], jenis: m[2], oleh: m[3], jam: m[4].slice(0, 2) + ':' + m[4].slice(2), size: x.getSize() });
+    }
+  }
+  return out.sort(function (a, b) { return a.tanggal === b.tanggal ? (a.jam < b.jam ? -1 : 1) : (a.tanggal < b.tanggal ? 1 : -1); });
+}
+
+/** Dipanggil tiap jam: beri tahu admin bila video opening/closing belum ada lewat jam batas. */
+function cekDokumentasi_() {
+  const p = PropertiesService.getScriptProperties();
+  if (!p.getProperty('UPLOAD_URL')) return;
+  const set = settings_();
+  const now = new Date(), today = today_();
+  const menit = Number(Utilities.formatDate(now, CFG.TZ, 'H')) * 60 + Number(Utilities.formatDate(now, CFG.TZ, 'm'));
+  const cek = [['OPENING', Number(set.dok_batas_open)], ['CLOSING', Number(set.dok_batas_close)]];
+  let items = null;
+  cek.forEach(function (c) {
+    if (!c[1] || menit < c[1]) return;
+    const key = 'dok_notif_' + c[0];
+    if (p.getProperty(key) === today) return;
+    items = items || dokBaca_(today.slice(0, 7));
+    if (items.some(function (x) { return x.tanggal === today && x.jenis === c[0]; })) return;
+    p.setProperty(key, today);
+    const jam = pad_(Math.floor(c[1] / 60)) + '.' + pad_(c[1] % 60);
+    withLock_(function () { notif_('admin', 'cek', 'video', 'Video ' + c[0].toLowerCase() + ' hari ini belum diunggah', 'Batas pukul ' + jam + ' sudah lewat', '#/dokumentasi'); });
+  });
 }
