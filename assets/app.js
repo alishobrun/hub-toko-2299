@@ -3434,12 +3434,13 @@
       var adm = null;
       if (d.admin) {
         var vals = {};
-        d.jenis.forEach(function (j) { vals[j.id] = j.target; });
+        d.jenis.forEach(function (j) { vals[j.id] = j.manual ? j.target : 0; });
         var btn = el('button', { class: 'btn btn-primary', type: 'button', text: 'Simpan target', onclick: function () {
           btn.disabled = true;
           api('omniTargetSet', { bulan: bulan, list: vals }).then(function () { toast('Target OmniChannel disimpan'); load(); }).catch(function (err) { btn.disabled = false; toast(err.message, true); });
         } });
-        adm = el('details', { class: 'card section' }, el('summary', { style: 'cursor:pointer;font-weight:700', text: 'Atur target ' + bulanLabel(bulan) + ' (admin)' }),
+        adm = el('details', { class: 'card section' }, el('summary', { style: 'cursor:pointer;font-weight:700', text: 'Ubah target manual ' + bulanLabel(bulan) + ' (admin)' }),
+          el('p', { class: 'sub', style: 'margin-top:8px', text: 'Kosongkan (0) agar memakai target otomatis dari persentase target bulanan. Isi angka hanya bila HO memberi target berbeda.' }),
           el('div', { class: 'grid grid-2', style: 'margin-top:12px' }, d.jenis.map(function (j) {
             return el('div', { class: 'field' }, el('label', { for: 'om-' + j.id, text: j.label }), rpInput('om-' + j.id, vals[j.id], function (n) { vals[j.id] = n; }));
           })), btn);
@@ -3452,7 +3453,8 @@
           el('tbody', null, d.trx.slice(0, 80).map(function (r) {
             return el('tr', null, el('td', { text: dShort(r[0]).replace(/ \d{4}$/, '') }), el('td', { text: r[2] }), el('td', { text: titleCase(r[4]) }), el('td', { text: titleCase(String(r[3]).split(' ')[0]) }), el('td', { class: 'r num', text: fRpShort(r[6]) }));
           })))) : el('div', { class: 'empty', text: 'Belum ada transaksi OmniChannel bulan ini' }));
-      body.replaceChildren(cards, el('p', { class: 'note', text: 'Endless Aisle = jenis transaksi Endless Aisle · Eigerindo Voucher = Category Lv.4 VOUCHER · Tax Invoice = jenis transaksi B2B2G · EASAP = jenis transaksi Tour & Travel. Data sampai ' + dShort(d.dataSampai) + '.' }), adm, trx);
+      var tInfo = el('p', { class: 'note', text: 'Target otomatis = target bulanan ' + (d.targetBulan ? 'Rp ' + fRp(d.targetBulan) : '(belum ada)') + ' × persentase: ' + d.jenis.map(function (j) { return j.label + ' ' + String(j.pct * 100).replace('.', ',') + '%' + (j.manual ? ' (diubah manual)' : ''); }).join(' · ') + '.' });
+      body.replaceChildren(cards, tInfo, el('p', { class: 'note', text: 'Endless Aisle = jenis transaksi Endless Aisle · Eigerindo Voucher = Category Lv.4 VOUCHER · Tax Invoice = jenis transaksi B2B2G · EASAP = jenis transaksi Tour & Travel. Data sampai ' + dShort(d.dataSampai) + '.' }), adm, trx);
     }
     load();
   }

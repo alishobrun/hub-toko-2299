@@ -2755,11 +2755,12 @@ Object.assign(API, {
  * ===================================================================== */
 // Jenis transaksi yang penjualannya dilebur & dibagi rata ke RA toko (cara HO).
 const DILEBUR_TIPE = /endless\s*aisle|b2b2g|tour\s*&?\s*travel|wholesale/i;
+// [id, label, aturan, % dari target bulanan]
 const OMNI_JENIS = [
-  ['ea', 'Endless Aisle', function (r) { return /endless\s*aisle/i.test(String(r.tipe)); }],
-  ['voucher', 'Eigerindo Voucher', function (r) { return String(r.kat4).trim().toUpperCase() === 'VOUCHER'; }],
-  ['tax', 'Tax Invoice', function (r) { return /b2b2g/i.test(String(r.tipe)); }],
-  ['easap', 'EASAP', function (r) { return /tour\s*&?\s*travel/i.test(String(r.tipe)); }]
+  ['ea', 'Endless Aisle', function (r) { return /endless\s*aisle/i.test(String(r.tipe)); }, 0.025],
+  ['voucher', 'Eigerindo Voucher', function (r) { return String(r.kat4).trim().toUpperCase() === 'VOUCHER'; }, 0.01],
+  ['tax', 'Tax Invoice', function (r) { return /b2b2g/i.test(String(r.tipe)); }, 0.01],
+  ['easap', 'EASAP', function (r) { return /tour\s*&?\s*travel/i.test(String(r.tipe)); }, 0.01]
 ];
 function sameName_(a, b) {
   const x = normDsr_(a), y = normDsr_(b);
@@ -2857,8 +2858,13 @@ Object.assign(API, {
     });
     const tg = {};
     read_('omni_target').forEach(function (x) { if (String(x.bulan) === bulan) tg[String(x.jenis)] = Number(x.target) || 0; });
-    return { bulan: bulan, dataSampai: latestDate_(), bulanTersedia: bulanTersedia_(), admin: u.role === 'admin',
-      jenis: OMNI_JENIS.map(function (j) { return { id: j[0], label: j[1], actual: Math.round(act[j[0]]), target: tg[j[0]] || 0 }; }),
+    const tb = read_('targets').filter(function (x) { return String(x.bulan) === bulan; })[0];
+    const tBulan = tb ? Number(tb.target) || 0 : 0;
+    return { bulan: bulan, dataSampai: latestDate_(), bulanTersedia: bulanTersedia_(), admin: u.role === 'admin', targetBulan: tBulan,
+      jenis: OMNI_JENIS.map(function (j) {
+        const auto = Math.round(tBulan * j[3]);
+        return { id: j[0], label: j[1], pct: j[3], actual: Math.round(act[j[0]]), target: tg[j[0]] || auto, auto: auto, manual: !!tg[j[0]] };
+      }),
       trx: trx.sort(function (a, b) { return a[0] < b[0] ? 1 : -1; }) };
   },
   omniTargetSet: function (req) {
