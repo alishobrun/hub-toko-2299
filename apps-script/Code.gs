@@ -2799,7 +2799,7 @@ function raToko_(bulan, rows) {
   const base = J.length ? J : D;
   const out = [];
   base.forEach(function (nm) {
-    if (isSl(nm)) return;
+    if (isSl(nm) || /^HL\b/i.test(String(nm).trim())) return; // Store Leader & tenaga harian lepas (HL) bukan RA
     const d = D.filter(function (x) { return sameName_(x, nm); })[0];
     const name = d || nm;
     if (out.indexOf(name) < 0) out.push(name);
