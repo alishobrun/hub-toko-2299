@@ -173,17 +173,19 @@
       { icon: 'star', id: 'stokart', label: 'Stok Artikel', desc: 'New Arrival, season & collection' },
       { icon: 'eye', id: 'display', label: 'Cek Display', desc: 'Barang belum terdisplay & display double' },
       { icon: 'search', id: 'cari', label: 'Cari Barang', desc: 'Lokasi bin per SKU, scan barcode' },
-      { icon: 'inbox', id: 'saranreq', label: 'Saran Request', desc: 'Laris tapi stok tipis/habis' },
-      { icon: 'upload', id: 'unggahbin', label: 'Unggah By Bin', desc: 'Perbarui stok per bin' }] },
+      { icon: 'inbox', id: 'saranreq', label: 'Saran Request', desc: 'Laris tapi stok tipis/habis' }] },
     { id: 'kasg', label: 'Kas', icon: 'cash', color: '#22C55E', items: [
       { icon: 'cash', id: 'kas', label: 'Cek Kas', desc: 'Till, Store Safe, Floating, Petty' },
       { icon: 'scale', id: 'kas-rekap', label: 'Rekap Selisih', desc: 'Selisih kas per orang' }] },
     { id: 'data', label: 'Data', icon: 'upload', color: '#A78BFA', items: [
       { icon: 'upload', id: 'unggah', label: 'Unggah DSR', desc: 'Perbarui data penjualan' },
+      { icon: 'box', id: 'unggahbin', label: 'Unggah By Bin', desc: 'Perbarui stok per bin' },
       { icon: 'video', id: 'dokumentasi', label: 'Dokumentasi', desc: 'Video opening & closing' }] },
     { id: 'tim', label: 'Tim', icon: 'users', color: '#FB923C', items: [
       { icon: 'bell', id: 'pengumuman', label: 'Pengumuman', desc: 'Info tim + tanda sudah baca' },
       { icon: 'clip', id: 'handover', label: 'Handover', desc: 'Serah terima shift dari foto buku' },
+      { icon: 'star', id: 'apresiasi', label: 'Apresiasi', desc: 'Ucapan terima kasih untuk rekan' },
+      { icon: 'heart', id: 'feedback', label: 'Feedback Anonim', desc: 'Saran & apresiasi tanpa nama' },
       { icon: 'cal', id: 'jadwal', label: 'Jadwal', desc: 'Shift tim per periode' },
       { icon: 'inbox', id: 'request', label: 'Request Jadwal', desc: 'Ajukan OFF, cuti atau shift' },
       { icon: 'swap', id: 'tukar', label: 'Tukar Shift', desc: 'Tukar shift dengan rekan' },
@@ -230,7 +232,7 @@
   window.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeMenu(); });
 
   function visibleItems(g) { return g.items.filter(function (x) { return !x.admin || isAdmin(); }); }
-  function badgeCount(id) { var b = S.badges || {}; return id === 'admin' ? b.admin : id === 'request' ? b.request : id === 'tukar' ? b.tukar : id === 'pengumuman' ? b.peng : 0; }
+  function badgeCount(id) { var b = S.badges || {}; return id === 'admin' ? b.admin : id === 'request' ? b.request : id === 'tukar' ? b.tukar : id === 'pengumuman' ? b.peng : id === 'feedback' ? b.fb : id === 'handover' ? b.ho : 0; }
   function groupCount(g) { return visibleItems(g).reduce(function (n, x) { return n + (badgeCount(x.id) || 0); }, 0); }
   function badgeEl(n, cls) { return el('span', { class: 'nbadge' + (cls ? ' ' + cls : ''), 'data-n': n || 0, text: n > 99 ? '99+' : String(n || '') }); }
   function getFold() { try { return JSON.parse(store.get('fold') || '[]'); } catch (e) { return []; } }
@@ -241,7 +243,7 @@
     { id: 'monitoring', label: 'Sales', icon: 'chart', groups: ['sales'] },
     { id: 'kas', label: 'Kas', icon: 'cash', groups: ['kasg'] },
     { id: 'jadwal', label: 'Jadwal', icon: 'cal', routes: ['jadwal', 'request', 'tukar', 'simpanan'], badge: ['request', 'tukar'] },
-    { id: '_menu', label: 'Menu', icon: 'grid', badge: ['admin', 'pengumuman'] }
+    { id: '_menu', label: 'Menu', icon: 'grid', badge: ['admin', 'pengumuman', 'feedback', 'handover'] }
   ];
 
   function shell(m) {
@@ -371,7 +373,7 @@
     drawBell();
     loadNotif(true);
   }
-  var NJ = { pengumuman: 'bell', handover: 'clip', video: 'video', master: 'box', request: 'inbox', simpanan: 'bookmark', tukar: 'swap', akun: 'user', kas: 'cash', dsr: 'upload', sheet: 'file', batal: 'x', batas: 'alert' };
+  var NJ = { feedback: 'heart', apresiasi: 'star', bin: 'box', pengumuman: 'bell', handover: 'clip', video: 'video', master: 'box', request: 'inbox', simpanan: 'bookmark', tukar: 'swap', akun: 'user', kas: 'cash', dsr: 'upload', sheet: 'file', batal: 'x', batas: 'alert' };
   function relTime(w) {
     var t = Date.parse(String(w).replace(' ', 'T') + '+07:00');
     if (isNaN(t)) return '';
@@ -662,6 +664,7 @@
     var kpis = el('div', { class: 'grid grid-3' }, el('div', { class: 'skel' }), el('div', { class: 'skel' }), el('div', { class: 'skel' }));
     v.append(kpis);
     v.append(pengBanner());
+    v.append(hoBeranda());
     v.append(sayaCard());
     var row = el('div', { class: 'grid grid-2 section' });
     var duty = el('a', { class: 'card duty-card', href: '#/jadwal', title: 'Buka jadwal lengkap' }, el('h3', { text: 'Bertugas hari ini' }), el('p', { class: 'sub', text: dLong(todayJkt()) }), el('div', { class: 'skel' }));
@@ -671,9 +674,12 @@
     var dokCard = el('a', { class: 'card dok-home section', href: '#/dokumentasi' }, el('div', { class: 'card-head' }, el('h3', { text: 'Dokumentasi hari ini' }), el('span', { class: 'duty-link' }, 'Unggah / lihat', icon('arrow'))), el('div', { class: 'skel', style: 'min-height:50px' }));
     api('dokList').then(function (d) {
       if (!d.siap && !d.items.length) { dokCard.remove(); return; }
-      dokCard.replaceChildren(el('div', { class: 'card-head' }, el('h3', { text: 'Dokumentasi hari ini' }), el('span', { class: 'duty-link' }, 'Unggah / lihat', icon('arrow'))), dokStatusEl(d));
+      var tugas = ((S.notif && S.notif.items) || []).filter(function (x) { return /^live-dok-/.test(x.id); });
+      dokCard.replaceChildren(el('div', { class: 'card-head' }, el('h3', null, 'Dokumentasi hari ini', tugas.length ? el('span', { class: 'tag tag-bad', style: 'margin-left:8px', text: 'Tugas kamu' }) : null), el('span', { class: 'duty-link' }, 'Unggah / lihat', icon('arrow'))), dokStatusEl(d));
+      if (tugas.length) dokCard.setAttribute('href', tugas[0].link);
     }).catch(function () { dokCard.remove(); });
     v.append(dokCard);
+    v.append(apBeranda());
     v.append(el('div', { class: 'quick section' },
       el('a', { href: '#/briefing' }, icon('sun'), 'Briefing Pagi', el('span', { text: 'Teks WA untuk tim' })),
       el('a', { href: '#/unggah' }, icon('upload'), 'Unggah DSR', el('span', { text: 'Perbarui data sales' })),
@@ -1969,7 +1975,9 @@
     box.append(el('h3', { text: 'Dokumentasi video' }),
       el('p', { class: 'sub', text: 'Batas ukuran video dan jam batas notifikasi bila video belum diunggah.' }),
       el('div', { class: 'field' }, el('label', { for: 'set-dokmb', text: 'Maksimal ukuran video (MB)' }), el('div', { class: 'inline' }, mb, mbBtn)),
-      timeRow('dok_batas_open', 'Batas video opening'), timeRow('dok_batas_close', 'Batas video closing'),
+      timeRow('dok_ingat_open', 'Pengingat opening mulai (RA shift pagi)'), timeRow('dok_batas_open', 'Batas video opening'),
+      timeRow('dok_ingat_close', 'Pengingat closing mulai (RA shift siang)'), timeRow('dok_batas_close', 'Batas video closing'),
+      timeRow('data_batas', 'Pengingat admin: DSR & By Bin belum diunggah setelah jam'),
       el('h3', { text: 'Mesin upload', style: 'margin-top:18px' }),
       el('p', { class: 'sub', text: 'Alamat Web App dan kunci dari mesin upload di akun pemilik folder Dokumentasi.' }),
       el('div', { class: 'field' }, el('label', { for: 'up-url', text: 'Alamat Web App' }), url),
@@ -3154,6 +3162,7 @@
             el('div', { class: 'muted art-meta', text: h.nama + ' · ' + fTime(h.waktu) + (h.foto.length ? ' · ' + h.foto.length + ' foto' : '') }),
             el('div', { class: 'ho-prev', text: h.isi.slice(0, 120) + (h.isi.length > 120 ? '…' : '') }))),
             el('div', { class: 'art-det' }, el('div', { class: 'peng-isi', text: h.isi || '(tanpa teks)' }),
+              el('small', { class: 'muted', style: 'display:block;margin-top:8px', text: h.pembaca && h.pembaca.length ? 'Dibaca: ' + h.pembaca.join(', ') : 'Belum ada yang menandai sudah baca' }),
               h.foto.length ? el('div', { class: 'ho-thumbs' }, h.foto.map(function (id) {
                 return el('a', { class: 'ho-thumb', href: 'https://drive.google.com/file/d/' + id + '/view', target: '_blank', rel: 'noopener' }, el('img', { src: 'https://drive.google.com/thumbnail?id=' + id + '&sz=w600', alt: 'Foto handover', loading: 'lazy' }));
               })) : null));
@@ -3161,6 +3170,176 @@
       }).catch(function (e) { list.replaceChildren(errBox(e)); });
     }
     loadList();
+  }
+
+  /* ---------- Rekap kepatuhan video per RA ---------- */
+  function dokRaTxt(r) {
+    var o = r.OPENING, c = r.CLOSING, P = [];
+    if (o.tugas) P.push('opening ' + o.tepat + '/' + o.tugas + ' tepat' + (o.telat ? ', ' + o.telat + ' telat' : '') + (o.kosong ? ', ' + o.kosong + ' tidak ada' : ''));
+    if (c.tugas) P.push('closing ' + c.tepat + '/' + c.tugas + ' tepat' + (c.telat ? ', ' + c.telat + ' telat' : '') + (c.kosong ? ', ' + c.kosong + ' tidak ada' : ''));
+    return P.join(' · ') || 'tidak ada tugas';
+  }
+  function dokRaRows(list) {
+    return [['Nama', 'Tugas opening', 'Opening tepat', 'Opening telat', 'Opening tidak ada', 'Tugas closing', 'Closing tepat', 'Closing telat', 'Closing tidak ada']].concat(list.map(function (r) {
+      return [r.nama, r.OPENING.tugas, r.OPENING.tepat, r.OPENING.telat, r.OPENING.kosong, r.CLOSING.tugas, r.CLOSING.tepat, r.CLOSING.telat, r.CLOSING.kosong];
+    }));
+  }
+  function dokRaCard(list, title, extra) {
+    function cell(x) {
+      if (!x.tugas) return el('td', { class: 'r muted', text: '—' });
+      var pct = x.tepat / x.tugas;
+      return el('td', { class: 'r' }, el('b', { class: 'num ' + (pct >= 0.999 ? 'c-good' : pct >= 0.7 ? '' : 'c-bad'), text: x.tepat + '/' + x.tugas }),
+        x.telat || x.kosong ? el('small', { class: 'muted', style: 'display:block;font-size:11px', text: (x.telat ? x.telat + ' telat' : '') + (x.telat && x.kosong ? ' · ' : '') + (x.kosong ? x.kosong + ' kosong' : '') }) : null);
+    }
+    return el('div', { class: 'card section' }, el('div', { class: 'card-head' }, el('h3', { text: title }), extra || null),
+      el('p', { class: 'sub', text: 'Tepat = video ada sebelum jam batas. Shift pagi bertugas opening, shift siang closing.' }),
+      list.length ? el('div', { class: 't-wrap' }, el('table', { class: 't t-sm' },
+        el('thead', null, el('tr', null, el('th', { text: 'RA' }), el('th', { class: 'r', text: 'Opening' }), el('th', { class: 'r', text: 'Closing' }))),
+        el('tbody', null, list.map(function (r) { return el('tr', null, el('td', { text: titleCase(r.nama) }), cell(r.OPENING), cell(r.CLOSING)); })))) : el('div', { class: 'empty', text: 'Belum ada data jadwal untuk periode ini' }));
+  }
+  function dokRekapBulan(bulan) {
+    var box = el('div', null, el('div', { class: 'card section' }, el('div', { class: 'skel', style: 'min-height:60px' })));
+    api('dokRekap', { bulan: bulan }).then(function (d) {
+      var dl = el('button', { class: 'btn btn-ghost btn-sm', type: 'button', onclick: function () { xlsxDownload('Kepatuhan video ' + CFG.STORE + ' ' + d.bulan, [{ name: 'Video per RA', rows: dokRaRows(d.list) }]); } }, icon('download'), 'Excel');
+      box.replaceChildren(dokRaCard(d.list, 'Kepatuhan video · ' + BULAN[Number(d.bulan.slice(5)) - 1] + ' ' + d.bulan.slice(0, 4), dl));
+    }).catch(function (e) { box.replaceChildren(errBox(e)); });
+    return box;
+  }
+
+  /* ---------- Handover di Beranda ---------- */
+  function hoBeranda() {
+    var box = el('div');
+    api('hoList').then(function (items) {
+      var me = S.user && S.user.username, kemarin = addDays(todayJkt(), -1);
+      var h = items.filter(function (x) { return x.tanggal >= kemarin && x.username !== me; })[0];
+      if (!h) return;
+      var btn = el('button', { class: 'btn btn-primary btn-sm', type: 'button', text: 'Sudah saya baca', onclick: function (e) {
+        e.preventDefault(); btn.disabled = true;
+        api('hoBaca', { id: h.id }).then(function () { h.dibaca = true; draw(); loadNotif(true); toast('Handover ditandai sudah dibaca'); }).catch(function (err) { btn.disabled = false; toast(err.message, true); });
+      } });
+      function draw() {
+        box.replaceChildren(el('div', { class: 'card ho-home section' + (h.dibaca ? ' read' : '') },
+          el('div', { class: 'card-head' }, el('div', null, el('h3', null, icon('clip'), ' Handover ', el('span', { class: 'tag', text: h.shift })),
+            el('p', { class: 'muted', style: 'margin:2px 0 0;font-size:12.5px', text: h.nama + ' · ' + fTime(h.waktu) + (h.pembaca.length ? ' · dibaca ' + h.pembaca.length + ' orang' : '') })),
+            h.dibaca ? el('span', { class: 'tag tag-good', text: '✓ sudah baca' }) : btn),
+          el('div', { class: 'peng-isi' + (h.dibaca ? ' clamp' : ''), text: h.isi || '(lihat foto)' }),
+          el('a', { class: 'duty-link', href: '#/handover', style: 'margin-top:8px;display:inline-flex' }, 'Semua handover', icon('arrow'))));
+      }
+      draw();
+    }).catch(function () {});
+    return box;
+  }
+
+  /* ---------- Papan apresiasi ---------- */
+  function apItem(x, onDel) {
+    var me = S.user && S.user.username;
+    return el('div', { class: 'ap-item' },
+      el('div', { class: 'ap-ic' }, icon('star')),
+      el('div', { class: 'ap-b' },
+        el('div', { class: 'ap-who' }, el('b', { text: x.nama }), ' → ', el('b', { text: x.untukNama })),
+        el('p', { text: x.isi }),
+        el('small', { class: 'muted', text: fTime(x.waktu) })),
+      onDel && (x.username === me || isAdmin()) ? el('button', { class: 'link-btn', type: 'button', text: 'Hapus', onclick: function () { onDel(x); } }) : null);
+  }
+  function apBeranda() {
+    var box = el('div');
+    api('apList').then(function (list) {
+      var d7 = addDays(todayJkt(), -7);
+      var baru = list.filter(function (x) { return x.waktu.slice(0, 10) >= d7; }).slice(0, 3);
+      box.replaceChildren(el('div', { class: 'card section ap-home' },
+        el('div', { class: 'card-head' }, el('h3', { text: '⭐ Apresiasi tim' }), el('a', { class: 'duty-link', href: '#/apresiasi' }, baru.length ? 'Lihat & tulis' : 'Tulis apresiasi', icon('arrow'))),
+        baru.length ? el('div', { class: 'ap-list' }, baru.map(function (x) { return apItem(x); })) : el('p', { class: 'muted', style: 'margin:6px 0 0', text: 'Belum ada apresiasi minggu ini. Jadilah yang pertama berterima kasih ke rekan!' })));
+    }).catch(function () {});
+    return box;
+  }
+  function viewApresiasi(v) {
+    pageHead(v, 'Apresiasi', 'Ucapan terima kasih terbuka untuk rekan. Tampil di Beranda selama seminggu.');
+    var form = el('div', { class: 'card' }), list = el('div', { class: 'card section' }, el('div', { class: 'skel', style: 'min-height:80px' }));
+    v.append(el('div', { class: 'grid grid-up' }, form, list));
+    api('fbTujuan').then(function (users) {
+      var untuk = el('select', { id: 'ap-u' }, el('option', { value: 'tim', text: 'Seluruh tim' }), users.map(function (u) { return el('option', { value: u.username, text: u.nama }); }));
+      var isi = el('textarea', { id: 'ap-i', class: 'brief-fokus', rows: 4, maxlength: 500, placeholder: 'Contoh: Terima kasih sudah bantu rapikan gudang kemarin, jadi cepat selesai 🙏' });
+      var btn = el('button', { class: 'btn btn-orange btn-block', type: 'button', text: 'Kirim apresiasi', onclick: function () {
+        btn.disabled = true;
+        api('apKirim', { untuk: untuk.value, isi: isi.value }).then(function () { toast('Apresiasi terkirim ⭐'); isi.value = ''; btn.disabled = false; load(); })
+          .catch(function (err) { btn.disabled = false; toast(err.message, true); });
+      } });
+      form.replaceChildren(el('h3', { text: 'Tulis apresiasi' }),
+        el('div', { class: 'field' }, el('label', { for: 'ap-u', text: 'Untuk' }), untuk),
+        el('div', { class: 'field' }, el('label', { for: 'ap-i', text: 'Pesan' }), isi),
+        el('p', { class: 'muted', style: 'font-size:12.5px;margin:0 0 12px', text: 'Namamu ikut tampil. Untuk kritik atau saran tanpa nama, pakai menu Feedback Anonim.' }), btn);
+    }).catch(function (e) { form.replaceChildren(errBox(e)); });
+    function load() {
+      api('apList').then(function (items) {
+        list.replaceChildren(el('h3', { text: 'Apresiasi terbaru' }), items.length ? el('div', { class: 'ap-list' }, items.map(function (x) {
+          return apItem(x, function (it) { api('apHapus', { id: it.id }).then(function () { toast('Dihapus'); load(); }).catch(function (err) { toast(err.message, true); }); });
+        })) : el('div', { class: 'empty', text: 'Belum ada apresiasi' }));
+      }).catch(function (e) { list.replaceChildren(errBox(e)); });
+    }
+    load();
+  }
+
+  /* ---------- Feedback anonim ---------- */
+  var FB_HINT = {
+    apresiasi: 'Yang sudah bagus dari kamu: …\nDampaknya buat tim/toko: …',
+    saran: 'Yang saya perhatikan: …\nAkan lebih baik kalau: …'
+  };
+  function viewFeedback(v) {
+    pageHead(v, 'Feedback Anonim', 'Saran & apresiasi tanpa nama. Pesan dikumpulkan lalu dikirim serentak tiap jam 08.00.');
+    var form = el('div', { class: 'card' }), inbox = el('div', { class: 'card section' }, el('div', { class: 'skel', style: 'min-height:80px' }));
+    var adminBox = el('div');
+    v.append(el('div', { class: 'grid grid-up' }, form, inbox), adminBox);
+    var jenis = 'saran';
+    api('fbTujuan').then(function (users) {
+      var untuk = el('select', { id: 'fb-u' }, el('option', { value: '', text: '— pilih —' }), el('option', { value: 'toko', text: 'Untuk toko (masukan umum ke pengelola)' }), users.map(function (u) { return el('option', { value: u.username, text: u.nama }); }));
+      var isi = el('textarea', { id: 'fb-i', class: 'brief-fokus', rows: 6, maxlength: 1500, placeholder: FB_HINT[jenis] });
+      var btn = el('button', { class: 'btn btn-orange btn-block', type: 'button', text: 'Kirim tanpa nama', onclick: function () {
+        if (!untuk.value) { toast('Pilih penerima dulu', true); return; }
+        btn.disabled = true;
+        api('fbKirim', { untuk: untuk.value, jenis: jenis, isi: isi.value }).then(function (r) {
+          isi.value = ''; btn.disabled = false;
+          toast('Terkirim. Sampai ke penerima ' + (r.kirim === todayJkt() ? 'hari ini' : 'besok') + ' jam 08.00');
+        }).catch(function (err) { btn.disabled = false; toast(err.message, true); });
+      } });
+      form.replaceChildren(el('h3', { text: 'Kirim feedback' }),
+        el('div', { class: 'fb-safe' }, icon('shield'), el('span', { text: 'Namamu tidak disimpan di mana pun, termasuk oleh admin. Maksimal 3 feedback per hari.' })),
+        el('div', { class: 'field' }, el('label', { text: 'Jenis' }), segmented([['saran', '💡 Saran perbaikan'], ['apresiasi', '👍 Apresiasi']], jenis, function (x) { jenis = x; isi.placeholder = FB_HINT[x]; })),
+        el('div', { class: 'field' }, el('label', { for: 'fb-u', text: 'Untuk' }), untuk),
+        el('div', { class: 'field' }, el('label', { for: 'fb-i', text: 'Pesan' }), isi),
+        el('p', { class: 'muted', style: 'font-size:12.5px;margin:0 0 12px', text: 'Tulis perilakunya, bukan orangnya. Hindari detail yang membuat kamu mudah ditebak.' }), btn);
+    }).catch(function (e) { form.replaceChildren(errBox(e)); });
+    function load() {
+      api('fbMasuk').then(function (d) {
+        inbox.replaceChildren(el('h3', { text: 'Feedback untukmu' }), d.list.length ? el('div', { class: 'fb-list' }, d.list.map(function (x) {
+          var lap = el('button', { class: 'link-btn', type: 'button', text: x.dilaporkan ? 'Sudah dilaporkan' : 'Laporkan', disabled: x.dilaporkan, onclick: function () {
+            var alasan = window.prompt('Kenapa dilaporkan? (mis. kasar, menyerang pribadi)');
+            if (alasan == null) return;
+            lap.disabled = true;
+            api('fbLapor', { id: x.id, alasan: alasan }).then(function () { lap.textContent = 'Sudah dilaporkan'; toast('Dilaporkan ke admin'); }).catch(function (err) { lap.disabled = false; toast(err.message, true); });
+          } });
+          return el('div', { class: 'fb-item ' + x.jenis + (x.dibaca ? '' : ' unread') },
+            el('div', { class: 'fb-top' }, el('span', { class: 'tag ' + (x.jenis === 'apresiasi' ? 'tag-good' : 'tag-warn'), text: x.jenis === 'apresiasi' ? '👍 Apresiasi' : '💡 Saran' }),
+              x.untuk === 'toko' ? el('span', { class: 'tag', text: 'Untuk toko' }) : null, el('small', { class: 'muted', text: dShort(x.kirim) })),
+            el('div', { class: 'peng-isi', text: x.isi }), el('div', { style: 'text-align:right' }, lap));
+        })) : el('div', { class: 'empty', text: 'Belum ada feedback untukmu' }));
+        loadNotif(true);
+        if (d.ringkas) {
+          var r = d.ringkas;
+          adminBox.replaceChildren(el('div', { class: 'card section' }, el('h3', { text: 'Ringkasan 30 hari (admin)' }),
+            el('p', { class: 'sub', text: 'Isi feedback antar rekan tidak bisa dibaca admin, kecuali yang dilaporkan.' }),
+            el('div', { class: 'insights' },
+              el('div', { class: 'insight good' }, el('span', { text: 'Apresiasi' }), el('b', { text: r.apresiasi })),
+              el('div', { class: 'insight warn' }, el('span', { text: 'Saran' }), el('b', { text: r.saran })),
+              el('div', { class: 'insight' }, el('span', { text: 'Antar rekan' }), el('b', { text: r.antarRekan })),
+              el('div', { class: 'insight' }, el('span', { text: 'Menunggu dikirim' }), el('b', { text: r.menunggu }))),
+            d.laporan.length ? el('div', { style: 'margin-top:14px' }, el('h3', { text: 'Dilaporkan' }), d.laporan.map(function (x) {
+              return el('div', { class: 'fb-item saran' }, el('div', { class: 'fb-top' }, el('span', { class: 'tag tag-bad', text: 'Dilaporkan' }), el('small', { class: 'muted', text: 'untuk ' + x.untuk + ' · ' + dShort(x.kirim) })),
+                el('div', { class: 'peng-isi', text: x.isi }), x.alasan ? el('small', { class: 'muted', text: 'Alasan: ' + x.alasan }) : null);
+            })) : null));
+        }
+      }).catch(function (e) { inbox.replaceChildren(errBox(e)); });
+    }
+    load();
   }
 
   /* ---------- Laporan mingguan ---------- */
@@ -3214,6 +3393,10 @@
         d.varian.slice().sort(function (a, b) { return b[col] - a[col]; }).slice(0, 5).forEach(function (x, i) { L.push((i + 1) + '. ' + titleCase(x[1]) + ' · ' + fRpShort(x[col])); });
         L.push('', '👥 RA:');
         d.ra.slice().sort(function (a, b) { return b[rcol] - a[rcol]; }).forEach(function (r) { L.push('• ' + titleCase(r[0]) + ' ' + fRpShort(r[rcol]) + ' (' + r[4] + ' trx)'); });
+        if (d.dokRA && d.dokRA.length) {
+          L.push('', '🎥 Video opening/closing:');
+          d.dokRA.forEach(function (r) { L.push('• ' + titleCase(r.nama) + ' · ' + dokRaTxt(r)); });
+        }
         return L.join('\n');
       }
       function excel() {
@@ -3224,7 +3407,8 @@
           })) },
           { name: 'Produk', rows: [['Varian', 'Nama', 'Qty', 'Bruto', 'Netto']].concat(d.varian) },
           { name: 'RA', rows: [['Nama', 'Bruto', 'Netto', 'Qty', 'Transaksi']].concat(d.ra) },
-          { name: 'Selisih kas', rows: [['Tanggal', 'Nama', 'Pos', 'Selisih', 'Catatan']].concat(d.kas.list) }]);
+          { name: 'Selisih kas', rows: [['Tanggal', 'Nama', 'Pos', 'Selisih', 'Catatan']].concat(d.kas.list) },
+          { name: 'Video per RA', rows: dokRaRows(d.dokRA || []) }]);
       }
       var hmax = Math.max.apply(null, d.hari.map(function (h) { return Math.max(h[K], h.target || 0); }).concat([1]));
       body.replaceChildren(
@@ -3259,6 +3443,7 @@
           el('div', { class: 'card' }, el('h3', { text: 'RA' }), el('ol', { class: 'prod-list' }, d.ra.slice().sort(function (a, b) { return b[rcol] - a[rcol]; }).map(function (r, i) {
             return el('li', null, el('span', { class: 'rank' + (i < 3 ? ' top' : ''), text: i + 1 }), el('div', { class: 'ra-main' }, el('div', { class: 'ra-top' }, el('b', { text: titleCase(r[0]) }), el('b', { class: 'num', text: fRpShort(r[rcol]) })), el('div', { class: 'muted', style: 'font-size:12.5px', text: r[4] + ' trx · UPT ' + fDec(r[4] ? r[3] / r[4] : null) })));
           })))),
+        d.dokRA && d.dokRA.length ? dokRaCard(d.dokRA, 'Kepatuhan video per RA') : null,
         d.kas.list.length ? el('div', { class: 'card section' }, el('h3', { text: 'Selisih kas minggu ini' }), el('ul', { class: 'calc' }, d.kas.list.map(function (k) { return el('li', null, el('span', { text: dShort(k[0]) + ' · ' + k[1] + ' · ' + posOf(k[2]).label + (k[4] ? ' · ' + k[4] : '') }), el('b', { class: 'num ' + (k[3] < 0 ? 'c-bad' : 'c-good'), text: (k[3] > 0 ? '+' : '') + nf.format(k[3]) })); }))) : null);
     }
     load();
@@ -3904,8 +4089,10 @@
     var upBox = el('div', { class: 'card' });
     var listBox = el('div', { class: 'card section' }, el('div', { class: 'skel', style: 'min-height:80px' }));
     v.append(el('div', { class: 'grid grid-up' }, el('div', { class: 'dok-left' }, statusBox, upBox), listBox));
+    v.append(dokRekapBulan(todayJkt().slice(0, 7)));
     var bulan = S.dokBulan || '';
     var jenis = Number(new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Jakarta', hour: 'numeric', hour12: false }).format(new Date())) < 15 ? 'OPENING' : 'CLOSING';
+    var qj = (location.hash.match(/[?&]jenis=(OPENING|CLOSING)/) || [])[1]; if (qj) jenis = qj;
     var busy = false, tanggal = '';
 
     function load() {
@@ -4003,7 +4190,7 @@
   }
 
   Object.assign(VIEWS, {
-    beranda: viewBeranda, briefing: viewBriefing, mingguan: viewMingguan, pengumuman: viewPengumuman, handover: viewHandover, dokumentasi: viewDokumentasi, monitoring: viewMonitoring, trend: viewTrend, ra: viewRA, produk: viewProduk, customer: viewCustomer,
+    beranda: viewBeranda, briefing: viewBriefing, mingguan: viewMingguan, pengumuman: viewPengumuman, handover: viewHandover, feedback: viewFeedback, apresiasi: viewApresiasi, dokumentasi: viewDokumentasi, monitoring: viewMonitoring, trend: viewTrend, ra: viewRA, produk: viewProduk, customer: viewCustomer,
     stok: viewStok, stokart: viewStokArt, saranreq: viewSaranReq, display: viewDisplay, cari: viewCari, unggahbin: viewUnggahBin, kas: viewKas, 'kas-rekap': viewKasRekap, unggah: viewUnggah,
     jadwal: viewJadwal, request: viewRequest, tukar: viewTukar, simpanan: viewSimpanan,
     akun: viewAkun, admin: viewAdmin, aktivitas: viewAktivitas, pica: viewPica

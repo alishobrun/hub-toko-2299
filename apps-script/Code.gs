@@ -63,11 +63,15 @@ const TABS = {
   target_ra: ['bulan', 'ra', 'target', 'diubah', 'oleh'],
   pengumuman: ['id', 'dibuat', 'oleh', 'nama', 'judul', 'isi', 'penting', 'aktif', 'diubah'],
   pengumuman_baca: ['id', 'username', 'waktu'],
-  handover: ['id', 'waktu', 'tanggal', 'shift', 'username', 'nama', 'isi', 'foto']
+  handover: ['id', 'waktu', 'tanggal', 'shift', 'username', 'nama', 'isi', 'foto'],
+  handover_baca: ['id', 'username', 'waktu'],
+  // feedback anonim: SENGAJA tanpa kolom pengirim
+  feedback: ['id', 'tanggal', 'kirim', 'untuk', 'jenis', 'isi', 'dibaca', 'dilaporkan', 'alasan_lapor'],
+  apresiasi: ['id', 'waktu', 'username', 'nama', 'untuk', 'untuk_nama', 'isi', 'aktif']
 };
 
 const PECAHAN = [100000, 50000, 20000, 10000, 5000, 2000, 1000, 500, 200, 100];
-const SETTING_DEFAULTS = { modal_till: 600000, floating_cash: 2400000, target_upt: 2, target_basket: 0, dok_max_mb: 300, dok_batas_open: 630, dok_batas_close: 1350, na_hari: 60 };
+const SETTING_DEFAULTS = { modal_till: 600000, floating_cash: 2400000, target_upt: 2, target_basket: 0, dok_max_mb: 300, dok_batas_open: 630, dok_batas_close: 1350, na_hari: 60, dok_ingat_open: 570, dok_ingat_close: 1290, data_batas: 660 };
 
 // Kolom yang disimpan sebagai teks (supaya tanggal/kode tidak diubah Sheets)
 const NUM_COLS = {
@@ -1558,7 +1562,7 @@ function syncTraffic_() {
   return { tanggal: tgl, traffic: traffic };
 }
 /** Dipanggil pemicu per jam supaya traffic tiap hari tetap tercatat walau web tidak dibuka. */
-function catatTraffic() { try { cekDokumentasi_(); } catch (e) { Logger.log('dok: ' + e); } return syncTraffic_(); }
+function catatTraffic() { try { cekDokumentasi_(); } catch (e) { Logger.log('dok: ' + e); } try { kirimFeedback_(); } catch (e) { Logger.log('fb: ' + e); } return syncTraffic_(); }
 function pasangCatatTraffic_() {
   ScriptApp.getProjectTriggers().forEach(function (t) { if (t.getHandlerFunction() === 'catatTraffic') ScriptApp.deleteTrigger(t); });
   ScriptApp.newTrigger('catatTraffic').timeBased().everyHours(1).create();
@@ -1634,12 +1638,18 @@ Object.assign(API, {
       }
 
       // DSR kemarin belum masuk (setelah jam 11)
-      const jam = Number(Utilities.formatDate(new Date(), CFG.TZ, 'H'));
+      const mnt = menitNow_(), bData = Number(settings_().data_batas) || 660;
+      const jamB = pad_(Math.floor(bData / 60)) + ':' + pad_(bData % 60);
       const kemarin = addDays_(today, -1);
       const latest = latestDate_();
-      if (jam >= 11 && latest < kemarin) {
-        items.push({ id: 'live-dsr-' + today, live: true, level: 'cek', jenis: 'dsr', waktu: today + ' 11:00:00',
+      if (mnt >= bData && latest < kemarin) {
+        items.push({ id: 'live-dsr-' + today, live: true, level: 'cek', jenis: 'dsr', waktu: today + ' ' + jamB + ':00',
           judul: 'DSR kemarin belum diunggah', isi: 'Data terakhir sampai ' + tglPendek_(latest), link: '#/unggah' });
+      }
+      if (mnt >= bData) {
+        const bu = read_('bin_upload'), lb = bu.length ? String(bu[bu.length - 1].waktu).slice(0, 10) : '';
+        if (lb < today) items.push({ id: 'live-bin-' + today, live: true, level: 'cek', jenis: 'bin', waktu: today + ' ' + jamB + ':00',
+          judul: 'By Bin hari ini belum diunggah', isi: lb ? 'Unggahan terakhir ' + tglPendek_(lb) : 'Belum pernah diunggah', link: '#/unggahbin' });
       }
     } else {
       tukar.filter(function (t) { return t.status === 'menunggu_rekan' && t.rekan === u.username; }).forEach(function (t) {
@@ -1649,6 +1659,15 @@ Object.assign(API, {
       });
       badges.tukar = items.length;
     }
+
+    // tugas video opening/closing sesuai shift hari ini
+    try { dokTugas_(u, today).forEach(function (x) { items.push(x); }); } catch (e) { /* jadwal/Drive belum siap */ }
+    try { badges.fb = fbMasuk_(u).filter(function (x) { return !x.dibaca; }).length; } catch (e) { badges.fb = 0; }
+    try {
+      const hb = {}; read_('handover_baca').forEach(function (x) { if (x.username === u.username) hb[String(x.id)] = 1; });
+      const lastHo = read_('handover').filter(function (x) { return String(x.tanggal) >= addDays_(today, -1) && x.username !== u.username; }).pop();
+      badges.ho = lastHo && !hb[String(lastHo.id)] ? 1 : 0;
+    } catch (e) { badges.ho = 0; }
 
     // catatan kejadian (60 hari terakhir, maks 60)
     const batasLama = addDays_(today, -60);
@@ -2127,7 +2146,7 @@ function dokBaca_(bulan) {
     const fi = folder.getFiles();
     while (fi.hasNext()) {
       const x = fi.next(), m = String(x.getName()).match(DOK_RE);
-      if (m) out.push({ id: x.getId(), nama: x.getName(), tanggal: m[1], jenis: m[2], oleh: m[3], jam: m[4].slice(0, 2) + ':' + m[4].slice(2), size: x.getSize() });
+      if (m) out.push({ id: x.getId(), nama: x.getName(), tanggal: m[1], jenis: m[2], oleh: m[3], jam: m[4].slice(0, 2) + ':' + m[4].slice(2), size: x.getSize(), dibuat: Utilities.formatDate(x.getDateCreated(), CFG.TZ, 'yyyy-MM-dd HH:mm') });
     }
     if (depth > 0) { const sub = folder.getFolders(); while (sub.hasNext()) ambil(sub.next(), depth - 1); }
   };
@@ -2316,7 +2335,7 @@ Object.assign(API, {
         kpi: { upt: kp.t ? kp.q / kp.t : null, basketB: kp.t ? kp.b / kp.t : null, basketN: kp.t ? kp.n / kp.t : null, trx: kp.t, partai: kp.partai },
         varian: Object.keys(vr).map(function (k) { const x = vr[k]; return [k, x.nama, x.q, Math.round(x.b), Math.round(x.n)]; }).sort(function (a, b) { return b[4] - a[4]; }),
         ra: Object.keys(ra).map(function (k) { const x = ra[k]; return [k, Math.round(x.b), Math.round(x.n), x.q, Object.keys(x.inv).length]; }).sort(function (a, b) { return b[2] - a[2]; }),
-        kas: kasSum, dok: dok, dataSampai: latestDate_()
+        kas: kasSum, dok: dok, dokRA: (function () { try { return dokRekap_(dari, sampai).list; } catch (e) { return []; } })(), dataSampai: latestDate_()
       };
     });
   },
@@ -2409,9 +2428,13 @@ Object.assign(API, {
   },
 
   hoList: function (req) {
-    auth_(req);
+    const u = auth_(req);
+    const baca = read_('handover_baca'), names = namesMap_();
     return read_('handover').slice(-60).reverse().map(function (x) {
-      return { id: String(x.id), waktu: String(x.waktu), tanggal: String(x.tanggal), shift: String(x.shift), nama: String(x.nama), username: String(x.username), isi: String(x.isi), foto: String(x.foto || '').split(',').filter(String) };
+      const b = baca.filter(function (r) { return String(r.id) === String(x.id); });
+      return { id: String(x.id), waktu: String(x.waktu), tanggal: String(x.tanggal), shift: String(x.shift), nama: String(x.nama), username: String(x.username), isi: String(x.isi), foto: String(x.foto || '').split(',').filter(String),
+        dibaca: x.username === u.username || b.some(function (r) { return r.username === u.username; }),
+        pembaca: b.map(function (r) { return names[r.username] || r.username; }) };
     });
   }
 });
@@ -2475,3 +2498,247 @@ function ocr_(blob) {
     try { DriveApp.getFileById(id).setTrashed(true); } catch (e) {}
   }
 }
+
+/* =====================================================================
+ * TAHAP 9: tugas video per shift, rekap kepatuhan, feedback anonim,
+ * papan apresiasi, handover dibaca
+ * ===================================================================== */
+const SHIFT_OPEN = 'PD', SHIFT_CLOSE = 'SB';
+function menitNow_() { const n = new Date(); return Number(Utilities.formatDate(n, CFG.TZ, 'H')) * 60 + Number(Utilities.formatDate(n, CFG.TZ, 'm')); }
+function hhmm_(m) { return pad_(Math.floor(m / 60)) + '.' + pad_(m % 60); }
+
+/** Peta shift semua tab jadwal terbaru: { 'yyyy-MM-dd': { 'NAMA': 'PD' } }. */
+function jadwalMap_() {
+  return cached_('jadwalmap_' + today_(), 600, function () {
+    const ss = SpreadsheetApp.openById(CFG.JADWAL_SHEET_ID);
+    const sheets = ss.getSheets().slice().reverse();
+    const out = {}; let n = 0;
+    for (let i = 0; i < sheets.length && n < 4; i++) {
+      const months = monthsFromName_(sheets[i].getName());
+      if (!months.length) continue;
+      n++;
+      const p = parseJadwal_(sheets[i].getRange('B2:AJ16').getDisplayValues(), months, sheets[i].getName(), today_());
+      p.tanggal.forEach(function (t, k) {
+        if (out[t]) return; // tab yang lebih baru menang
+        const m = {}; p.staf.forEach(function (s) { m[s.nama] = s.shift[k] || ''; }); out[t] = m;
+      });
+    }
+    return out;
+  });
+}
+function dokItems_(bulan) {
+  const c = CacheService.getScriptCache(), hit = c.get('dok_' + bulan);
+  if (hit) return JSON.parse(hit);
+  const items = dokBaca_(bulan);
+  try { c.put('dok_' + bulan, JSON.stringify(items), 120); } catch (e) {}
+  return items;
+}
+/** Notifikasi langsung untuk RA yang bertugas opening (PD) / closing (SB) hari ini. */
+function dokTugas_(u, today) {
+  const p = PropertiesService.getScriptProperties();
+  if (!p.getProperty('UPLOAD_URL')) return [];
+  const set = settings_(), mnt = menitNow_();
+  const tugas = [['OPENING', SHIFT_OPEN, Number(set.dok_ingat_open), Number(set.dok_batas_open)], ['CLOSING', SHIFT_CLOSE, Number(set.dok_ingat_close), Number(set.dok_batas_close)]]
+    .filter(function (t) { return t[2] && mnt >= t[2]; });
+  if (!tugas.length) return [];
+  const map = jadwalMap_()[today];
+  if (!map) return [];
+  const nama = resolveNamaJadwal_(u, Object.keys(map));
+  if (!nama) return [];
+  const out = [];
+  let items = null;
+  tugas.forEach(function (t) {
+    if (map[nama] !== t[1]) return;
+    items = items || dokItems_(today.slice(0, 7));
+    if (items.some(function (x) { return x.tanggal === today && x.jenis === t[0]; })) return;
+    const telat = mnt >= t[3], j = t[0] === 'OPENING' ? 'opening' : 'closing';
+    out.push({ id: 'live-dok-' + j + '-' + today, live: true, level: telat ? 'aksi' : 'cek', jenis: 'video', waktu: today + ' ' + hhmm_(t[2]).replace('.', ':') + ':00',
+      judul: (telat ? 'Terlambat: ' : '') + 'Video ' + j + ' hari ini belum diunggah',
+      isi: 'Kamu shift ' + (t[1] === 'PD' ? 'pagi' : 'siang') + ' · batas ' + hhmm_(t[3]) + (telat ? ' sudah lewat' : ''),
+      link: '#/dokumentasi?jenis=' + t[0] });
+  });
+  return out;
+}
+
+/** Rekap kepatuhan video per RA (berdasarkan shift PD = opening, SB = closing). */
+function dokRekap_(dari, sampai) {
+  const set = settings_(), today = today_(), mnt = menitNow_();
+  const map = jadwalMap_();
+  const bulan = {}; let t = dari;
+  while (t <= sampai) { bulan[t.slice(0, 7)] = 1; t = addDays_(t, 1); }
+  let items = [];
+  Object.keys(bulan).forEach(function (b) { items = items.concat(dokItems_(b)); });
+  const vid = {};
+  items.forEach(function (x) {
+    const k = x.tanggal + '|' + x.jenis, created = String(x.dibuat || (x.tanggal + ' ' + x.jam));
+    if (!vid[k] || created < vid[k]) vid[k] = created;
+  });
+  const ra = {}, hariList = [];
+  for (let d = dari; d <= sampai && d <= today; d = addDays_(d, 1)) {
+    const m = map[d]; if (!m) continue;
+    hariList.push(d);
+    [['OPENING', SHIFT_OPEN, Number(set.dok_batas_open)], ['CLOSING', SHIFT_CLOSE, Number(set.dok_batas_close)]].forEach(function (c) {
+      if (d === today && mnt < c[2]) return; // belum jatuh tempo
+      const batas = d + ' ' + hhmm_(c[2]).replace('.', ':');
+      const v = vid[d + '|' + c[0]];
+      const st = !v ? 'kosong' : v <= batas ? 'tepat' : 'telat';
+      Object.keys(m).forEach(function (nama) {
+        if (m[nama] !== c[1]) return;
+        const o = ra[nama] = ra[nama] || { nama: nama, OPENING: { tugas: 0, tepat: 0, telat: 0, kosong: 0 }, CLOSING: { tugas: 0, tepat: 0, telat: 0, kosong: 0 } };
+        o[c[0]].tugas++; o[c[0]][st]++;
+      });
+    });
+  }
+  const list = Object.keys(ra).map(function (k) { return ra[k]; }).sort(function (a, b) { return a.nama < b.nama ? -1 : 1; });
+  return { dari: dari, sampai: sampai, hari: hariList.length, list: list };
+}
+
+/* ---------- feedback anonim ---------- */
+function fbTerkirim_(x, today, mnt) { const k = String(x.kirim); return k < today || (k === today && mnt >= 480); }
+function fbMasuk_(u) {
+  const today = today_(), mnt = menitNow_(), admin = u.role === 'admin';
+  return read_('feedback').filter(function (x) {
+    const to = String(x.untuk);
+    return (to === u.username || (admin && to === 'toko')) && fbTerkirim_(x, today, mnt);
+  }).map(function (x) {
+    return { id: String(x.id), kirim: String(x.kirim), untuk: String(x.untuk), jenis: String(x.jenis), isi: String(x.isi),
+      dibaca: String(x.dibaca || '').split(',').indexOf(u.username) >= 0, dilaporkan: String(x.dilaporkan) === 'ya' };
+  }).sort(function (a, b) { return a.kirim < b.kirim ? 1 : a.kirim > b.kirim ? -1 : 0; });
+}
+/** Dipanggil tiap jam: jam 08.00 kirim notifikasi feedback yang terkumpul. */
+function kirimFeedback_() {
+  const p = PropertiesService.getScriptProperties(), today = today_();
+  if (menitNow_() < 480 || p.getProperty('fb_kirim') === today) return;
+  p.setProperty('fb_kirim', today);
+  const per = {};
+  read_('feedback').forEach(function (x) { if (String(x.kirim) === today) per[x.untuk] = (per[x.untuk] || 0) + 1; });
+  const keys = Object.keys(per);
+  if (!keys.length) return;
+  withLock_(function () {
+    keys.forEach(function (to) {
+      notif_(to === 'toko' ? 'admin' : to, 'info', 'feedback', per[to] + ' feedback anonim baru' + (to === 'toko' ? ' untuk toko' : ' untukmu'), 'Buka untuk membaca', '#/feedback');
+    });
+  });
+}
+
+Object.assign(API, {
+  dokRekap: function (req) {
+    auth_(req);
+    const b = /^\d{4}-\d{2}$/.test(String(req.bulan || '')) ? String(req.bulan) : today_().slice(0, 7);
+    const y = Number(b.slice(0, 4)), m = Number(b.slice(5));
+    const akhir = addDays_((m === 12 ? (y + 1) + '-01' : y + '-' + pad_(m + 1)) + '-01', -1);
+    const r = dokRekap_(b + '-01', akhir < today_() ? akhir : today_());
+    r.bulan = b;
+    return r;
+  },
+
+  fbTujuan: function (req) {
+    const u = auth_(req);
+    return read_('users').filter(function (x) { return x.status === 'aktif' && x.username !== u.username; })
+      .map(function (x) { return { username: x.username, nama: x.nama }; });
+  },
+  fbKirim: function (req) {
+    const u = auth_(req);
+    const untuk = String(req.untuk || ''), jenis = String(req.jenis || ''), isi = String(req.isi || '').trim().slice(0, 1500);
+    if (!/^(apresiasi|saran)$/.test(jenis)) throw new Error('Pilih jenis feedback');
+    if (isi.length < 10) throw new Error('Tulis minimal 10 huruf ya');
+    if (untuk !== 'toko') {
+      if (untuk === u.username) throw new Error('Tidak bisa mengirim ke diri sendiri');
+      if (!read_('users').some(function (x) { return x.username === untuk && x.status === 'aktif'; })) throw new Error('Penerima tidak ditemukan');
+    }
+    const today = today_();
+    // kuota harian disimpan sementara di cache (tanpa nama, tidak masuk sheet)
+    const c = CacheService.getScriptCache();
+    const kk = 'fbq_' + Utilities.base64EncodeWebSafe(Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, u.username + '|' + today + '|' + ScriptApp.getScriptId()));
+    const n = Number(c.get(kk) || 0);
+    if (n >= 3) throw new Error('Batas 3 feedback per hari sudah tercapai. Lanjut besok ya');
+    const kirim = menitNow_() < 480 ? today : addDays_(today, 1);
+    return withLock_(function () {
+      const all = read_('feedback');
+      const row = { id: Utilities.getUuid().slice(0, 8), tanggal: kirim, kirim: kirim, untuk: untuk, jenis: jenis, isi: isi, dibaca: '', dilaporkan: '', alasan_lapor: '' };
+      all.splice(Math.floor(Math.random() * (all.length + 1)), 0, row); // posisi acak supaya urutan baris tidak membuka pengirim
+      writeAll_('feedback', all);
+      c.put(kk, String(n + 1), 21600);
+      return { kirim: kirim, sisa: 2 - n };
+    });
+  },
+  fbMasuk: function (req) {
+    const u = auth_(req);
+    const list = fbMasuk_(u);
+    const un = list.filter(function (x) { return !x.dibaca; }).map(function (x) { return x.id; });
+    if (un.length) withLock_(function () {
+      const all = read_('feedback');
+      all.forEach(function (x) { if (un.indexOf(String(x.id)) >= 0) { const l = String(x.dibaca || '').split(',').filter(String); l.push(u.username); x.dibaca = l.join(','); } });
+      writeAll_('feedback', all);
+    });
+    const out = { list: list };
+    if (u.role === 'admin') {
+      const all = read_('feedback'), today = today_(), mnt = menitNow_(), d30 = addDays_(today, -30);
+      const kirim = all.filter(function (x) { return fbTerkirim_(x, today, mnt) && String(x.kirim) >= d30; });
+      out.ringkas = { apresiasi: kirim.filter(function (x) { return x.jenis === 'apresiasi'; }).length, saran: kirim.filter(function (x) { return x.jenis === 'saran'; }).length,
+        antarRekan: kirim.filter(function (x) { return x.untuk !== 'toko'; }).length, menunggu: all.filter(function (x) { return !fbTerkirim_(x, today, mnt); }).length };
+      const names = namesMap_();
+      out.laporan = all.filter(function (x) { return String(x.dilaporkan) === 'ya'; }).map(function (x) {
+        return { id: String(x.id), kirim: String(x.kirim), untuk: x.untuk === 'toko' ? 'Toko' : (names[x.untuk] || x.untuk), jenis: String(x.jenis), isi: String(x.isi), alasan: String(x.alasan_lapor || '') };
+      });
+    }
+    return out;
+  },
+  fbLapor: function (req) {
+    const u = auth_(req);
+    return withLock_(function () {
+      const all = read_('feedback');
+      const x = all.filter(function (r) { return String(r.id) === String(req.id); })[0];
+      if (!x || (x.untuk !== u.username && !(u.role === 'admin' && x.untuk === 'toko'))) throw new Error('Feedback tidak ditemukan');
+      x.dilaporkan = 'ya'; x.alasan_lapor = String(req.alasan || '').slice(0, 300);
+      writeAll_('feedback', all);
+      notif_('admin', 'cek', 'feedback', 'Ada feedback anonim yang dilaporkan', 'Cek di menu Feedback Anonim', '#/feedback');
+      return true;
+    });
+  },
+
+  /* ---------- papan apresiasi (terbuka) ---------- */
+  apList: function (req) {
+    auth_(req);
+    return read_('apresiasi').filter(function (x) { return x.aktif !== 'tidak'; }).slice(-40).reverse().map(function (x) {
+      return { id: String(x.id), waktu: String(x.waktu), username: String(x.username), nama: String(x.nama), untuk: String(x.untuk), untukNama: String(x.untuk_nama), isi: String(x.isi) };
+    });
+  },
+  apKirim: function (req) {
+    const u = auth_(req);
+    const isi = String(req.isi || '').trim().slice(0, 500), untuk = String(req.untuk || 'tim');
+    if (isi.length < 5) throw new Error('Tulis apresiasinya dulu');
+    let untukNama = 'Seluruh tim';
+    if (untuk !== 'tim') {
+      const t = read_('users').filter(function (x) { return x.username === untuk && x.status === 'aktif'; })[0];
+      if (!t) throw new Error('Rekan tidak ditemukan');
+      if (untuk === u.username) throw new Error('Pilih rekan lain ya');
+      untukNama = t.nama;
+    }
+    return withLock_(function () {
+      append_('apresiasi', { id: Utilities.formatDate(new Date(), CFG.TZ, 'yyyyMMddHHmmss') + '-' + u.username, waktu: now_(), username: u.username, nama: u.nama, untuk: untuk, untuk_nama: untukNama, isi: isi, aktif: 'ya' });
+      notif_(untuk === 'tim' ? 'semua' : untuk, 'info', 'apresiasi', u.nama + ' mengapresiasi ' + (untuk === 'tim' ? 'tim' : 'kamu'), isi.slice(0, 100), '#/apresiasi');
+      return true;
+    });
+  },
+  apHapus: function (req) {
+    const u = auth_(req);
+    return withLock_(function () {
+      const all = read_('apresiasi');
+      const x = all.filter(function (r) { return String(r.id) === String(req.id); })[0];
+      if (!x || (x.username !== u.username && u.role !== 'admin')) throw new Error('Tidak bisa menghapus');
+      x.aktif = 'tidak'; writeAll_('apresiasi', all);
+      return true;
+    });
+  },
+
+  /* ---------- handover dibaca ---------- */
+  hoBaca: function (req) {
+    const u = auth_(req);
+    return withLock_(function () {
+      const ada = read_('handover_baca').some(function (x) { return String(x.id) === String(req.id) && x.username === u.username; });
+      if (!ada) append_('handover_baca', { id: String(req.id), username: u.username, waktu: now_() });
+      return true;
+    });
+  }
+});
