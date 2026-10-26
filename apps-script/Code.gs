@@ -296,23 +296,7 @@ const API = {
       if (!r[0]) throw new Error('Baris ke-' + (i + 1) + ' tidak punya nomor invoice');
       if (!/^\d{4}-\d{2}-\d{2}$/.test(String(r[2]))) throw new Error('Tanggal baris ke-' + (i + 1) + ' tidak terbaca');
     });
-    return withLock_(function () {
-      const res = mergeDsr_(read_('dsr'), rows, uploadId_(u.username));
-      if (res.changed) {
-        writeAll_('dsr', res.all);
-        writeAll_('ringkasan', aggregateDaily_(res.all));
-        bumpVersion_();
-      }
-      log_(u.username, 'unggah DSR', res.dari + ' s/d ' + res.sampai + ': ' + res.baru + ' baru, ' + res.diperbarui + ' diperbarui');
-      if (u.role !== 'admin') notif_('admin', 'info', 'dsr', 'DSR diunggah oleh ' + u.nama,
-        'Data ' + res.dari + ' s/d ' + res.sampai + ' · ' + res.baru + ' invoice baru, ' + res.diperbarui + ' diperbarui', '#/unggah');
-      append_('uploads', {
-        id: res.id, waktu: now_(), username: u.username, nama_file: String(req.fileName || '').slice(0, 120),
-        dari: res.dari, sampai: res.sampai, baris: rows.length,
-        invoice_baru: res.baru, invoice_diperbarui: res.diperbarui, invoice_sama: res.sama
-      });
-      return { baru: res.baru, diperbarui: res.diperbarui, sama: res.sama, baris: rows.length, dari: res.dari, sampai: res.sampai };
-    }, 120000);
+    return simpanDsr_(rows, u, req.fileName);
   },
 
   monitoring: function (req) {
@@ -2884,3 +2868,152 @@ Object.assign(API, {
     });
   }
 });
+
+/* =====================================================================
+ * TAHAP 11: DSR otomatis dari email CARE Omni
+ * CARE mengirim email "Export ItemDSRReport_….xlsx selesai diproses" berisi link unduhan.
+ * Tiap 15 menit Basecamp mengambil file dari link itu, membaca, lalu mengimpornya.
+ * ===================================================================== */
+const DSR_EMAIL = { FROM: 'noreplyinfo@pos-eigerindo.com', LABEL: 'Basecamp-DSR', LABEL_GAGAL: 'Basecamp-DSR-gagal' };
+
+/** Simpan baris DSR (array sesuai DSR_FIELDS). Dipakai unggah manual & otomatis dari email. */
+function simpanDsr_(rows, u, fileName) {
+  return withLock_(function () {
+    const res = mergeDsr_(read_('dsr'), rows, uploadId_(u.username));
+    if (res.changed) {
+      writeAll_('dsr', res.all);
+      writeAll_('ringkasan', aggregateDaily_(res.all));
+      bumpVersion_();
+    }
+    log_(u.username, 'unggah DSR', res.dari + ' s/d ' + res.sampai + ': ' + res.baru + ' baru, ' + res.diperbarui + ' diperbarui');
+    if (u.role !== 'admin') notif_('admin', 'info', 'dsr', u.username === 'email' ? 'DSR otomatis masuk dari email CARE' : 'DSR diunggah oleh ' + u.nama,
+      'Data ' + res.dari + ' s/d ' + res.sampai + ' · ' + res.baru + ' invoice baru, ' + res.diperbarui + ' diperbarui', '#/unggah');
+    append_('uploads', {
+      id: res.id, waktu: now_(), username: u.username, nama_file: String(fileName || '').slice(0, 120),
+      dari: res.dari, sampai: res.sampai, baris: rows.length,
+      invoice_baru: res.baru, invoice_diperbarui: res.diperbarui, invoice_sama: res.sama
+    });
+    return { baru: res.baru, diperbarui: res.diperbarui, sama: res.sama, baris: rows.length, dari: res.dari, sampai: res.sampai };
+  }, 120000);
+}
+
+/** Baca file xlsx → array baris (lewat konversi sementara ke Google Sheet). */
+function xlsxAoa_(blob) {
+  const boundary = 'bc2299x' + Date.now();
+  const meta = { name: 'dsr-tmp-' + Date.now(), mimeType: 'application/vnd.google-apps.spreadsheet' };
+  const head = '--' + boundary + '\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n' + JSON.stringify(meta) + '\r\n--' + boundary + '\r\nContent-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet\r\n\r\n';
+  const tail = '\r\n--' + boundary + '--';
+  const payload = Utilities.newBlob(head).getBytes().concat(blob.getBytes()).concat(Utilities.newBlob(tail).getBytes());
+  const r = UrlFetchApp.fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id', {
+    method: 'post', contentType: 'multipart/related; boundary=' + boundary, payload: payload, muteHttpExceptions: true,
+    headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken() }
+  });
+  if (r.getResponseCode() !== 200) throw new Error('Gagal membaca file Excel (' + r.getResponseCode() + ')');
+  const id = JSON.parse(r.getContentText()).id;
+  try {
+    const ss = SpreadsheetApp.openById(id), tz = ss.getSpreadsheetTimeZone();
+    const sh = ss.getSheets()[0];
+    return sh.getDataRange().getValues().map(function (row) {
+      return row.map(function (v) { return v instanceof Date ? Utilities.formatDate(v, tz, 'yyyy-MM-dd HH:mm:ss') : v; });
+    });
+  } finally {
+    try { DriveApp.getFileById(id).setTrashed(true); } catch (e) {}
+  }
+}
+
+/** Sama dengan DSR.parse di web (assets/dsr.js). */
+function parseDsrAoa_(aoa) {
+  const HEAD = {
+    invoice: 'Invoice No', order_no: 'Order No', date: 'Order Date', status: 'Bill Status', tipe: 'Transaction Type',
+    sku: 'SKU Code', nama_sku: 'Sku Name', kat3: 'Category Lv.3', kat4: 'Category Lv.4', brand: 'Brand',
+    lokasi: 'Location', qty: 'Quantity', harga: 'Sale Price', sales_person: 'Sales Person', gross: 'Gross Amount',
+    promo_value: 'Promotion Value', promo_name: 'Promotion Name', coupon: 'Coupon Value', discount: 'Discount Amount',
+    net: 'Net Amount', emp_disc: 'Employee Discount', phone: 'Customer Phone', email: 'Customer Email', cust_name: 'Customer Name'
+  };
+  const REQ = ['invoice', 'date', 'brand', 'nama_sku', 'qty', 'gross', 'net'];
+  const norm = function (x) { return String(x == null ? '' : x).trim().toLowerCase().replace(/\s+/g, ' '); };
+  const num = function (x) { if (x == null || x === '') return 0; if (typeof x === 'number') return x; const v = Number(String(x).replace(/,/g, '').trim()); return isNaN(v) ? 0 : v; };
+  let hi = -1;
+  for (let i = 0; i < Math.min(aoa.length, 50); i++) { const r = (aoa[i] || []).map(norm); if (r.indexOf('invoice no') >= 0 && r.indexOf('order date') >= 0) { hi = i; break; } }
+  if (hi < 0) throw new Error('Kolom "Invoice No" dan "Order Date" tidak ditemukan');
+  const head = aoa[hi].map(norm), idx = {};
+  Object.keys(HEAD).forEach(function (k) { idx[k] = head.indexOf(norm(HEAD[k])); });
+  const miss = REQ.filter(function (k) { return idx[k] < 0; });
+  if (miss.length) throw new Error('Kolom tidak ada: ' + miss.map(function (k) { return HEAD[k]; }).join(', '));
+  let lokasi = '';
+  for (let j = 0; j < hi; j++) { const m = String((aoa[j] || [])[0] || '').match(/^\s*Location:\s*(.+)$/i); if (m) lokasi = m[1].replace(/\s+/g, ' ').trim(); }
+  const keyCache = {};
+  const custKey = function (src) {
+    if (!src) return '';
+    if (keyCache[src] == null) {
+      const b = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, 'hub2299|' + src, Utilities.Charset.UTF_8);
+      keyCache[src] = b.slice(0, 8).map(function (x) { return ('0' + ((x + 256) % 256).toString(16)).slice(-2); }).join('');
+    }
+    return keyCache[src];
+  };
+  const out = [];
+  for (let k = hi + 1; k < aoa.length; k++) {
+    const row = aoa[k] || [];
+    const inv = String(row[idx.invoice] == null ? '' : row[idx.invoice]).trim();
+    if (!inv) continue;
+    const ds = String(row[idx.date] == null ? '' : row[idx.date]).trim();
+    const m = ds.match(/^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{1,2}):(\d{2})(?::(\d{2}))?)?/);
+    if (!m) continue;
+    const g = function (key) { return idx[key] >= 0 ? row[idx[key]] : null; };
+    const t = function (key) { const x = g(key); return x == null ? '' : String(x).trim(); };
+    if (!lokasi && idx.lokasi >= 0) lokasi = t('lokasi').replace(/\s+/g, ' ');
+    const src = [norm(t('cust_name')), norm(t('phone')), norm(t('email'))];
+    const o = {
+      invoice: inv, order_no: t('order_no'), tanggal: m[1] + '-' + m[2] + '-' + m[3], jam: m[4] != null ? pad_(Number(m[4])) + ':' + m[5] + ':' + (m[6] || '00') : '00:00:00',
+      status: t('status'), tipe: t('tipe'), sku: t('sku'), nama_sku: t('nama_sku'), kat3: t('kat3'), kat4: t('kat4'), brand: t('brand'),
+      qty: num(g('qty')), harga: num(g('harga')), sales_person: t('sales_person'), gross: num(g('gross')),
+      promo_value: num(g('promo_value')), promo_name: t('promo_name'), coupon: num(g('coupon')), discount: num(g('discount')), net: num(g('net')),
+      cust_key: custKey(src.join('').length ? src.join('|') : ''), cust_name: t('cust_name'), emp_disc: num(g('emp_disc'))
+    };
+    out.push(DSR_FIELDS.map(function (f) { return o[f] == null ? '' : o[f]; }));
+  }
+  return { lokasi: lokasi, rows: out };
+}
+
+function labelOf_(name) { return GmailApp.getUserLabelByName(name) || GmailApp.createLabel(name); }
+
+/** Dijalankan tiap 15 menit oleh pemicu waktu. */
+function cekEmailDsr() {
+  const lab = labelOf_(DSR_EMAIL.LABEL), labGagal = labelOf_(DSR_EMAIL.LABEL_GAGAL);
+  const threads = GmailApp.search('from:' + DSR_EMAIL.FROM + ' subject:ItemDSRReport -label:' + DSR_EMAIL.LABEL + ' -label:' + DSR_EMAIL.LABEL_GAGAL + ' newer_than:3d', 0, 10);
+  const msgs = [];
+  threads.forEach(function (th) { th.getMessages().forEach(function (m) { msgs.push({ th: th, m: m }); }); });
+  msgs.sort(function (a, b) { return a.m.getDate() - b.m.getDate(); });
+  const bot = { username: 'email', nama: 'Email CARE', role: 'sistem' };
+  const hasil = [];
+  msgs.forEach(function (x) {
+    const body = x.m.getBody() + ' ' + x.m.getPlainBody();
+    const mm = body.match(/https:\/\/[A-Za-z0-9.\-]+\/export\/(ItemDSRReport_[A-Za-z0-9_\-]+\.xlsx)/);
+    try {
+      if (!mm) throw new Error('Link unduhan tidak ditemukan di email');
+      const r = UrlFetchApp.fetch(mm[0], { muteHttpExceptions: true, followRedirects: true });
+      if (r.getResponseCode() !== 200) throw new Error('File tidak bisa diunduh (' + r.getResponseCode() + ')');
+      const p = parseDsrAoa_(xlsxAoa_(r.getBlob()));
+      if (p.lokasi && p.lokasi.indexOf(CFG.STORE) < 0) throw new Error('Bukan DSR toko ' + CFG.STORE + ' (' + p.lokasi + ')');
+      if (!p.rows.length) throw new Error('File tidak berisi transaksi');
+      const res = simpanDsr_(p.rows, bot, mm[1]);
+      x.th.addLabel(lab);
+      hasil.push(mm[1] + ': ' + res.dari + ' s/d ' + res.sampai + ', ' + res.baru + ' baru, ' + res.diperbarui + ' diperbarui');
+    } catch (e) {
+      x.th.addLabel(labGagal);
+      withLock_(function () { notif_('admin', 'cek', 'dsr', 'DSR otomatis dari email gagal', (mm ? mm[1] + ': ' : '') + String(e.message || e).slice(0, 180), '#/unggah'); });
+      hasil.push('GAGAL ' + (mm ? mm[1] : '') + ': ' + (e.message || e));
+    }
+  });
+  Logger.log(hasil.join('\n') || 'Tidak ada email DSR baru');
+  return hasil;
+}
+
+/** Jalankan sekali dari editor: minta izin Gmail & pasang pemicu tiap 15 menit. */
+function pasangDsrEmail() {
+  ScriptApp.getProjectTriggers().forEach(function (t) { if (t.getHandlerFunction() === 'cekEmailDsr') ScriptApp.deleteTrigger(t); });
+  ScriptApp.newTrigger('cekEmailDsr').timeBased().everyMinutes(15).create();
+  const h = cekEmailDsr();
+  Logger.log('Pemicu DSR email terpasang. ' + (h.length ? h.join(' | ') : ''));
+  return 'ok';
+}
