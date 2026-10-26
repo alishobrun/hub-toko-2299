@@ -2988,7 +2988,12 @@ function cekEmailDsr() {
   msgs.sort(function (a, b) { return a.m.getDate() - b.m.getDate(); });
   const bot = { username: 'email', nama: 'Email CARE', role: 'sistem' };
   const hasil = [];
+  // email yang lebih lama dari unggahan manual terakhir dilewati, supaya tidak menimpa data yang lebih baru
+  let manualTerakhir = '';
+  read_('uploads').forEach(function (u) { if (u.username !== 'email' && String(u.waktu) > manualTerakhir) manualTerakhir = String(u.waktu); });
   msgs.forEach(function (x) {
+    const tglEmail = Utilities.formatDate(x.m.getDate(), CFG.TZ, 'yyyy-MM-dd HH:mm:ss');
+    if (manualTerakhir && tglEmail < manualTerakhir) { x.th.addLabel(lab); hasil.push('Dilewati (sudah ada unggahan manual lebih baru): ' + x.m.getSubject()); return; }
     const body = x.m.getBody() + ' ' + x.m.getPlainBody();
     const mm = body.match(/https:\/\/[A-Za-z0-9.\-]+\/export\/(ItemDSRReport_[A-Za-z0-9_\-]+\.xlsx)/);
     try {
