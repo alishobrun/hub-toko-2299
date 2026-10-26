@@ -76,7 +76,7 @@ function folderHari_(tgl) {
   const it = m.getFoldersByName(tgl);
   return it.hasNext() ? it.next() : m.createFolder(tgl);
 }
-/** Sekali jalan: pindahkan video yang masih di folder bulan ke folder harian. */
+/** Sekali jalan (otomatis saat unggahan pertama setelah update): pindahkan video yang masih di folder bulan ke folder harian. */
 function rapikanHarian() {
   const subs = DriveApp.getFolderById(UP.FOLDER_ID).getFolders();
   let n = 0;
@@ -100,6 +100,8 @@ function start_(req, t) {
   if (size > t.max) throw new Error('Video ' + Math.round(size / 1048576) + ' MB, maksimal ' + Math.round(t.max / 1048576) + ' MB');
   const mime = /^video\//.test(String(req.mime || '')) ? String(req.mime) : 'video/mp4';
   const ext = String(req.ext || 'mp4').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 5) || 'mp4';
+  const pr = PropertiesService.getScriptProperties();
+  if (!pr.getProperty('RAPI_HARIAN')) { try { rapikanHarian(); } catch (e) { /* lanjut */ } pr.setProperty('RAPI_HARIAN', '1'); }
   const folder = folderHari_(t.t);
   const nama = t.t + ' ' + t.j + ' - ' + bersihNama_(t.n) + ' ' + t.h + '.' + ext;
   const meta = { name: nama, parents: [folder.getId()], mimeType: mime, description: 'Basecamp 2299 · ' + t.j + ' · ' + t.n + ' (' + t.u + ')' };
