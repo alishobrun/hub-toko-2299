@@ -312,20 +312,22 @@ const API = {
     const bulan = tanggal.slice(0, 7);
     syncTargetIfNeeded_(bulan);
     syncTrafficIfNeeded_();
-    const t = read_('targets').filter(function (x) { return String(x.bulan) === bulan; })[0];
-    const bobot = {};
-    read_('bobot').forEach(function (b) {
-      const d = String(b.tanggal);
-      if (d.slice(0, 7) === bulan) bobot[d] = { harian: Number(b.harian), kumulatif: Number(b.kumulatif) };
+    return cached_('mon_' + tanggal, 300, function () {
+      const t = read_('targets').filter(function (x) { return String(x.bulan) === bulan; })[0];
+      const bobot = {};
+      read_('bobot').forEach(function (b) {
+        const d = String(b.tanggal);
+        if (d.slice(0, 7) === bulan) bobot[d] = { harian: Number(b.harian), kumulatif: Number(b.kumulatif) };
+      });
+      return {
+        tanggal: tanggal, bulan: bulan, dataSampai: latest,
+        store: CFG.STORE, storeName: CFG.STORE_NAME,
+        target: t ? Number(t.target) : null, targetSumber: t ? String(t.sumber) : null,
+        bobot: bobot,
+        harian: ringkasan_().filter(function (r) { return r.tanggal.slice(0, 7) === bulan; }),
+        traffic: trafficMap_(bulan)
+      };
     });
-    return {
-      tanggal: tanggal, bulan: bulan, dataSampai: latest,
-      store: CFG.STORE, storeName: CFG.STORE_NAME,
-      target: t ? Number(t.target) : null, targetSumber: t ? String(t.sumber) : null,
-      bobot: bobot,
-      harian: ringkasan_().filter(function (r) { return r.tanggal.slice(0, 7) === bulan; }),
-      traffic: trafficMap_(bulan)
-    };
   },
 
   jadwal: function (req) {
