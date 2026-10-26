@@ -957,3 +957,8 @@ a.dok-home{display:block;color:inherit;text-decoration:none}
 .scan-aim{position:absolute;left:4%;right:4%;top:50%;height:34%;transform:translateY(-50%);border:3px solid rgba(242,107,58,.95);border-radius:12px;box-shadow:0 0 0 2000px rgba(0,0,0,.28);pointer-events:none}
 .scan-aim::after{content:'';position:absolute;left:6px;right:6px;top:50%;height:2px;background:#F26B3A;opacity:.8}
 .scan-acts{display:flex;gap:8px;justify-content:center;padding:0 16px 14px;flex-wrap:wrap}
+.brand-row{display:flex;align-items:center;gap:12px}
+.bc-badge{width:48px;height:48px;border-radius:13px;flex:none;display:block;box-shadow:0 0 0 2px rgba(255,255,255,.18),0 4px 14px rgba(0,0,0,.25)}
+.brand-sm{gap:10px}
+.brand-sm img.bc-mini{height:32px;width:32px;border-radius:9px}
+.auth-badge{width:84px;height:84px;border-radius:22px;display:block;margin:0;box-shadow:0 10px 30px rgba(10,26,79,.25)}

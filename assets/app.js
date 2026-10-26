@@ -291,13 +291,14 @@
     return el('div', { class: 'shell' },
       el('aside', { class: 'side' },
         el('div', { class: 'brand' }, el('div', { class: 'logo-plate' }, el('img', { src: 'assets/logo.png', alt: 'Eigerindo MPI' })),
-          el('div', { class: 'brand-txt' }, el('b', { text: APP }), el('span', { text: CFG.STORE_NAME }))),
+          el('div', { class: 'brand-row' }, el('img', { class: 'bc-badge', src: 'assets/basecamp-mini.svg', alt: '' }),
+            el('div', { class: 'brand-txt' }, el('b', { text: APP }), el('span', { text: CFG.STORE_NAME })))),
         side,
         el('div', { class: 'side-foot' }, el('div', { text: 'Dibuat oleh' }), el('b', { text: 'Ali Muhammad Shobrun' }))),
       el('div', { class: 'main-col' },
         el('header', { class: 'topbar' },
           el('div', { class: 'topbar-in' },
-            el('a', { class: 'brand-sm', href: '#/beranda', 'aria-label': 'Beranda' }, el('img', { src: 'assets/logo.png', alt: 'Eigerindo MPI' })),
+            el('a', { class: 'brand-sm', href: '#/beranda', 'aria-label': 'Beranda' }, el('img', { class: 'bc-mini', src: 'assets/basecamp-mini.svg', alt: 'Basecamp 2299' }), el('img', { src: 'assets/logo.png', alt: 'Eigerindo MPI' })),
             el('span', { class: 'page-title' }, crumb),
             el('span', { class: 'user-name', text: S.user ? S.user.nama : '' }),
             el('span', { class: 'chip' }, icon('store'), CFG.STORE),
@@ -478,7 +479,7 @@
       el('p', { text: 'Web ini belum tersambung ke Apps Script. Isi API_URL di file assets/config.js dengan alamat Web App setelah deploy.' })));
   }
   function brandBlock() {
-    return el('div', { class: 'auth-brand' }, el('img', { class: 'auth-logo', src: 'assets/logo.png', alt: 'Eigerindo MPI' }),
+    return el('div', { class: 'auth-brand' }, el('img', { class: 'auth-badge', src: 'assets/basecamp.svg', alt: 'Logo Basecamp 2299' }), el('img', { class: 'auth-logo', src: 'assets/logo.png', alt: 'Eigerindo MPI' }),
       el('div', null, el('h1', { text: APP }), el('p', { text: 'EIGER ' + CFG.STORE_NAME })));
   }
 
