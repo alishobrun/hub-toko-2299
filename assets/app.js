@@ -1579,7 +1579,7 @@
     function load() {
       loadLap(bulan).then(function (d) {
         bulan = d.bulan; S.raBulan = bulan;
-        return api('raTarget', { bulan: bulan }).then(function (t) { TG = t.targets || {}; }, function () { TG = {}; }).then(function () { draw(d); });
+        return swrPromise('raTarget', { bulan: bulan }).then(function (t) { TG = t.targets || {}; }, function () { TG = {}; }).then(function () { draw(d); });
       }).catch(function (e) { body.replaceChildren(errBox(e)); });
     }
     function draw(d) {
