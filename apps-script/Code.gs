@@ -132,6 +132,10 @@ function doPost(e) {
     const fn = API[req.action];
     if (!fn) throw new Error('Aksi tidak dikenal: ' + req.action);
     out = { ok: true, data: fn(req) };
+    // notifikasi penting langsung dikirim ke HP (tanpa menunggu pengecekan 15 menit)
+    const seg = PUSH_SEGERA_AKSI[req.action];
+    if (seg) seg(req).forEach(function (t) { PUSH_SEGERA[t] = 1; });
+    if (Object.keys(PUSH_SEGERA).length) { try { pushUntuk_(Object.keys(PUSH_SEGERA)); } catch (e) { Logger.log('push segera: ' + e); } }
   } catch (err) {
     const msg = String((err && err.message) || err);
     out = { ok: false, auth: msg.indexOf('AUTH:') === 0, error: msg.replace(/^AUTH:\s*/, '') };
@@ -1716,6 +1720,7 @@ function notifFor_(u) {
 
 /** Catat notifikasi. Dipanggil di dalam withLock_ yang sudah berjalan. */
 function notif_(untuk, level, jenis, judul, isi, link) {
+  if (level !== 'info') PUSH_SEGERA[String(untuk)] = 1;
   try {
     append_('notifikasi', {
       id: Utilities.formatDate(new Date(), CFG.TZ, 'yyyyMMddHHmmss') + '-' + Math.random().toString(36).slice(2, 7),
@@ -3138,19 +3143,42 @@ function pushTick_() {
   const users = {}; read_('users').forEach(function (x) { if (x.status === 'aktif') users[x.username] = x; });
   const byUser = {}; subs.forEach(function (s) { (byUser[s.username] = byUser[s.username] || []).push(s); });
   const mati = {};
-  Object.keys(byUser).forEach(function (un) {
-    const u = users[un]; if (!u) return;
-    let ids; try { ids = idsNotif_(u); } catch (e) { return; }
-    const key = 'push_seen_' + un;
-    const seen = JSON.parse(p.getProperty(key) || '[]');
-    const baru = ids.filter(function (id) { return seen.indexOf(id) < 0; });
-    p.setProperty(key, JSON.stringify(ids.slice(0, 150)));
-    if (!baru.length) return;
-    byUser[un].forEach(function (s) {
-      try { if (!kirimPush_(String(s.endpoint))) mati[s.endpoint] = 1; } catch (e) { Logger.log(e); }
+  Object.keys(byUser).forEach(function (un) { pushUser_(users[un], byUser[un], p, mati); });
+  buangLangganan_(mati);
+  p.setProperty('push_tick', now_());
+}
+function pushUser_(u, subs, p, mati) {
+  if (!u || !subs || !subs.length) return;
+  let ids; try { ids = idsNotif_(u); } catch (e) { return; }
+  const key = 'push_seen_' + u.username;
+  const seen = JSON.parse(p.getProperty(key) || '[]');
+  const baru = ids.filter(function (id) { return seen.indexOf(id) < 0; });
+  p.setProperty(key, JSON.stringify(ids.slice(0, 150)));
+  if (!baru.length) return;
+  subs.forEach(function (s) {
+    try { if (!kirimPush_(String(s.endpoint))) mati[s.endpoint] = 1; } catch (e) { Logger.log(e); }
+  });
+}
+function buangLangganan_(mati) {
+  if (!Object.keys(mati).length) return;
+  writeAll_('push_sub', read_('push_sub').filter(function (s) { return !mati[s.endpoint]; }));
+}
+/** Kirim push sekarang untuk target: 'admin', 'semua', atau username. */
+function pushUntuk_(targets) {
+  const subs = read_('push_sub');
+  if (!subs.length) return;
+  const users = {}; read_('users').forEach(function (x) { if (x.status === 'aktif') users[x.username] = x; });
+  const byUser = {}; subs.forEach(function (s) { (byUser[s.username] = byUser[s.username] || []).push(s); });
+  const pilih = {};
+  targets.forEach(function (t) {
+    Object.keys(byUser).forEach(function (un) {
+      const u = users[un]; if (!u) return;
+      if (t === 'semua' || t === un || (t === 'admin' && u.role === 'admin')) pilih[un] = 1;
     });
   });
-  if (Object.keys(mati).length) withLock_(function () { writeAll_('push_sub', read_('push_sub').filter(function (s) { return !mati[s.endpoint]; })); });
+  const p = PropertiesService.getScriptProperties(), mati = {};
+  Object.keys(pilih).forEach(function (un) { pushUser_(users[un], byUser[un], p, mati); });
+  buangLangganan_(mati);
 }
 
 Object.assign(API, {
@@ -3192,5 +3220,86 @@ Object.assign(API, {
     subs.forEach(function (s) { try { if (kirimPush_(String(s.endpoint))) ok++; else galat.push('langganan kedaluwarsa'); } catch (e) { galat.push(String(e.message || e)); } });
     try { PropertiesService.getScriptProperties().setProperty('push_seen_' + u.username, JSON.stringify(idsNotif_(u).slice(0, 150))); } catch (e) {}
     return { terkirim: ok, perangkat: subs.length, galat: galat };
+  }
+});
+
+/* ---------- penerima push segera ---------- */
+var PUSH_SEGERA = {};
+const PUSH_SEGERA_AKSI = {
+  reqCreate: function () { return ['admin']; },
+  register: function () { return ['admin']; },
+  tukarCreate: function (req) { return [cleanUser_(req.rekan)]; },
+  tukarRespond: function (req) { return req.terima ? ['admin'] : []; },
+  pengSave: function (req) { return req.penting ? ['semua'] : []; }
+};
+
+/* =====================================================================
+ * TAHAP 13: halaman Kesehatan Data (admin)
+ * ===================================================================== */
+Object.assign(API, {
+  kesehatan: function (req) {
+    auth_(req, true);
+    const today = today_(), p = PropertiesService.getScriptProperties();
+    const lag = function (d) { return d ? Math.round((Date.parse(today) - Date.parse(String(d).slice(0, 10))) / 864e5) : null; };
+    const out = [];
+    const add = function (grup, nama, status, nilai, ket, link) { out.push({ grup: grup, nama: nama, status: status, nilai: nilai, ket: ket || '', link: link || '' }); };
+    // DSR
+    const latest = latestDate_(), up = read_('uploads'), lu = up[up.length - 1];
+    const dL = lag(latest);
+    add('Data penjualan', 'DSR sampai tanggal', dL == null ? 'bad' : dL <= 1 ? 'ok' : dL <= 2 ? 'warn' : 'bad', latest ? tglPendek_(latest) : 'belum ada',
+      dL == null ? '' : dL <= 1 ? 'sudah terbaru' : 'tertinggal ' + dL + ' hari', '#/unggah');
+    if (lu) add('Data penjualan', 'Unggahan DSR terakhir', 'ok', String(lu.waktu).slice(0, 16).replace(' ', ' · '), (lu.username === 'email' ? 'otomatis dari email CARE' : 'manual oleh ' + namaUser_(lu.username)) + ' · ' + String(lu.nama_file || '').slice(0, 40), '#/unggah');
+    // email CARE
+    try {
+      const gagal = GmailApp.search('label:' + DSR_EMAIL.LABEL_GAGAL + ' newer_than:7d', 0, 10);
+      const sukses = GmailApp.search('label:' + DSR_EMAIL.LABEL + ' newer_than:7d', 0, 50);
+      add('Data penjualan', 'DSR otomatis dari email (7 hari)', gagal.length ? 'bad' : 'ok', sukses.length + ' diproses · ' + gagal.length + ' gagal',
+        gagal.length ? 'Gagal: ' + gagal.slice(0, 3).map(function (t) { return t.getFirstMessageSubject().replace(/^Export\s+|\s+selesai diproses$/g, ''); }).join(', ') : 'tidak ada yang gagal');
+    } catch (e) { add('Data penjualan', 'DSR otomatis dari email', 'warn', 'tidak bisa dicek', String(e.message || e).slice(0, 80)); }
+    // target & traffic
+    const bulan = today.slice(0, 7);
+    const tg = read_('targets').filter(function (x) { return String(x.bulan) === bulan; })[0];
+    add('Data penjualan', 'Target bulan ini', tg ? 'ok' : 'bad', tg ? 'Rp ' + rupiah_(Number(tg.target)) : 'belum ada', tg ? 'dari sheet Target Jateng 01' : 'cek sheet Target Jateng 01', '#/monitoring');
+    const tr = read_('traffic').filter(function (x) { return x.traffic !== ''; }).map(function (x) { return String(x.tanggal); }).sort().pop();
+    const tL = lag(tr);
+    add('Data penjualan', 'Traffic pengunjung sampai', tL == null ? 'warn' : tL <= 1 ? 'ok' : 'warn', tr ? tglPendek_(tr) : 'belum ada', tL > 1 ? 'tertinggal ' + tL + ' hari' : '');
+    // stok
+    const bu = read_('bin_upload'), lb = bu[bu.length - 1];
+    const bL = lb ? lag(lb.waktu) : null;
+    add('Stok', 'By Bin terakhir', bL == null ? 'bad' : bL === 0 ? 'ok' : bL <= 2 ? 'warn' : 'bad', lb ? String(lb.waktu).slice(0, 16) : 'belum ada',
+      lb ? namaUser_(lb.username) + ' · ' + rupiah_(Number(lb.sku)) + ' SKU' + (bL ? ' · ' + bL + ' hari lalu' : ' · hari ini') : '', '#/unggahbin');
+    const ml = prop_('master_loaded'), me = prop_('master_error'), mp = prop_('master_pending');
+    const mBulan = ml && ml.folder ? String(ml.folder) : '';
+    const blnNow = Number(bulan.slice(5));
+    const mOk = ml && Number((mBulan.match(/^(\d{1,2})_/) || [])[1]) === blnNow;
+    add('Stok', 'Master artikel', me ? 'bad' : mOk ? 'ok' : 'warn', ml ? ml.nama : 'belum dimuat',
+      me ? 'Galat: ' + String(me.pesan || me).slice(0, 80) : mp ? 'Ada file baru menunggu dimuat' : mOk ? 'master bulan ini' : 'belum master bulan ini', '#/unggahbin');
+    // jadwal
+    try {
+      const jm = jadwalMap_()[today];
+      add('Tim', 'Jadwal hari ini', jm ? 'ok' : 'bad', jm ? Object.keys(jm).length + ' orang' : 'tidak ada', jm ? '' : 'tab jadwal periode ini belum ada di sheet', '#/jadwal');
+    } catch (e) { add('Tim', 'Jadwal hari ini', 'bad', 'tidak bisa dibaca', String(e.message || e).slice(0, 80)); }
+    // video
+    const upOk = !!(p.getProperty('UPLOAD_URL') && p.getProperty('UPLOAD_SECRET'));
+    add('Tim', 'Mesin upload video', upOk ? 'ok' : 'bad', upOk ? 'tersambung' : 'belum tersambung', '', '#/dokumentasi');
+    // otomatisasi
+    const trg = {}; ScriptApp.getProjectTriggers().forEach(function (t) { trg[t.getHandlerFunction()] = 1; });
+    [['catatTraffic', 'Pengecekan tiap jam (traffic, pengingat video, feedback)'], ['cekEmailDsr', 'Pengecekan tiap 15 menit (DSR email & notifikasi HP)'], ['cadangan', 'Cadangan data mingguan']].forEach(function (x) {
+      add('Otomatisasi', x[1], trg[x[0]] ? 'ok' : 'bad', trg[x[0]] ? 'aktif' : 'tidak aktif', trg[x[0]] ? '' : 'pemicu ' + x[0] + ' belum terpasang');
+    });
+    const pt = p.getProperty('push_tick');
+    add('Otomatisasi', 'Notifikasi HP terakhir dicek', pt ? 'ok' : 'warn', pt ? pt.slice(0, 16) : 'belum pernah', '');
+    try {
+      const it = DriveApp.getFoldersByName(CFG.BACKUP_FOLDER);
+      let last = null;
+      if (it.hasNext()) { const fi = it.next().getFiles(); while (fi.hasNext()) { const f = fi.next(); if (f.getName().indexOf('Cadangan DB Hub 2299') === 0 && (!last || f.getDateCreated() > last)) last = f.getDateCreated(); } }
+      const cL = last ? Math.round((Date.now() - last.getTime()) / 864e5) : null;
+      add('Otomatisasi', 'Cadangan data terakhir', cL == null ? 'bad' : cL <= 8 ? 'ok' : 'warn', last ? Utilities.formatDate(last, CFG.TZ, 'yyyy-MM-dd HH:mm') : 'belum ada', cL != null ? cL + ' hari lalu' : '');
+    } catch (e) {}
+    // notifikasi HP per orang
+    const subs = read_('push_sub'), dev = {};
+    subs.forEach(function (s) { dev[s.username] = (dev[s.username] || 0) + 1; });
+    const tim = read_('users').filter(function (x) { return x.status === 'aktif'; }).map(function (x) { return { nama: x.nama, username: x.username, perangkat: dev[x.username] || 0 }; });
+    return { waktu: now_(), cek: out, tim: tim };
   }
 });

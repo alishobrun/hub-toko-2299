@@ -182,7 +182,8 @@
     { id: 'data', label: 'Data', icon: 'upload', color: '#A78BFA', items: [
       { icon: 'upload', id: 'unggah', label: 'Unggah DSR', desc: 'Perbarui data penjualan' },
       { icon: 'box', id: 'unggahbin', label: 'Unggah By Bin', desc: 'Perbarui stok per bin' },
-      { icon: 'video', id: 'dokumentasi', label: 'Dokumentasi', desc: 'Video opening & closing' }] },
+      { icon: 'video', id: 'dokumentasi', label: 'Dokumentasi', desc: 'Video opening & closing' },
+      { icon: 'gauge', id: 'kesehatan', label: 'Kesehatan Data', desc: 'Data terbaru, otomatisasi & notifikasi', admin: true }] },
     { id: 'tim', label: 'Tim', icon: 'users', color: '#FB923C', items: [
       { icon: 'bell', id: 'pengumuman', label: 'Pengumuman', desc: 'Info tim + tanda sudah baca' },
       { icon: 'clip', id: 'handover', label: 'Handover', desc: 'Serah terima shift dari foto buku' },
@@ -3541,6 +3542,46 @@
     load();
   }
 
+  /* ---------- Kesehatan data (admin) ---------- */
+  function viewKesehatan(v) {
+    pageHead(v, 'Kesehatan Data', 'Cek cepat: data sudah terbaru, otomatisasi berjalan, dan siapa yang sudah mengaktifkan notifikasi HP.');
+    var body = el('div', null, skel(3));
+    v.append(body);
+    function load() {
+      body.replaceChildren(skel(3));
+      api('kesehatan').then(function (d) {
+        var ST = { ok: ['ok', '✓', 'Baik'], warn: ['warn', '!', 'Perlu dicek'], bad: ['bad', '✕', 'Bermasalah'] };
+        var cnt = { ok: 0, warn: 0, bad: 0 }; d.cek.forEach(function (c) { cnt[c.status]++; });
+        var grup = []; d.cek.forEach(function (c) { if (grup.indexOf(c.grup) < 0) grup.push(c.grup); });
+        var belum = d.tim.filter(function (t) { return !t.perangkat; });
+        body.replaceChildren(
+          el('div', { class: 'insights' },
+            el('div', { class: 'insight good' }, el('span', { text: 'Baik' }), el('b', { text: cnt.ok })),
+            el('div', { class: 'insight warn' }, el('span', { text: 'Perlu dicek' }), el('b', { text: cnt.warn })),
+            el('div', { class: 'insight ' + (cnt.bad ? 'bad' : '') }, el('span', { text: 'Bermasalah' }), el('b', { text: cnt.bad }))),
+          grup.map(function (g) {
+            return el('div', { class: 'card section' }, el('h3', { text: g }), el('div', { class: 'kh-list' }, d.cek.filter(function (c) { return c.grup === g; }).map(function (c) {
+              var row = el(c.link ? 'a' : 'div', c.link ? { class: 'kh-row kh-' + c.status, href: c.link } : { class: 'kh-row kh-' + c.status },
+                el('span', { class: 'kh-ic', text: ST[c.status][1], title: ST[c.status][2] }),
+                el('div', { class: 'kh-main' }, el('b', { text: c.nama }), c.ket ? el('small', { text: c.ket }) : null),
+                el('span', { class: 'kh-val', text: c.nilai }));
+              return row;
+            })));
+          }),
+          el('div', { class: 'card section' }, el('div', { class: 'card-head' }, el('h3', { text: 'Notifikasi HP tim' }), el('span', { class: 'tag ' + (belum.length ? 'tag-warn' : 'tag-good'), text: (d.tim.length - belum.length) + ' / ' + d.tim.length + ' aktif' })),
+            el('p', { class: 'sub', text: 'Yang belum aktif: minta buka Menu → Akun → Aktifkan notifikasi (iPhone harus dari ikon di layar utama).' }),
+            el('div', { class: 'kh-list' }, d.tim.map(function (t) {
+              return el('div', { class: 'kh-row kh-' + (t.perangkat ? 'ok' : 'warn') }, el('span', { class: 'kh-ic', text: t.perangkat ? '✓' : '!' }),
+                el('div', { class: 'kh-main' }, el('b', { text: t.nama }), el('small', { text: '@' + t.username })),
+                el('span', { class: 'kh-val', text: t.perangkat ? t.perangkat + ' perangkat' : 'belum aktif' }));
+            }))),
+          el('div', { class: 'inline', style: 'gap:8px;margin-top:12px' }, el('button', { class: 'btn btn-ghost btn-sm', type: 'button', text: 'Cek ulang', onclick: load }),
+            el('span', { class: 'muted', style: 'font-size:12.5px', text: 'Dicek ' + fTime(d.waktu) })));
+      }).catch(function (e) { body.replaceChildren(errBox(e)); });
+    }
+    load();
+  }
+
   /* ---------- Laporan mingguan ---------- */
   function weekList() {
     var t = todayJkt(), p = dParts(t), d = new Date(Date.UTC(p.y, p.m - 1, p.d));
@@ -4398,7 +4439,7 @@
   }
 
   Object.assign(VIEWS, {
-    beranda: viewBeranda, briefing: viewBriefing, mingguan: viewMingguan, omni: viewOmni, pengumuman: viewPengumuman, handover: viewHandover, feedback: viewFeedback, apresiasi: viewApresiasi, dokumentasi: viewDokumentasi, monitoring: viewMonitoring, trend: viewTrend, ra: viewRA, produk: viewProduk, customer: viewCustomer,
+    beranda: viewBeranda, briefing: viewBriefing, mingguan: viewMingguan, omni: viewOmni, kesehatan: viewKesehatan, pengumuman: viewPengumuman, handover: viewHandover, feedback: viewFeedback, apresiasi: viewApresiasi, dokumentasi: viewDokumentasi, monitoring: viewMonitoring, trend: viewTrend, ra: viewRA, produk: viewProduk, customer: viewCustomer,
     stok: viewStok, stokart: viewStokArt, saranreq: viewSaranReq, display: viewDisplay, cari: viewCari, unggahbin: viewUnggahBin, kas: viewKas, 'kas-rekap': viewKasRekap, unggah: viewUnggah,
     jadwal: viewJadwal, request: viewRequest, tukar: viewTukar, simpanan: viewSimpanan,
     akun: viewAkun, admin: viewAdmin, aktivitas: viewAktivitas, pica: viewPica
