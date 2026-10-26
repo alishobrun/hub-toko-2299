@@ -8,6 +8,11 @@
  * Setelah menempel kode: pilih fungsi `setup` lalu klik Run sekali.
  */
 
+/** Versi kode. WAJIB dinaikkan setiap kali Code.gs diubah (format yyyy-MM-dd.n),
+ *  lalu simpan ke GitHub (alishobrun/hub-toko-2299) SEBELUM dipasang. Halaman Kesehatan Data
+ *  membandingkan angka ini dengan GitHub supaya kode yang dipasang di luar GitHub ketahuan. */
+const KODE_VERSI = '2026-10-27.1';
+
 const CFG = {
   STORE: '2299',
   STORE_NAME: 'EIGER Store A. Yani Kertasuro Sukoharjo',
@@ -29,7 +34,8 @@ const CFG = {
   REQUEST_DEADLINE_DAY: 21,
   REQUEST_COLOR: '#B4A7D6',
   BACKUP_FOLDER: 'Cadangan Hub 2299',
-  BACKUP_KEEP: 8,
+  BACKUP_KEEP: 30,          // cadangan harian DB disimpan 30 hari (lebih lama → Sampah Drive)
+  BACKUP_JADWAL_KEEP: 8,    // cadangan mingguan sheet JADWAL
   SESSION_DAYS: 30,
   HASH_ROUNDS: 300
 };
@@ -591,6 +597,8 @@ function syncTarget_() {
   if (!bobot.length) throw new Error('Tabel bobot (Date / Daily Ratio / Cumm. Ratio) tidak ditemukan di tab Target');
   const bulan = bobot[0].tanggal.slice(0, 7);
 
+  const sebelum = JSON.stringify([read_('bobot').filter(function (x) { return String(x.tanggal).slice(0, 7) === bulan; }).map(function (x) { return [String(x.tanggal), Number(x.harian), Number(x.kumulatif)]; }),
+    read_('targets').filter(function (x) { return String(x.bulan) === bulan; }).map(function (x) { return Number(x.target); })]);
   withLock_(function () {
     const b = read_('bobot').filter(function (x) { return String(x.tanggal).slice(0, 7) !== bulan; }).concat(bobot)
       .sort(function (a, c) { return String(a.tanggal) < String(c.tanggal) ? -1 : 1; });
@@ -604,6 +612,9 @@ function syncTarget_() {
       writeAll_('targets', ts);
     }
   });
+  const sesudah = JSON.stringify([read_('bobot').filter(function (x) { return String(x.tanggal).slice(0, 7) === bulan; }).map(function (x) { return [String(x.tanggal), Number(x.harian), Number(x.kumulatif)]; }),
+    read_('targets').filter(function (x) { return String(x.bulan) === bulan; }).map(function (x) { return Number(x.target); })]);
+  if (sebelum !== sesudah) bumpVersion_(); // target/bobot berubah → Monitoring langsung pakai angka baru
   return { bulan: bulan, target: target, hari: bobot.length };
 }
 
@@ -792,7 +803,7 @@ function read_(n) {
  * writeAll_/append_/updateRow_). */
 function readCached_(n, seconds) {
   const c = CacheService.getScriptCache();
-  const k = 'rc_' + n + '_v' + (PropertiesService.getScriptProperties().getProperty('ver') || '0');
+  const k = 'rc_' + n + '_v' + (PropertiesService.getScriptProperties().getProperty('ver_rc') || '0');
   const hit = c.get(k);
   if (hit) { try { return JSON.parse(hit); } catch (e) { /* lanjut baca sheet */ } }
   const out = read_(n);
@@ -801,7 +812,11 @@ function readCached_(n, seconds) {
 }
 
 function invalidateReadCache_(n) {
-  if (n === 'users' || n === 'sessions') bumpVersion_();
+  // hanya membatalkan cache akun/sesi — cache lain (monitoring, jadwal, dll.) tetap utuh saat ada yang login
+  if (n === 'users' || n === 'sessions') {
+    const p = PropertiesService.getScriptProperties();
+    p.setProperty('ver_rc', String(Number(p.getProperty('ver_rc') || 0) + 1));
+  }
 }
 
 function writeAll_(n, objs) {
@@ -1315,20 +1330,61 @@ function namesMap_() {
   return m;
 }
 
-/* ---------- cadangan mingguan ---------- */
-function cadangan() {
-  const ss = SpreadsheetApp.getActive();
+/* ---------- cadangan: DB harian (30 hari), sheet JADWAL mingguan ---------- */
+function folderCadangan_() {
   const it = DriveApp.getFoldersByName(CFG.BACKUP_FOLDER);
-  const folder = it.hasNext() ? it.next() : DriveApp.createFolder(CFG.BACKUP_FOLDER);
-  const name = 'Cadangan DB Hub 2299 ' + Utilities.formatDate(new Date(), CFG.TZ, 'yyyy-MM-dd HHmm');
-  DriveApp.getFileById(ss.getId()).makeCopy(name, folder);
+  return it.hasNext() ? it.next() : DriveApp.createFolder(CFG.BACKUP_FOLDER);
+}
+function rapikanCadangan_(folder, awalan, simpan) {
   const files = [];
   const fi = folder.getFiles();
-  while (fi.hasNext()) { const f = fi.next(); if (f.getName().indexOf('Cadangan DB Hub 2299') === 0) files.push(f); }
+  while (fi.hasNext()) { const f = fi.next(); if (f.getName().indexOf(awalan) === 0) files.push(f); }
   files.sort(function (a, b) { return b.getDateCreated() - a.getDateCreated(); });
-  files.slice(CFG.BACKUP_KEEP).forEach(function (f) { f.setTrashed(true); });
-  log_('sistem', 'cadangan', name);
-  return name;
+  files.slice(simpan).forEach(function (f) { f.setTrashed(true); }); // ke Sampah Drive, bukan hapus permanen
+  return files.length ? files[0].getDateCreated() : null;
+}
+function cadangan(e) {
+  // dipanggil pemicu (ada objek event) & sudah dicadangkan hari ini → lewati
+  if (e && PropertiesService.getScriptProperties().getProperty('cadangan_tgl') === today_()) return 'sudah';
+  const folder = folderCadangan_();
+  const stamp = Utilities.formatDate(new Date(), CFG.TZ, 'yyyy-MM-dd HHmm');
+  const name = 'Cadangan DB Hub 2299 ' + stamp;
+  DriveApp.getFileById(SpreadsheetApp.getActive().getId()).makeCopy(name, folder);
+  rapikanCadangan_(folder, 'Cadangan DB Hub 2299', CFG.BACKUP_KEEP);
+  const p = PropertiesService.getScriptProperties();
+  p.setProperty('cadangan_tgl', today_());
+  let info = name;
+  // sheet JADWAL: seminggu sekali
+  try {
+    const lastJ = p.getProperty('cadangan_jadwal_tgl') || '';
+    if (!lastJ || lastJ <= addDays_(today_(), -7)) {
+      DriveApp.getFileById(CFG.JADWAL_SHEET_ID).makeCopy('Cadangan JADWAL 2299 ' + stamp, folder);
+      rapikanCadangan_(folder, 'Cadangan JADWAL 2299', CFG.BACKUP_JADWAL_KEEP);
+      p.setProperty('cadangan_jadwal_tgl', today_());
+      info += ' + JADWAL';
+    }
+  } catch (e) { info += ' (JADWAL gagal: ' + e.message + ')'; }
+  log_('sistem', 'cadangan', info);
+  return info;
+}
+/** Dipanggil pemicu tiap jam: cadangan sekali sehari setelah pukul 03.00. */
+function cadanganHarian_() {
+  const p = PropertiesService.getScriptProperties();
+  const jam = Number(Utilities.formatDate(new Date(), CFG.TZ, 'H'));
+  if (jam < 3 || p.getProperty('cadangan_tgl') === today_()) return;
+  cadangan();
+}
+/** Bersihkan sesi login yang sudah kedaluwarsa (sekali sehari). */
+function bersihSesi_() {
+  const p = PropertiesService.getScriptProperties();
+  if (p.getProperty('bersih_sesi_tgl') === today_()) return;
+  withLock_(function () {
+    const all = read_('sessions'), now = now_();
+    const keep = all.filter(function (x) { return String(x.kedaluwarsa) >= now; });
+    if (keep.length < all.length) writeAll_('sessions', keep);
+    p.setProperty('bersih_sesi_tgl', today_());
+    if (keep.length < all.length) log_('sistem', 'bersih sesi', (all.length - keep.length) + ' sesi kedaluwarsa dihapus');
+  });
 }
 function pasangCadanganMingguan_() {
   ScriptApp.getProjectTriggers().forEach(function (t) { if (t.getHandlerFunction() === 'cadangan') ScriptApp.deleteTrigger(t); });
@@ -1608,7 +1664,7 @@ function syncTraffic_() {
   return { tanggal: tgl, traffic: traffic };
 }
 /** Dipanggil pemicu per jam supaya traffic tiap hari tetap tercatat walau web tidak dibuka. */
-function catatTraffic() { try { cekDokumentasi_(); } catch (e) { Logger.log('dok: ' + e); } try { kirimFeedback_(); } catch (e) { Logger.log('fb: ' + e); } return syncTraffic_(); }
+function catatTraffic() { try { cadanganHarian_(); } catch (e) { Logger.log('cadangan: ' + e); } try { bersihSesi_(); } catch (e) { Logger.log('sesi: ' + e); } try { cekDokumentasi_(); } catch (e) { Logger.log('dok: ' + e); } try { kirimFeedback_(); } catch (e) { Logger.log('fb: ' + e); } return syncTraffic_(); }
 function pasangCatatTraffic_() {
   ScriptApp.getProjectTriggers().forEach(function (t) { if (t.getHandlerFunction() === 'catatTraffic') ScriptApp.deleteTrigger(t); });
   ScriptApp.newTrigger('catatTraffic').timeBased().everyHours(1).create();
@@ -3331,7 +3387,7 @@ Object.assign(API, {
     add('Tim', 'Mesin upload video', upOk ? 'ok' : 'bad', upOk ? 'tersambung' : 'belum tersambung', '', '#/dokumentasi');
     // otomatisasi
     const trg = {}; ScriptApp.getProjectTriggers().forEach(function (t) { trg[t.getHandlerFunction()] = 1; });
-    [['catatTraffic', 'Pengecekan tiap jam (traffic, pengingat video, feedback)'], ['cekEmailDsr', 'Pengecekan tiap 15 menit (DSR email & notifikasi HP)'], ['cadangan', 'Cadangan data mingguan']].forEach(function (x) {
+    [['catatTraffic', 'Pengecekan tiap jam (traffic, pengingat video, feedback, cadangan harian)'], ['cekEmailDsr', 'Pengecekan tiap 15 menit (DSR email & notifikasi HP)']].forEach(function (x) {
       add('Otomatisasi', x[1], trg[x[0]] ? 'ok' : 'bad', trg[x[0]] ? 'aktif' : 'tidak aktif', trg[x[0]] ? '' : 'pemicu ' + x[0] + ' belum terpasang');
     });
     const pt = p.getProperty('push_tick');
@@ -3341,8 +3397,15 @@ Object.assign(API, {
       let last = null;
       if (it.hasNext()) { const fi = it.next().getFiles(); while (fi.hasNext()) { const f = fi.next(); if (f.getName().indexOf('Cadangan DB Hub 2299') === 0 && (!last || f.getDateCreated() > last)) last = f.getDateCreated(); } }
       const cL = last ? Math.round((Date.now() - last.getTime()) / 864e5) : null;
-      add('Otomatisasi', 'Cadangan data terakhir', cL == null ? 'bad' : cL <= 8 ? 'ok' : 'warn', last ? Utilities.formatDate(last, CFG.TZ, 'yyyy-MM-dd HH:mm') : 'belum ada', cL != null ? cL + ' hari lalu' : '');
+      add('Keamanan', 'Cadangan database terakhir', cL == null ? 'bad' : cL <= 1 ? 'ok' : 'warn', last ? Utilities.formatDate(last, CFG.TZ, 'yyyy-MM-dd HH:mm') : 'belum ada', (cL != null ? cL + ' hari lalu · ' : '') + 'harian, disimpan ' + CFG.BACKUP_KEEP + ' hari');
+      const jt = p.getProperty('cadangan_jadwal_tgl');
+      add('Keamanan', 'Cadangan sheet JADWAL', jt ? 'ok' : 'warn', jt || 'belum ada', 'mingguan · folder ' + CFG.BACKUP_FOLDER);
     } catch (e) {}
+    try {
+      const gh = versiGithub_();
+      add('Keamanan', 'Versi kode mesin', gh.versi === KODE_VERSI ? 'ok' : 'bad', KODE_VERSI,
+        gh.versi === KODE_VERSI ? 'sama dengan GitHub' : gh.galat ? 'GitHub tidak terbaca: ' + gh.galat : 'BEDA dengan GitHub (' + (gh.versi || 'tanpa versi') + '). Ada kode yang dipasang di luar GitHub — samakan dulu sebelum mengubah lagi.');
+    } catch (e) { add('Keamanan', 'Versi kode mesin', 'warn', KODE_VERSI, String(e.message || e).slice(0, 80)); }
     // notifikasi HP per orang
     const subs = read_('push_sub'), dev = {};
     subs.forEach(function (s) { dev[s.username] = (dev[s.username] || 0) + 1; });
@@ -3878,3 +3941,15 @@ Object.assign(API, {
     return { periode: periodInfo_(p), jadwal: j };
   }
 });
+
+/** Versi Code.gs di GitHub (cabang main), di-cache 10 menit. */
+function versiGithub_() {
+  return cached_('versi_github', 600, function () {
+    try {
+      const r = UrlFetchApp.fetch('https://raw.githubusercontent.com/alishobrun/hub-toko-2299/main/apps-script/Code.gs', { muteHttpExceptions: true });
+      if (r.getResponseCode() !== 200) return { versi: null, galat: 'HTTP ' + r.getResponseCode() };
+      const m = r.getContentText().match(/const KODE_VERSI = '([^']+)'/);
+      return { versi: m ? m[1] : null };
+    } catch (e) { return { versi: null, galat: String(e.message || e).slice(0, 60) }; }
+  });
+}

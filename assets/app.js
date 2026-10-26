@@ -183,19 +183,24 @@
       { icon: 'upload', id: 'unggah', label: 'Unggah DSR', desc: 'Perbarui data penjualan' },
       { icon: 'box', id: 'unggahbin', label: 'Unggah By Bin', desc: 'Perbarui stok per bin' },
       { icon: 'video', id: 'dokumentasi', label: 'Dokumentasi', desc: 'Video opening & closing' },
-      { icon: 'gauge', id: 'kesehatan', label: 'Kesehatan Data', desc: 'Data terbaru, otomatisasi & notifikasi', admin: true }] },
+      ] },
     { id: 'tim', label: 'Tim', icon: 'users', color: '#FB923C', items: [
       { icon: 'bell', id: 'pengumuman', label: 'Pengumuman', desc: 'Info tim + tanda sudah baca' },
       { icon: 'clip', id: 'handover', label: 'Handover', desc: 'Serah terima shift dari foto buku' },
       { icon: 'star', id: 'apresiasi', label: 'Apresiasi', desc: 'Ucapan terima kasih untuk rekan' },
       { icon: 'heart', id: 'feedback', label: 'Feedback Anonim', desc: 'Saran & apresiasi tanpa nama' },
       { icon: 'cal', id: 'jadwal', label: 'Jadwal', desc: 'Shift tim per periode' },
-      { icon: 'cal', id: 'jadwaldraf', label: 'Susun Jadwal', desc: 'Draf otomatis & terbitkan', admin: true },
       { icon: 'inbox', id: 'request', label: 'Request Jadwal', desc: 'Ajukan OFF, cuti atau shift' },
       { icon: 'swap', id: 'tukar', label: 'Tukar Shift', desc: 'Tukar shift dengan rekan' },
       { icon: 'bookmark', id: 'simpanan', label: 'Simpanan OFF', desc: 'OFF yang belum diambil' },
-      { icon: 'user', id: 'akun', label: 'Akun', desc: 'Ganti password' },
-      { icon: 'shield', id: 'admin', label: 'Admin', desc: 'Akun tim & pengaturan', admin: true },
+      { icon: 'user', id: 'akun', label: 'Akun', desc: 'Ganti password' }] },
+    { id: 'adm', label: 'Admin', icon: 'shield', color: '#E11D48', items: [
+      { icon: 'inbox', id: 'persetujuan', label: 'Persetujuan', desc: 'Pendaftaran, request & tukar shift', admin: true },
+      { icon: 'cal', id: 'jadwaldraf', label: 'Susun Jadwal', desc: 'Draf otomatis & terbitkan', admin: true },
+      { icon: 'users', id: 'admin', label: 'Akun Tim', desc: 'Akun, nama di jadwal & reset password', admin: true },
+      { icon: 'award', id: 'targetadm', label: 'Target', desc: 'Target RA, UPT & basket', admin: true },
+      { icon: 'shield', id: 'pengaturan', label: 'Pengaturan', desc: 'Kas, video dokumentasi & mesin upload', admin: true },
+      { icon: 'gauge', id: 'kesehatan', label: 'Kesehatan Data', desc: 'Data, otomatisasi, cadangan & versi kode', admin: true },
       { icon: 'list', id: 'aktivitas', label: 'Aktivitas', desc: 'Catatan siapa melakukan apa', admin: true }] }
   ];
   var VIEWS = {};
@@ -236,7 +241,7 @@
   window.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeMenu(); });
 
   function visibleItems(g) { return g.items.filter(function (x) { return !x.admin || isAdmin(); }); }
-  function badgeCount(id) { var b = S.badges || {}; return id === 'admin' ? b.admin : id === 'request' ? b.request : id === 'tukar' ? b.tukar : id === 'pengumuman' ? b.peng : id === 'feedback' ? b.fb : id === 'handover' ? b.ho : 0; }
+  function badgeCount(id) { var b = S.badges || {}; return id === 'persetujuan' ? (b.admin || 0) + (isAdmin() ? (b.request || 0) + (b.tukar || 0) : 0) : id === 'admin' ? b.admin : id === 'request' ? b.request : id === 'tukar' ? b.tukar : id === 'pengumuman' ? b.peng : id === 'feedback' ? b.fb : id === 'handover' ? b.ho : 0; }
   function groupCount(g) { return visibleItems(g).reduce(function (n, x) { return n + (badgeCount(x.id) || 0); }, 0); }
   function badgeEl(n, cls) { return el('span', { class: 'nbadge' + (cls ? ' ' + cls : ''), 'data-n': n || 0, text: n > 99 ? '99+' : String(n || '') }); }
   function getFold() { try { return JSON.parse(store.get('fold') || '[]'); } catch (e) { return []; } }
@@ -252,7 +257,7 @@
 
   function shell(m) {
     var fold = getFold();
-    var side = el('nav', { class: 'snav' }, GROUPS.map(function (g) {
+    var side = el('nav', { class: 'snav' }, GROUPS.filter(function (g) { return visibleItems(g).length; }).map(function (g) {
       var items = visibleItems(g);
       if (g.id === 'beranda') {
         return el('a', { href: '#/beranda', class: 'snav-home', style: '--c:' + g.color, 'aria-current': m.r.id === 'beranda' ? 'page' : null },
@@ -326,7 +331,7 @@
     var panel = el('div', { class: 'sheet', role: 'dialog', 'aria-label': 'Semua menu' },
       el('div', { class: 'sheet-grip' }),
       el('div', { class: 'sheet-head' }, el('b', { text: 'Semua menu' }), el('button', { class: 'sheet-x', 'aria-label': 'Tutup', html: IC.x, onclick: closeMenu })),
-      el('div', { class: 'sheet-body' }, GROUPS.filter(function (g) { return g.id !== 'beranda'; }).map(function (g) {
+      el('div', { class: 'sheet-body' }, GROUPS.filter(function (g) { return g.id !== 'beranda' && visibleItems(g).length; }).map(function (g) {
         return el('section', { class: 'sheet-g', style: '--c:' + g.color },
           el('h4', null, el('span', { class: 'dotc' }), g.label),
           el('div', { class: 'sheet-grid' }, visibleItems(g).map(function (x) {
@@ -363,7 +368,7 @@
     try { if (navigator.setAppBadge && S.notif) { if (S.notif.unread) navigator.setAppBadge(S.notif.unread); else navigator.clearAppBadge(); } } catch (e) {}
     document.querySelectorAll('.snav-item').forEach(function (a) { setBadge(a.querySelector('.nbadge'), badgeCount(a.getAttribute('data-id'))); });
     document.querySelectorAll('.snav-group').forEach(function (gEl, i) {
-      var g = GROUPS.filter(function (x) { return x.id !== 'beranda'; })[i];
+      var g = GROUPS.filter(function (x) { return x.id !== 'beranda' && visibleItems(x).length; })[i];
       if (g) setBadge(gEl.querySelector('.nbadge.grp'), groupCount(g));
     });
     document.querySelectorAll('.bnav-a').forEach(function (a) {
@@ -2163,12 +2168,20 @@
     return box;
   }
   /* ---------- Admin ---------- */
-  function viewAdmin(v) {
-    v.append(el('section', { class: 'hero' }, el('div', null, el('h2', { text: 'Admin · Akun Tim' }), el('p', { text: 'Setujui pendaftaran, nonaktifkan akun, atau reset password.' }))));
+  function viewAdmin(v) { adminPage(v, 'akun'); }
+  function viewTargetAdm(v) { adminPage(v, 'target'); }
+  function viewPengaturan(v) { adminPage(v, 'atur'); }
+  function adminPage(v, part) {
+    var HEAD = { akun: ['Akun Tim', 'Setujui pendaftaran, nonaktifkan akun, reset password, dan cocokkan nama di jadwal.'],
+      target: ['Target', 'Target per RA, target UPT & basket size untuk Briefing Pagi.'],
+      atur: ['Pengaturan', 'Angka standar kas, batas video dokumentasi, dan mesin upload.'] }[part];
+    v.append(el('section', { class: 'hero' }, el('div', null, el('h2', { text: HEAD[0] }), el('p', { text: HEAD[1] }))));
     var box = el('div', null, el('div', { class: 'skel' }));
-    var setCard = el('div', { class: 'card section' }, el('h3', { text: 'Pengaturan kas' }), el('div', { class: 'skel', style: 'margin-top:12px;min-height:60px' }));
-    v.append(box, setCard, raTargetAdmin());
-    api('settings').then(function (s) {
+    var setCard = el('div', { class: 'card section' }, el('h3', { text: part === 'target' ? 'Target briefing' : 'Pengaturan kas' }), el('div', { class: 'skel', style: 'margin-top:12px;min-height:60px' }));
+    if (part === 'akun') v.append(box);
+    if (part === 'target') v.append(raTargetAdmin(), setCard);
+    if (part === 'atur') v.append(setCard);
+    if (part !== 'akun') api('settings').then(function (s) {
       var vals = { modal_till: Number(s.modal_till) || 0, floating_cash: Number(s.floating_cash) || 0 };
       var row = function (key, id, label) {
         var btn = el('button', { class: 'btn btn-primary', type: 'button', text: 'Simpan' });
@@ -2189,14 +2202,15 @@
         uptBtn.disabled = true;
         api('setSetting', { key: 'target_upt', value: n }).then(function () { uptBtn.disabled = false; toast('Target UPT disimpan'); }).catch(function (err) { uptBtn.disabled = false; toast(err.message, true); });
       } });
-      setCard.replaceChildren(el('h3', { text: 'Pengaturan kas' }),
-        el('p', { class: 'sub', text: 'Angka standar yang dipakai di menu Cek Kas.' }),
-        row('modal_till', 'set-modal', 'Modal till (Float To Till)'),
-        row('floating_cash', 'set-float', 'Floating Cash (modal besar)'),
-        el('h3', { text: 'Target briefing', style: 'margin-top:18px' }),
+      if (part === 'target') setCard.replaceChildren(el('h3', { text: 'Target briefing' }),
         el('p', { class: 'sub', text: 'Patokan fokus otomatis di Briefing Pagi. Basket 0 = tidak dipakai (cukup bulan lalu & rekor).' }),
         el('div', { class: 'field' }, el('label', { for: 'set-upt', text: 'Target UPT' }), el('div', { class: 'inline' }, uptInp, uptBtn)),
         row('target_basket', 'set-basket', 'Target basket size'),
+        el('p', { class: 'sub', style: 'margin-top:12px' }, 'Target OmniChannel diubah di menu ', el('a', { href: '#/omni', text: 'OmniChannel' }), '.'));
+      else setCard.replaceChildren(el('h3', { text: 'Pengaturan kas' }),
+        el('p', { class: 'sub', text: 'Angka standar yang dipakai di menu Cek Kas.' }),
+        row('modal_till', 'set-modal', 'Modal till (Float To Till)'),
+        row('floating_cash', 'set-float', 'Floating Cash (modal besar)'),
         dokAdmin(s));
     }).catch(function (err) { setCard.replaceChildren(el('h3', { text: 'Pengaturan kas' }), errBox(err)); });
     function load() {
@@ -2258,6 +2272,53 @@
           el('div', { class: 'temp-pw', text: pw }),
           el('div', { class: 'row' }, el('button', { class: 'btn btn-primary', text: 'Selesai', onclick: function () { back.remove(); } }))));
       document.body.appendChild(back);
+    }
+    if (part === 'akun') load();
+  }
+
+  /* ---------- Persetujuan (admin): semua yang menunggu keputusan ---------- */
+  function viewPersetujuan(v) {
+    pageHead(v, 'Persetujuan', 'Semua yang menunggu keputusan admin: pendaftaran akun, request jadwal, dan tukar shift.');
+    var body = el('div', null, skel(3));
+    v.append(body);
+    function load() {
+      Promise.all([api('users'), api('reqList'), api('tukarList')]).then(function (r) {
+        var users = r[0].filter(function (u) { return u.status === 'menunggu'; });
+        var reqs = (r[1].semua || []).filter(function (x) { return x.status === 'menunggu'; });
+        var tks = (r[2].semua || []).filter(function (x) { return x.status === 'menunggu_admin'; });
+        S.badges.admin = users.length; S.badges.request = reqs.length; S.badges.tukar = tks.length; paintBadges();
+        var btns = function (ok, no) { return el('div', { class: 'actions' }, el('button', { class: 'btn btn-primary btn-sm', text: 'Setujui', onclick: ok }), el('button', { class: 'btn btn-danger btn-sm', text: 'Tolak', onclick: no })); };
+        var card = function (title, n, items, link, linkTxt) {
+          return el('div', { class: 'card section' }, el('div', { class: 'hist-top' }, el('h3', { text: title + (n ? ' (' + n + ')' : '') }), el('a', { href: link, class: 'muted', text: linkTxt })),
+            n ? el('ul', { class: 'hist' }, items) : el('p', { class: 'muted', style: 'margin:8px 0 0', text: 'Tidak ada yang menunggu.' }));
+        };
+        body.replaceChildren(
+          !users.length && !reqs.length && !tks.length ? el('div', { class: 'banner b-good' }, el('b', { text: 'Semua beres' }), el('span', { text: 'Tidak ada yang menunggu keputusan.' })) : null,
+          card('Request jadwal', reqs.length, reqs.slice().reverse().map(function (x) {
+            return el('li', null, el('span', { class: 'avatar sm', text: x.jenis }), el('div', { class: 'hist-main' },
+              el('div', { class: 'hist-top' }, el('b', { text: x.nama }), el('span', { class: 'tag tag-warn', text: x.jenis + (x.pakaiSimpanan ? ' · simpanan' : '') })),
+              el('div', null, dLong(x.tanggal)), el('div', { class: 'muted', text: x.alasan }),
+              btns(function (e) { act(e.target, 'reqDecide', { id: x.id, keputusan: 'setuju', catatan: '' }, 'Request disetujui'); },
+                function (e) { var c = prompt('Alasan ditolak (opsional):', ''); if (c === null) return; act(e.target, 'reqDecide', { id: x.id, keputusan: 'tolak', catatan: c }, 'Request ditolak'); })));
+          }), '#/request', 'Kalender request ›'),
+          card('Tukar shift', tks.length, tks.map(function (t) {
+            return el('li', null, el('span', { class: 'avatar sm', text: '⇄' }), el('div', { class: 'hist-main' },
+              el('div', { class: 'hist-top' }, el('b', { text: dLong(t.tanggal) }), statusPill(t.status)),
+              el('div', null, t.namaPemohon + ' (' + t.shiftPemohon + ') ⇄ ' + t.namaRekan + ' (' + t.shiftRekan + ')'), el('div', { class: 'muted', text: t.alasan }),
+              btns(function (e) { act(e.target, 'tukarDecide', { id: t.id, keputusan: 'setuju' }, 'Tukar shift disetujui'); },
+                function (e) { act(e.target, 'tukarDecide', { id: t.id, keputusan: 'tolak' }, 'Ditolak'); })));
+          }), '#/tukar', 'Semua tukar shift ›'),
+          card('Pendaftaran akun', users.length, users.map(function (u) {
+            return el('li', null, el('span', { class: 'avatar', text: initials(u.nama) }), el('div', { class: 'hist-main' },
+              el('b', { text: u.nama }), el('div', { class: 'muted', text: '@' + u.username + ' · daftar ' + String(u.dibuat).slice(0, 16) }),
+              btns(function (e) { act(e.target, 'setUserStatus', { username: u.username, status: 'aktif' }, u.nama + ' disetujui'); },
+                function (e) { act(e.target, 'setUserStatus', { username: u.username, status: 'nonaktif' }, 'Pendaftaran ditolak'); })));
+          }), '#/admin', 'Akun tim ›'));
+      }).catch(function (e) { body.replaceChildren(errBox(e)); });
+    }
+    function act(btn, action, payload, msg) {
+      btn.disabled = true;
+      api(action, payload).then(function (r) { toast(msg); if (r && r.info) alert(r.info); S.jadwal = null; load(); }).catch(function (err) { btn.disabled = false; toast(err.message, true); });
     }
     load();
   }
@@ -4605,7 +4666,7 @@
   Object.assign(VIEWS, {
     beranda: viewBeranda, briefing: viewBriefing, mingguan: viewMingguan, omni: viewOmni, kesehatan: viewKesehatan, pengumuman: viewPengumuman, handover: viewHandover, feedback: viewFeedback, apresiasi: viewApresiasi, dokumentasi: viewDokumentasi, monitoring: viewMonitoring, trend: viewTrend, ra: viewRA, produk: viewProduk, customer: viewCustomer,
     stok: viewStok, stokart: viewStokArt, saranreq: viewSaranReq, display: viewDisplay, cari: viewCari, unggahbin: viewUnggahBin, kas: viewKas, 'kas-rekap': viewKasRekap, unggah: viewUnggah,
-    jadwal: viewJadwal, jadwaldraf: viewJadwalDraf, request: viewRequest, tukar: viewTukar, simpanan: viewSimpanan,
+    jadwal: viewJadwal, jadwaldraf: viewJadwalDraf, persetujuan: viewPersetujuan, targetadm: viewTargetAdm, pengaturan: viewPengaturan, request: viewRequest, tukar: viewTukar, simpanan: viewSimpanan,
     akun: viewAkun, admin: viewAdmin, aktivitas: viewAktivitas, pica: viewPica
   });
   render();
