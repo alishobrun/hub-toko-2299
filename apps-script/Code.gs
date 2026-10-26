@@ -3038,34 +3038,35 @@ function pasangDsrEmail() {
  * ===================================================================== */
 /* ---------- ECDSA P-256 (ES256) murni JS untuk VAPID Web Push ---------- */
 const EC_ = (function () {
+  const _B0 = BigInt(0), _B1 = BigInt(1), _B2 = BigInt(2), _B3 = BigInt(3), _B4 = BigInt(4), _B8 = BigInt(8);
   const P = BigInt('0xffffffff00000001000000000000000000000000ffffffffffffffffffffffff');
   const N = BigInt('0xffffffff00000000ffffffffffffffffbce6faada7179e84f3b9cac2fc632551');
-  const A = P - 3n;
+  const A = P - _B3;
   const G = [BigInt('0x6b17d1f2e12c4247f8bce6e563a440f277037d812deb33a0f4a13945d898c296'), BigInt('0x4fe342e2fe1a7f9b8ee7eb4a7c0f9e162bce33576b315ececbb6406837bf51f5')];
-  const mod = function (a, m) { const r = a % m; return r >= 0n ? r : r + m; };
-  const inv = function (a, m) { let t = 0n, nt = 1n, r = m, nr = mod(a, m); while (nr) { const q = r / nr; [t, nt] = [nt, t - q * nt]; [r, nr] = [nr, r - q * nr]; } return mod(t, m); };
+  const mod = function (a, m) { const r = a % m; return r >= _B0 ? r : r + m; };
+  const inv = function (a, m) { let t = _B0, nt = _B1, r = m, nr = mod(a, m); while (nr) { const q = r / nr; [t, nt] = [nt, t - q * nt]; [r, nr] = [nr, r - q * nr]; } return mod(t, m); };
   // titik Jacobian [X,Y,Z]
   const dbl = function (p) {
     if (!p[2]) return p;
     const [X, Y, Z] = p;
-    const YY = mod(Y * Y, P), S = mod(4n * X * YY, P), ZZ = mod(Z * Z, P);
-    const M = mod(3n * X * X + A * ZZ * ZZ, P);
-    const X3 = mod(M * M - 2n * S, P);
-    return [X3, mod(M * (S - X3) - 8n * YY * YY, P), mod(2n * Y * Z, P)];
+    const YY = mod(Y * Y, P), S = mod(_B4 * X * YY, P), ZZ = mod(Z * Z, P);
+    const M = mod(_B3 * X * X + A * ZZ * ZZ, P);
+    const X3 = mod(M * M - _B2 * S, P);
+    return [X3, mod(M * (S - X3) - _B8 * YY * YY, P), mod(_B2 * Y * Z, P)];
   };
   const add = function (p, q) {
     if (!p[2]) return q; if (!q[2]) return p;
     const Z1Z1 = mod(p[2] * p[2], P), Z2Z2 = mod(q[2] * q[2], P);
     const U1 = mod(p[0] * Z2Z2, P), U2 = mod(q[0] * Z1Z1, P);
     const S1 = mod(p[1] * q[2] * Z2Z2, P), S2 = mod(q[1] * p[2] * Z1Z1, P);
-    if (U1 === U2) return S1 === S2 ? dbl(p) : [0n, 1n, 0n];
+    if (U1 === U2) return S1 === S2 ? dbl(p) : [_B0, _B1, _B0];
     const H = mod(U2 - U1, P), R = mod(S2 - S1, P), HH = mod(H * H, P), HHH = mod(H * HH, P), V = mod(U1 * HH, P);
-    const X3 = mod(R * R - HHH - 2n * V, P);
+    const X3 = mod(R * R - HHH - _B2 * V, P);
     return [X3, mod(R * (V - X3) - S1 * HHH, P), mod(p[2] * q[2] * H, P)];
   };
   const mul = function (k, pt) {
-    let r = [0n, 1n, 0n], q = [pt[0], pt[1], 1n];
-    while (k > 0n) { if (k & 1n) r = add(r, q); q = dbl(q); k >>= 1n; }
+    let r = [_B0, _B1, _B0], q = [pt[0], pt[1], _B1];
+    while (k > _B0) { if (k & _B1) r = add(r, q); q = dbl(q); k >>= _B1; }
     const zi = inv(r[2], P), zi2 = mod(zi * zi, P);
     return [mod(r[0] * zi2, P), mod(r[1] * zi2 * zi, P)];
   };
@@ -3076,7 +3077,7 @@ const EC_ = (function () {
     N: N,
     /** kunci baru: {d: hex32, pub: hex65 (04|X|Y)} */
     keygen: function (randHex) {
-      let d = mod(BigInt('0x' + randHex), N - 1n) + 1n;
+      let d = mod(BigInt('0x' + randHex), N - _B1) + _B1;
       const Q = mul(d, G);
       return { d: toHex(d, 32), pub: '04' + toHex(Q[0], 32) + toHex(Q[1], 32) };
     },
@@ -3084,12 +3085,12 @@ const EC_ = (function () {
     sign: function (hashHex, dHex, randHex) {
       const z = BigInt('0x' + hashHex), d = BigInt('0x' + dHex);
       for (let i = 0; i < 8; i++) {
-        const k = mod(BigInt('0x' + randHex) + BigInt(i), N - 1n) + 1n;
+        const k = mod(BigInt('0x' + randHex) + BigInt(i), N - _B1) + _B1;
         const R = mul(k, G), r = mod(R[0], N);
         if (!r) continue;
         let s = mod(inv(k, N) * (z + r * d), N);
         if (!s) continue;
-        if (s > N / 2n) s = N - s;
+        if (s > N / _B2) s = N - s;
         return toHex(r, 32) + toHex(s, 32);
       }
       throw new Error('ECDSA gagal');
