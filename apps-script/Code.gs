@@ -67,7 +67,8 @@ const TABS = {
   handover_baca: ['id', 'username', 'waktu'],
   // feedback anonim: SENGAJA tanpa kolom pengirim
   feedback: ['id', 'tanggal', 'kirim', 'untuk', 'jenis', 'isi', 'dibaca', 'dilaporkan', 'alasan_lapor'],
-  apresiasi: ['id', 'waktu', 'username', 'nama', 'untuk', 'untuk_nama', 'isi', 'aktif']
+  apresiasi: ['id', 'waktu', 'username', 'nama', 'untuk', 'untuk_nama', 'isi', 'aktif'],
+  omni_target: ['bulan', 'jenis', 'target', 'diubah', 'oleh']
 };
 
 const PECAHAN = [100000, 50000, 20000, 10000, 5000, 2000, 1000, 500, 200, 100];
@@ -79,6 +80,7 @@ const NUM_COLS = {
   traffic: ['traffic'],
   uploads: ['baris', 'invoice_baru', 'invoice_diperbarui', 'invoice_sama'],
   targets: ['target'],
+  omni_target: ['target'],
   bobot: ['harian', 'kumulatif'],
   kas: ['total_fisik', 'modal', 'penjualan_tunai', 'masuk', 'keluar', 'seharusnya', 'selisih'],
   settings: ['value'],
@@ -823,6 +825,7 @@ Object.assign(API, {
     return cached_('lap_' + bulan, 600, function () {
       const rows = read_('dsr').filter(function (r) { return String(r.tanggal).slice(0, 7) === bulan; });
       const out = laporan_(rows);
+      try { out.raHO = raHO_(rows, raToko_(bulan, rows)); } catch (e) { out.raHO = null; }
       out.bulan = bulan;
       out.dataSampai = latestDate_();
       out.bulanTersedia = bulanTersedia_();
@@ -1133,8 +1136,10 @@ function laporan_(rows) {
     const J = jam[d + '|' + h] || (jam[d + '|' + h] = { t: d, h: h, b: 0, n: 0, inv: {} });
     J.b += g; J.n += n; J.inv[inv] = 1;
     const sp = String(r.sales_person || '').trim() || '(tanpa nama)';
-    const R = ra[sp + '|' + d] || (ra[sp + '|' + d] = { p: sp, t: d, b: 0, n: 0, q: 0, inv: {} });
-    R.b += g; R.n += n; R.q += q; R.inv[inv] = 1;
+    if (!DILEBUR_TIPE.test(String(r.tipe || ''))) {
+      const R = ra[sp + '|' + d] || (ra[sp + '|' + d] = { p: sp, t: d, b: 0, n: 0, q: 0, inv: {} });
+      R.b += g; R.n += n; R.q += q; R.inv[inv] = 1;
+    }
     const k3 = String(r.kat3 || '').trim() || 'LAINNYA', k4 = String(r.kat4 || '').trim() || '-';
     const K = kat[k3 + '|' + k4] || (kat[k3 + '|' + k4] = { k3: k3, k4: k4, b: 0, n: 0, q: 0 });
     K.b += g; K.n += n; K.q += q;
@@ -2196,13 +2201,14 @@ Object.assign(API, {
     auth_(req);
     const today = today_();
     return cached_('perf_' + today, 1800, function () {
-      const d180 = addDays_(today, -182), d30 = addDays_(today, -30);
-      const G = {}, V = {};
+      const d180 = addDays_(today, -182), d30 = addDays_(today, -30), d90 = addDays_(today, -90);
+      const G = {}, V = {}, V90 = {};
       read_('dsr').forEach(function (r) {
         if (!isSalesLine_(r)) return;
         const t = String(r.tanggal), q = Number(r.qty) || 0, sku = String(r.sku);
         const g = sku.length > 9 ? sku.slice(0, 9) : sku;
-        const o = G[g] || (G[g] = { q6: 0, q30: 0, first: t, last: t });
+        const o = G[g] || (G[g] = { q6: 0, q30: 0, q90: 0, first: t, last: t });
+        if (t >= d90) { o.q90 += q; const vk9 = varianKey_(sku, r.nama_sku); V90[vk9] = (V90[vk9] || 0) + q; }
         if (t < o.first) o.first = t;
         if (t > o.last) o.last = t;
         if (t >= d180) o.q6 += q;
@@ -2219,9 +2225,9 @@ Object.assign(API, {
       });
       return {
         today: today, dari6: d180,
-        gen: Object.keys(G).map(function (k) { const o = G[k]; return [k, o.q6, o.q30, o.first, o.last]; }),
+        gen: Object.keys(G).map(function (k) { const o = G[k]; return [k, o.q6, o.q30, o.first, o.last, o.q90]; }),
         firstBin: firstBin,
-        var30: V
+        var30: V, var90: V90
       };
     });
   },
@@ -2274,15 +2280,9 @@ Object.assign(API, {
     const today = today_(), bulan = today.slice(0, 7);
     const ras = raNames_(bulan);
     const nama = resolveNamaDsr_(u, ras);
-    const by = {};
-    read_('dsr').forEach(function (r) {
-      if (String(r.tanggal).slice(0, 7) !== bulan || !isSalesLine_(r)) return;
-      const sp = String(r.sales_person || '').trim();
-      if (!sp) return;
-      const o = by[sp] || (by[sp] = { b: 0, n: 0, q: 0, inv: {} });
-      o.b += Number(r.gross) || 0; o.n += Number(r.net) || 0; o.q += Number(r.qty) || 0; o.inv[String(r.invoice)] = 1;
-    });
-    const list = Object.keys(by).map(function (k) { const o = by[k]; return { ra: k, b: Math.round(o.b), n: Math.round(o.n), q: o.q, trx: Object.keys(o.inv).length }; });
+    const rowsM = read_('dsr').filter(function (r) { return String(r.tanggal).slice(0, 7) === bulan; });
+    const H = raHO_(rowsM, raToko_(bulan, rowsM));
+    const list = H.list.map(function (x) { return { ra: x.nama, b: x.b, n: x.n, q: x.q, trx: x.trx, ownB: x.ownB, ownN: x.ownN, shareB: H.share.b, shareN: H.share.n }; });
     const tg = read_('target_ra').filter(function (x) { return String(x.bulan) === bulan && String(x.ra) === nama; })[0];
     const p = today.split('-').map(Number), dim = new Date(Date.UTC(p[0], p[1], 0)).getUTCDate();
     return { bulan: bulan, nama: nama, list: list, target: tg ? Number(tg.target) : null, dataSampai: latestDate_(), sisaHari: dim - p[2] + 1 };
@@ -2306,10 +2306,9 @@ Object.assign(API, {
         const vk = varianKey_(r.sku, r.nama_sku), parts = String(r.nama_sku).split(',');
         const V = vr[vk] || (vr[vk] = { nama: parts.length >= 3 ? parts.slice(0, parts.length - 2).join(',').trim() + ' ' + parts[parts.length - 2].trim() : String(r.nama_sku), q: 0, b: 0, n: 0 });
         V.q += q; V.b += g; V.n += n;
-        const sp = String(r.sales_person || '').trim() || '(tanpa nama)';
-        const R = ra[sp] || (ra[sp] = { b: 0, n: 0, q: 0, inv: {} });
-        R.b += g; R.n += n; R.q += q; R.inv[k] = 1;
       });
+      const HO = raHO_(rows, raToko_(sampai.slice(0, 7), rows));
+      HO.list.forEach(function (x) { ra[x.nama] = { b: x.b, n: x.n, q: x.q, inv: null, t: x.trx }; });
       // target harian = target bulan × bobot hari itu
       const tg = {}; read_('targets').forEach(function (x) { tg[String(x.bulan)] = Number(x.target); });
       const bb = {}; read_('bobot').forEach(function (x) { bb[String(x.tanggal)] = Number(x.harian); });
@@ -2341,7 +2340,8 @@ Object.assign(API, {
         dari: dari, sampai: sampai, hari: hari,
         kpi: { upt: kp.t ? kp.q / kp.t : null, basketB: kp.t ? kp.b / kp.t : null, basketN: kp.t ? kp.n / kp.t : null, trx: kp.t, partai: kp.partai },
         varian: Object.keys(vr).map(function (k) { const x = vr[k]; return [k, x.nama, x.q, Math.round(x.b), Math.round(x.n)]; }).sort(function (a, b) { return b[4] - a[4]; }),
-        ra: Object.keys(ra).map(function (k) { const x = ra[k]; return [k, Math.round(x.b), Math.round(x.n), x.q, Object.keys(x.inv).length]; }).sort(function (a, b) { return b[2] - a[2]; }),
+        ra: Object.keys(ra).map(function (k) { const x = ra[k]; return [k, Math.round(x.b), Math.round(x.n), x.q, x.t]; }).sort(function (a, b) { return b[2] - a[2]; }),
+        raDilebur: { b: HO.dilebur.b, n: HO.dilebur.n, ra: HO.ras.length },
         kas: kasSum, dok: dok, dokRA: (function () { try { return dokRekap_(dari, sampai).list; } catch (e) { return []; } })(), dataSampai: latestDate_()
       };
     });
@@ -2745,6 +2745,135 @@ Object.assign(API, {
     return withLock_(function () {
       const ada = read_('handover_baca').some(function (x) { return String(x.id) === String(req.id) && x.username === u.username; });
       if (!ada) append_('handover_baca', { id: String(req.id), username: u.username, waktu: now_() });
+      return true;
+    });
+  }
+});
+
+/* =====================================================================
+ * TAHAP 10: sales RA cara HO (sales dilebur) & Monitoring OmniChannel
+ * ===================================================================== */
+// Jenis transaksi yang penjualannya dilebur & dibagi rata ke RA toko (cara HO).
+const DILEBUR_TIPE = /endless\s*aisle|b2b2g|tour\s*&?\s*travel|wholesale/i;
+const OMNI_JENIS = [
+  ['ea', 'Endless Aisle', function (r) { return /endless\s*aisle/i.test(String(r.tipe)); }],
+  ['voucher', 'Eigerindo Voucher', function (r) { return String(r.kat4).trim().toUpperCase() === 'VOUCHER'; }],
+  ['tax', 'Tax Invoice', function (r) { return /b2b2g/i.test(String(r.tipe)); }],
+  ['easap', 'EASAP', function (r) { return /tour\s*&?\s*travel/i.test(String(r.tipe)); }]
+];
+function sameName_(a, b) {
+  const x = normDsr_(a), y = normDsr_(b);
+  if (!x || !y) return false;
+  if (x === y || x.indexOf(y) === 0 || y.indexOf(x) === 0) return true;
+  const wa = x.split(' '), wb = y.split(' ');
+  return wa.length > 1 && wb.length > 1 && wa[0] === wb[0] && wa[1] === wb[1];
+}
+/** Nama-nama Store Leader/admin (tidak dihitung sebagai RA). */
+function slNames_() {
+  const out = [];
+  read_('users').forEach(function (u) {
+    if (u.role !== 'admin') return;
+    [u.nama_dsr, u.nama_jadwal, u.nama].forEach(function (x) { if (String(x || '').trim()) out.push(String(x).trim()); });
+  });
+  return out;
+}
+/** RA toko bulan itu: dari jadwal (tanpa Store Leader); bila jadwal tidak ada, dari penjual Walk In di DSR. */
+function raToko_(bulan, rows) {
+  const sl = slNames_();
+  const isSl = function (n) { return sl.some(function (s) { return sameName_(s, n); }); };
+  const dsrNames = {};
+  rows.forEach(function (r) {
+    if (!isSalesLine_(r) || DILEBUR_TIPE.test(String(r.tipe || ''))) return;
+    const sp = String(r.sales_person || '').trim(); if (sp) dsrNames[sp] = 1;
+  });
+  const D = Object.keys(dsrNames);
+  let jad = {};
+  try {
+    const map = jadwalMap_();
+    Object.keys(map).forEach(function (t) {
+      if (t.slice(0, 7) !== bulan) return;
+      Object.keys(map[t]).forEach(function (nm) { if (String(map[t][nm] || '').trim()) jad[nm] = 1; });
+    });
+  } catch (e) { jad = {}; }
+  const J = Object.keys(jad);
+  const base = J.length ? J : D;
+  const out = [];
+  base.forEach(function (nm) {
+    if (isSl(nm)) return;
+    const d = D.filter(function (x) { return sameName_(x, nm); })[0];
+    const name = d || nm;
+    if (out.indexOf(name) < 0) out.push(name);
+  });
+  return out.sort();
+}
+/** Sales per RA cara HO. Sales = Walk In atas nama sendiri + bagian rata sales dilebur.
+ *  Dilebur = Endless Aisle, B2B2G (Tax Invoice), Tour & Travel (EASAP), Wholesale, dan penjualan
+ *  yang bukan atas nama RA toko. UPT/qty/basket hanya dari transaksi sendiri. */
+function raHO_(rows, ras) {
+  const per = {}; ras.forEach(function (n) { per[n] = { b: 0, n: 0, q: 0, inv: {} }; });
+  const dil = { b: 0, n: 0, inv: {}, rinci: {} };
+  rows.forEach(function (r) {
+    if (!isSalesLine_(r)) return;
+    const g = Number(r.gross) || 0, n = Number(r.net) || 0, q = Number(r.qty) || 0;
+    const tipe = String(r.tipe || ''), sp = String(r.sales_person || '').trim();
+    const owner = ras.filter(function (x) { return sameName_(x, sp); })[0];
+    if (DILEBUR_TIPE.test(tipe) || !owner) {
+      dil.b += g; dil.n += n; dil.inv[String(r.invoice)] = 1;
+      const k = DILEBUR_TIPE.test(tipe) ? tipe : 'Bukan atas nama RA toko';
+      const o = dil.rinci[k] || (dil.rinci[k] = { b: 0, n: 0 }); o.b += g; o.n += n;
+      return;
+    }
+    const o = per[owner]; o.b += g; o.n += n; o.q += q; o.inv[String(r.invoice)] = 1;
+  });
+  const cnt = ras.length || 1;
+  const sb = dil.b / cnt, sn = dil.n / cnt;
+  return {
+    ras: ras,
+    dilebur: { b: Math.round(dil.b), n: Math.round(dil.n), trx: Object.keys(dil.inv).length,
+      rinci: Object.keys(dil.rinci).map(function (k) { return [k, Math.round(dil.rinci[k].b), Math.round(dil.rinci[k].n)]; }) },
+    share: { b: Math.round(sb), n: Math.round(sn) },
+    list: ras.map(function (nm) {
+      const o = per[nm];
+      return { nama: nm, ownB: Math.round(o.b), ownN: Math.round(o.n), b: Math.round(o.b + sb), n: Math.round(o.n + sn), q: o.q, trx: Object.keys(o.inv).length };
+    }).sort(function (a, b) { return b.b - a.b; })
+  };
+}
+
+Object.assign(API, {
+  /** Monitoring OmniChannel: actual = gross sales bulan berjalan per jenis. */
+  omni: function (req) {
+    const u = auth_(req);
+    const bulan = /^\d{4}-\d{2}$/.test(String(req.bulan || '')) ? String(req.bulan) : latestDate_().slice(0, 7);
+    const act = {}, trx = [];
+    OMNI_JENIS.forEach(function (j) { act[j[0]] = 0; });
+    read_('dsr').forEach(function (r) {
+      if (String(r.tanggal).slice(0, 7) !== bulan) return;
+      OMNI_JENIS.forEach(function (j) {
+        if (!j[2](r)) return;
+        const g = Number(r.gross) || 0;
+        act[j[0]] += g;
+        trx.push([String(r.tanggal), String(r.invoice), j[1], String(r.sales_person || ''), String(r.nama_sku), Number(r.qty) || 0, Math.round(g)]);
+      });
+    });
+    const tg = {};
+    read_('omni_target').forEach(function (x) { if (String(x.bulan) === bulan) tg[String(x.jenis)] = Number(x.target) || 0; });
+    return { bulan: bulan, dataSampai: latestDate_(), bulanTersedia: bulanTersedia_(), admin: u.role === 'admin',
+      jenis: OMNI_JENIS.map(function (j) { return { id: j[0], label: j[1], actual: Math.round(act[j[0]]), target: tg[j[0]] || 0 }; }),
+      trx: trx.sort(function (a, b) { return a[0] < b[0] ? 1 : -1; }) };
+  },
+  omniTargetSet: function (req) {
+    const a = auth_(req, true);
+    const bulan = String(req.bulan || '');
+    if (!/^\d{4}-\d{2}$/.test(bulan)) throw new Error('Bulan tidak valid');
+    const list = req.list || {};
+    return withLock_(function () {
+      const keep = read_('omni_target').filter(function (x) { return String(x.bulan) !== bulan; });
+      OMNI_JENIS.forEach(function (j) {
+        const v = Number(list[j[0]]) || 0;
+        if (v > 0) keep.push({ bulan: bulan, jenis: j[0], target: v, diubah: now_(), oleh: a.username });
+      });
+      writeAll_('omni_target', keep);
+      log_(a.username, 'target omnichannel', bulan);
       return true;
     });
   }
