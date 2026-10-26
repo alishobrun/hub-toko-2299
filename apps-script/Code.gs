@@ -11,7 +11,7 @@
 /** Versi kode. WAJIB dinaikkan setiap kali Code.gs diubah (format yyyy-MM-dd.n),
  *  lalu simpan ke GitHub (alishobrun/hub-toko-2299) SEBELUM dipasang. Halaman Kesehatan Data
  *  membandingkan angka ini dengan GitHub supaya kode yang dipasang di luar GitHub ketahuan. */
-const KODE_VERSI = '2026-10-27.2';
+const KODE_VERSI = '2026-10-27.3';
 
 const CFG = {
   STORE: '2299',
@@ -817,6 +817,14 @@ function invalidateReadCache_(n) {
     const p = PropertiesService.getScriptProperties();
     p.setProperty('ver_rc', String(Number(p.getProperty('ver_rc') || 0) + 1));
   }
+  if (NF_TABS_[n]) bumpNf_();
+}
+/* Tab yang memengaruhi isi lonceng notifikasi: ditulis → hitung ulang lonceng semua orang. */
+const NF_TABS_ = { notifikasi: 1, request_jadwal: 1, tukar_shift: 1, users: 1, bin_upload: 1, handover: 1, handover_baca: 1,
+  pengumuman: 1, pengumuman_baca: 1, feedback: 1, dsr: 1, settings: 1 };
+function bumpNf_() {
+  const p = PropertiesService.getScriptProperties();
+  p.setProperty('ver_nf', String(Number(p.getProperty('ver_nf') || 0) + 1));
 }
 
 function writeAll_(n, objs) {
@@ -1697,7 +1705,7 @@ function readArea_() {
 
 Object.assign(API, {
   notif: function (req) {
-    return notifFor_(auth_(req));
+    return notifCached_(auth_(req));
   },
 
   notifRead: function (req) {
@@ -1722,6 +1730,18 @@ Object.assign(API, {
   }
 });
 
+
+/** Lonceng notifikasi dengan cache 2 menit per orang; batal otomatis saat ada data baru (lihat NF_TABS_).
+ *  2 menit juga menjaga pengingat berbasis jam (video, DSR, By Bin) tetap tepat waktu. */
+function notifCached_(u) {
+  const ver = PropertiesService.getScriptProperties().getProperty('ver_nf') || '0';
+  const c = CacheService.getScriptCache(), k = 'nf_' + u.username + '_v' + ver + '_' + Math.floor(Date.now() / 120000);
+  const hit = c.get(k);
+  if (hit) { try { return JSON.parse(hit); } catch (e) { /* hitung ulang */ } }
+  const out = notifFor_(u);
+  try { c.put(k, JSON.stringify(out), 150); } catch (e) { /* terlalu besar */ }
+  return out;
+}
 
 /** Isi lonceng notifikasi untuk satu user (dipakai web & push). */
 function notifFor_(u) {
@@ -2117,12 +2137,7 @@ Object.assign(API, {
     const kemarin = /^\d{4}-\d{2}-\d{2}$/.test(String(req.tanggal || '')) ? String(req.tanggal) : addDays_(today, -1);
     const latest = latestDate_();
     syncTrafficIfNeeded_();
-    const out = cached_('brief_' + kemarin, 600, function () {
-      const all = read_('dsr');
-      const rowsK = all.filter(function (r) { return String(r.tanggal) === kemarin; });
-      const h = hari_(rowsK);
-      return { hari: h, kpi: kpiBriefing_(all, kemarin) };
-    });
+    const out = briefingData_(kemarin);
     const tr = read_('traffic').filter(function (x) { return String(x.tanggal) === kemarin; })[0];
     out.hari.traffic = tr && tr.traffic !== '' ? Number(tr.traffic) : null;
     out.kemarin = kemarin; out.today = today; out.dataSampai = latest;
@@ -2204,6 +2219,7 @@ Object.assign(API, {
     const jenis = String(req.jenis || '').toUpperCase();
     const tg = /^\d{4}-\d{2}-\d{2}$/.test(String(req.tanggal || '')) ? String(req.tanggal) : today_();
     CacheService.getScriptCache().removeAll(['dok_' + tg.slice(0, 7), 'dok_' + today_().slice(0, 7), 'dok_bulan']);
+    bumpNf_(); // tugas video di lonceng langsung hilang
     log_(u.username, 'unggah video ' + jenis.toLowerCase(), String(req.nama || '').slice(0, 120));
     withLock_(function () {
       if (u.role !== 'admin') notif_('admin', 'info', 'video', 'Video ' + jenis.toLowerCase() + ' diunggah oleh ' + u.nama,
@@ -3090,6 +3106,7 @@ function labelOf_(name) { return GmailApp.getUserLabelByName(name) || GmailApp.c
 /** Dijalankan tiap 15 menit oleh pemicu waktu. */
 function cekEmailDsr() {
   try { hangatkanDsr_(); } catch (e) { Logger.log('hangat dsr: ' + e); }
+  try { siapkanBriefing_(); } catch (e) { Logger.log('briefing: ' + e); }
   const lab = labelOf_(DSR_EMAIL.LABEL), labGagal = labelOf_(DSR_EMAIL.LABEL_GAGAL);
   const threads = GmailApp.search('from:' + DSR_EMAIL.FROM + ' -label:' + DSR_EMAIL.LABEL + ' -label:' + DSR_EMAIL.LABEL_GAGAL + ' newer_than:3d', 0, 30);
   const msgs = [];
@@ -3232,7 +3249,7 @@ function kirimPush_(endpoint) {
   return true;
 }
 function idsNotif_(u) {
-  const n = notifFor_(u);
+  const n = notifCached_(u);
   return n.items.filter(function (x) { return x.live || (!x.dibaca); }).map(function (x) { return x.id; });
 }
 /** Tiap 15 menit: kirim push ke user yang punya notifikasi baru sejak push terakhir. */
@@ -4021,4 +4038,20 @@ function hangatkanDsr_() {
   const b = bulanIni_(latestDate_());
   const c = CacheService.getScriptCache();
   if (!c.get(dsrKunci_(b) + '_n')) dsrBulan_(b);
+}
+
+/** Data Briefing Pagi untuk satu tanggal (kemarin). Disimpan 6 jam; batal otomatis saat DSR berubah. */
+function briefingData_(kemarin) {
+  return cached_('brief_' + kemarin, 21600, function () {
+    const all = read_('dsr');
+    const rowsK = all.filter(function (r) { return String(r.tanggal) === kemarin; });
+    const h = hari_(rowsK);
+    return { hari: h, kpi: kpiBriefing_(all, kemarin) };
+  });
+}
+/** Dipanggil pemicu 15 menit: Briefing Pagi untuk hari ini sudah jadi sebelum dibuka. */
+function siapkanBriefing_() {
+  const jam = Number(Utilities.formatDate(new Date(), CFG.TZ, 'H'));
+  if (jam < 5 || jam > 13) return;
+  briefingData_(addDays_(today_(), -1));
 }

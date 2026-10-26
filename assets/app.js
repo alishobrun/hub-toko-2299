@@ -132,6 +132,35 @@
     return o;
   }
 
+  /** Versi Promise: langsung pakai data tersimpan, ambil yang terbaru di belakang; bila berubah,
+   *  onFresh dipanggil lalu halaman yang sedang dibuka digambar ulang sekali. */
+  var viewGen = 0, swrMem = {}, refreshedGen = -1;
+  function swrPromise(action, payload, onFresh) {
+    var key = swrKey(action, payload), m = swrMem[key];
+    if (m && Date.now() - m.t < 90000) return Promise.resolve(m.d);
+    var cached = swrGet(action, payload), gen = viewGen;
+    var fresh = api(action, payload).then(function (d) {
+      swrMem[key] = { t: Date.now(), d: d };
+      var changed = !cached || JSON.stringify(cached) !== JSON.stringify(d);
+      swrSet(action, payload, d);
+      if (cached && changed) { if (onFresh) onFresh(d); refreshView(gen); }
+      return d;
+    });
+    if (!cached) return fresh;
+    setSync(1);
+    fresh.then(function () { setSync(-1); }, function () { setSync(-1); });
+    return Promise.resolve(cached);
+  }
+  function refreshView(gen) {
+    if (gen !== viewGen || refreshedGen === gen || !S.curView || !VIEWS[S.curView]) return;
+    refreshedGen = gen;
+    if (formDirty) { toast('Data terbaru sudah masuk — ketuk tombol muat ulang untuk menampilkan'); return; }
+    var v = $('#view'); if (!v) return;
+    var y = window.scrollY;
+    v.replaceChildren(); VIEWS[S.curView](v);
+    setTimeout(function () { window.scrollTo(0, y); }, 60);
+  }
+
   function setSession(token, user) {
     S.token = token; S.user = user;
     store.set('token', token); store.set('user', user ? JSON.stringify(user) : null);
@@ -257,6 +286,7 @@
     var m = routeOf(id) || routeOf('beranda');
     if (m.r.admin && !isAdmin()) m = routeOf('beranda');
     if (!S.meChecked) { S.meChecked = true; refreshMe(); }
+    viewGen++; S.curView = m.r.id; swrMem = {};
     app.replaceChildren(shell(m));
     loadNotif(false); startNotifPolling(); masterAuto();
     VIEWS[m.r.id]($('#view'));
@@ -1428,7 +1458,7 @@
     S.lap = S.lap || {};
     var k = bulan || '_';
     if (S.lap[k]) return Promise.resolve(S.lap[k]);
-    return api('laporan', { bulan: bulan || '' }).then(function (d) { S.lap[k] = d; S.lap[d.bulan] = d; return d; });
+    return swrPromise('laporan', { bulan: bulan || '' }, function () { S.lap = {}; }).then(function (d) { S.lap[k] = d; S.lap[d.bulan] = d; return d; });
   }
   function skel(n) { var a = []; for (var i = 0; i < (n || 1); i++) a.push(el('div', { class: 'skel', style: 'margin-bottom:14px' })); return a; }
   function emptyCard(text) { return el('div', { class: 'card' }, el('div', { class: 'empty', text: text })); }
@@ -1688,7 +1718,7 @@
       tools.replaceChildren(seg);
       body.replaceChildren(skel(2));
       if (tab === 'customer') {
-        (S.cust ? Promise.resolve(S.cust) : api('customer').then(function (d) { S.cust = d; return d; })).then(function (d) {
+        (S.cust ? Promise.resolve(S.cust) : swrPromise('customer', null, function () { S.cust = null; }).then(function (d) { S.cust = d; return d; })).then(function (d) {
           var row = function (x, i) {
             return el('li', null, el('span', { class: 'avatar', text: initials(x[0]) }),
               el('div', { class: 'hist-main' },
@@ -1742,7 +1772,7 @@
     var body = el('div', null, skel(3));
     v.append(body);
     var filter = 'semua', q = '';
-    (S.stok ? Promise.resolve(S.stok) : api('stok').then(function (d) { S.stok = d; return d; })).then(function (d) {
+    (S.stok ? Promise.resolve(S.stok) : swrPromise('stok', null, function () { S.stok = null; }).then(function (d) { S.stok = d; return d; })).then(function (d) {
       var gt = d.kategori.filter(function (k) { return /grand total/i.test(k.mc3); })[0] || {};
       var kats = d.kategori.filter(function (k) { return !/grand total/i.test(k.mc3); }).sort(function (a, b) { return (b.qty || 0) - (a.qty || 0); });
       var kmax = kats.length ? kats[0].qty : 1;
@@ -2700,8 +2730,8 @@
           loadLap(mon.bulan).catch(function () { return null; }),
           api('laporan', { bulan: pt.slice(0, 7) }).catch(function () { return null; }),
           (S.stok ? Promise.resolve(S.stok) : api('stok').then(function (d) { S.stok = d; return d; })).catch(function () { return null; }),
-          api('area').catch(function () { return null; }),
-          api('hari', { tanggal: tanggal }).catch(function () { return null; }),
+          swrPromise('area').catch(function () { return null; }),
+          swrPromise('hari', { tanggal: tanggal }).catch(function () { return null; }),
           Promise.resolve(pt)
         ]);
       }).then(function (r) { draw.apply(null, r); }).catch(function (e) { body.replaceChildren(errBox(e)); });
@@ -2901,7 +2931,8 @@
   }
   function loadBin(force) {
     if (S.bin && !force) return Promise.resolve(S.bin);
-    return Promise.all([api('binData'), loadMaster(force).catch(function () { return null; }), api('perfData').catch(function () { return null; })]).then(function (x) {
+    var ulangBin = function () { S.bin = null; };
+    return Promise.all([force ? api('binData') : swrPromise('binData', null, ulangBin), loadMaster(force).catch(function () { return null; }), (force ? api('perfData') : swrPromise('perfData', null, ulangBin)).catch(function () { return null; })]).then(function (x) {
       var d = x[0], M = x[1], P = x[2], K = d.kolom;
       var rows = d.rows.map(function (r) {
         var o = {}; K.forEach(function (k, i) { o[k] = r[i]; });
@@ -3866,7 +3897,7 @@
     var tools = el('div', { class: 'toolbar2' }), body = el('div', null, skel(2));
     v.append(tools, body);
     var bulan = S.omBulan || '';
-    function load() { api('omni', { bulan: bulan }).then(function (d) { bulan = d.bulan; S.omBulan = bulan; draw(d); }).catch(function (e) { body.replaceChildren(errBox(e)); }); }
+    function load() { swrPromise('omni', { bulan: bulan }).then(function (d) { bulan = d.bulan; S.omBulan = bulan; draw(d); }).catch(function (e) { body.replaceChildren(errBox(e)); }); }
     function draw(d) {
       tools.replaceChildren(monthSel(d.bulanTersedia, bulan, function (m) { bulan = m; load(); }));
       var tA = 0, tT = 0;
@@ -3913,7 +3944,7 @@
     v.append(body);
     function load() {
       body.replaceChildren(skel(3));
-      api('kesehatan').then(function (d) {
+      swrPromise('kesehatan').then(function (d) {
         var ST = { ok: ['ok', '✓', 'Baik'], warn: ['warn', '!', 'Perlu dicek'], bad: ['bad', '✕', 'Bermasalah'] };
         var cnt = { ok: 0, warn: 0, bad: 0 }; d.cek.forEach(function (c) { cnt[c.status]++; });
         var grup = []; d.cek.forEach(function (c) { if (grup.indexOf(c.grup) < 0) grup.push(c.grup); });
@@ -3964,7 +3995,7 @@
       var w = weeks[wi];
       tools.replaceChildren(plainSel('Minggu', weeks.map(function (x, i) { return [String(i), x.label]; }), String(wi), function (x) { wi = Number(x); S.mgIdx = wi; load(); }), modeSeg(function () { load(); }));
       body.replaceChildren(skel(3));
-      Promise.all([api('mingguan', { dari: w.dari, sampai: w.sampai }), loadMaster().catch(function () { return null; }), loadBin().catch(function () { return null; })])
+      Promise.all([swrPromise('mingguan', { dari: w.dari, sampai: w.sampai }), loadMaster().catch(function () { return null; }), loadBin().catch(function () { return null; })])
         .then(function (x) { draw(x[0], x[1], x[2]); }).catch(function (e) { body.replaceChildren(errBox(e)); });
     }
     function draw(d, M, B) {
@@ -4473,7 +4504,7 @@
     v.append(body);
     var hide = {}; try { hide = JSON.parse(store.get('briefHide') || '{}'); } catch (e) { hide = {}; }
     var today = todayJkt();
-    api('briefing').then(function (B) {
+    swrPromise('briefing').then(function (B) {
       var kem = B.kemarin;
       var monP = loadMon(kem).catch(function () { return null; });
       var monT = today.slice(0, 7) === kem.slice(0, 7) ? monP : api('monitoring', { tanggal: today }).catch(function () { return null; });
