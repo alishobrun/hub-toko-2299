@@ -474,11 +474,14 @@ function kasOut_(r) {
 
 /* ===================== Rumus sales (sama dengan Integrated Hub Jateng 01) ===================== */
 
-/** Baris yang dihitung sebagai sales: barang dagangan brand EIGER, selain paper bag.
- *  (Jasa seperti reparasi, packing WAB/ECOM dan paper bag tidak dihitung.) */
+/** Baris yang dihitung sebagai sales (sama dengan Monitoring Sales Integrated Hub Jateng 01):
+ *  barang dagangan brand EIGER. Tidak dihitung: paper bag, voucher (Eiger Voucher), barang bukan jual
+ *  berkode 98…, serta jasa seperti reparasi & packing WAB/ECOM. */
 function isSalesLine_(r) {
-  return String(r.brand).trim().toUpperCase() === 'EIGER' && !/PAPER\s*BAG/i.test(String(r.nama_sku));
+  return String(r.brand).trim().toUpperCase() === 'EIGER' && !/^98/.test(String(r.sku).trim())
+    && !/PAPER\s*BAG|VOUCHER/i.test(String(r.nama_sku)) && String(r.kat4).trim().toUpperCase() !== 'VOUCHER';
 }
+const RUMUS_SALES = '2'; // naikkan bila rumus berubah → ringkasan dihitung ulang otomatis
 
 /** Ringkasan per tanggal: bruto (Gross Amount), netto (Net Amount), transaksi (invoice unik), qty.
  *  Retur (qty minus) ikut mengurangi. */
@@ -1205,7 +1208,11 @@ function bulanTersedia_() {
 /* ---------- ringkasan harian (supaya cepat) ---------- */
 function ringkasan_() {
   let rows = read_('ringkasan');
-  if (!rows.length && sh_('dsr').getLastRow() > 1) rows = rebuildRingkasan_();
+  const p = PropertiesService.getScriptProperties();
+  if ((!rows.length || p.getProperty('rumus_sales') !== RUMUS_SALES) && sh_('dsr').getLastRow() > 1) {
+    rows = rebuildRingkasan_();
+    p.setProperty('rumus_sales', RUMUS_SALES);
+  }
   return rows.map(function (r) { return { tanggal: String(r.tanggal), bruto: Number(r.bruto), netto: Number(r.netto), qty: Number(r.qty), trx: Number(r.trx) }; });
 }
 function rebuildRingkasan_() {

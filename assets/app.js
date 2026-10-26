@@ -832,7 +832,7 @@
           el('span', null, el('i', { class: 'bg-good' }), '≥100%'), el('span', null, el('i', { class: 'bg-warn' }), '95–100%'), el('span', null, el('i', { class: 'bg-bad' }), '<95%')),
         el('div', { class: 'wa-actions', style: 'margin:12px 0 4px' },
           el('a', { class: 'btn btn-wa', href: '#/pica' }, icon('whatsapp'), 'Laporan WA & Analisa PICA')),
-        el('p', { class: 'note', text: 'Sales = ' + (S.mode === 'netto' ? 'Net Amount' : 'Gross Amount') + ' barang dagangan EIGER (paper bag, jasa & packing tidak dihitung; retur mengurangi). UPT = qty ÷ jumlah transaksi. Basket = sales ÷ jumlah transaksi. Target kumulatif = target bulan × bobot kumulatif s/d tanggal laporan. Target harian = target bulan × bobot hari itu.' }),
+        el('p', { class: 'note', text: 'Sales = ' + (S.mode === 'netto' ? 'Net Amount' : 'Gross Amount') + ' barang dagangan EIGER (paper bag, voucher, jasa & packing tidak dihitung; retur mengurangi), sama dengan Monitoring Sales Integrated Hub Jateng 01. UPT = qty ÷ jumlah transaksi. Basket = sales ÷ jumlah transaksi. Target kumulatif = target bulan × bobot kumulatif s/d tanggal laporan. Target harian = target bulan × bobot hari itu.' }),
         el('div', { class: 'card section' }, el('h3', { text: 'Sales harian ' + BULAN[p.m - 1] + ' ' + p.y }),
           el('p', { class: 'sub', text: 'Batang = sales (warna sesuai achievement), garis putus-putus = target harian. Ketuk batang untuk detail.' }),
           d.harian.length ? dailyChart(d, S.mode) : el('div', { class: 'empty', text: 'Belum ada data bulan ini' })),

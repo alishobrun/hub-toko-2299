@@ -98,9 +98,10 @@
 
   /* ---------- rumus sales ---------- */
 
-  /** Baris yang dihitung: barang dagangan brand EIGER, selain paper bag. */
+  /** Baris yang dihitung: barang dagangan brand EIGER, selain paper bag, voucher & barang bukan jual (kode 98…). */
   function isSalesLine(r) {
-    return String(r.brand).trim().toUpperCase() === 'EIGER' && !/PAPER\s*BAG/i.test(String(r.nama_sku));
+    return String(r.brand).trim().toUpperCase() === 'EIGER' && !/^98/.test(String(r.sku).trim())
+      && !/PAPER\s*BAG|VOUCHER/i.test(String(r.nama_sku)) && String(r.kat4).trim().toUpperCase() !== 'VOUCHER';
   }
 
   /** Ringkasan per tanggal: bruto, netto, qty, transaksi (invoice unik). Retur ikut mengurangi. */
