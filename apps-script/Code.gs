@@ -3188,9 +3188,9 @@ Object.assign(API, {
     const subs = read_('push_sub').filter(function (s) { return s.username === u.username; });
     if (!subs.length) throw new Error('Belum ada perangkat yang mengaktifkan notifikasi');
     withLock_(function () { notif_(u.username, 'info', 'info', 'Tes notifikasi Basecamp 2299', 'Notifikasi di HP sudah aktif 👍', '#/akun'); });
-    let ok = 0;
-    subs.forEach(function (s) { try { if (kirimPush_(String(s.endpoint))) ok++; } catch (e) { Logger.log(e); } });
+    let ok = 0; const galat = [];
+    subs.forEach(function (s) { try { if (kirimPush_(String(s.endpoint))) ok++; else galat.push('langganan kedaluwarsa'); } catch (e) { galat.push(String(e.message || e)); } });
     try { PropertiesService.getScriptProperties().setProperty('push_seen_' + u.username, JSON.stringify(idsNotif_(u).slice(0, 150))); } catch (e) {}
-    return { terkirim: ok, perangkat: subs.length };
+    return { terkirim: ok, perangkat: subs.length, galat: galat };
   }
 });
