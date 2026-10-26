@@ -35,7 +35,7 @@ const CFG = {
 };
 
 const TABS = {
-  users: ['username', 'nama', 'hash', 'salt', 'role', 'status', 'dibuat', 'disetujui_oleh', 'login_terakhir', 'nama_jadwal'],
+  users: ['username', 'nama', 'hash', 'salt', 'role', 'status', 'dibuat', 'disetujui_oleh', 'login_terakhir', 'nama_jadwal', 'nama_dsr'],
   sessions: ['token', 'username', 'kedaluwarsa'],
   dsr: ['invoice', 'order_no', 'tanggal', 'jam', 'status', 'tipe', 'sku', 'nama_sku', 'kat3', 'kat4', 'brand',
     'qty', 'harga', 'sales_person', 'gross', 'promo_value', 'promo_name', 'coupon', 'discount', 'net',
@@ -59,11 +59,15 @@ const TABS = {
   bin_upload: ['id', 'waktu', 'username', 'nama_file', 'baris', 'sku', 'pcs'],
   varian_pertama: ['varian', 'generic', 'pertama', 'baseline'],
   master: ['varian', 'generic', 'nama', 'warna', 'dibuat', 'dibuat_terbaru', 'season', 'collection', 'story', 'gender', 'activity',
-    'lv2', 'lv3', 'lv4', 'dc_status', 'product_status', 'grade', 'harga']
+    'lv2', 'lv3', 'lv4', 'dc_status', 'product_status', 'grade', 'harga'],
+  target_ra: ['bulan', 'ra', 'target', 'diubah', 'oleh'],
+  pengumuman: ['id', 'dibuat', 'oleh', 'nama', 'judul', 'isi', 'penting', 'aktif', 'diubah'],
+  pengumuman_baca: ['id', 'username', 'waktu'],
+  handover: ['id', 'waktu', 'tanggal', 'shift', 'username', 'nama', 'isi', 'foto']
 };
 
 const PECAHAN = [100000, 50000, 20000, 10000, 5000, 2000, 1000, 500, 200, 100];
-const SETTING_DEFAULTS = { modal_till: 600000, floating_cash: 2400000, target_upt: 2, target_basket: 0, dok_max_mb: 300, dok_batas_open: 630, dok_batas_close: 1350 };
+const SETTING_DEFAULTS = { modal_till: 600000, floating_cash: 2400000, target_upt: 2, target_basket: 0, dok_max_mb: 300, dok_batas_open: 630, dok_batas_close: 1350, na_hari: 60 };
 
 // Kolom yang disimpan sebagai teks (supaya tanggal/kode tidak diubah Sheets)
 const NUM_COLS = {
@@ -77,7 +81,8 @@ const NUM_COLS = {
   ringkasan: ['bruto', 'netto', 'qty', 'trx'],
   bin: ['total', 'available', 'allocated', 'proses'],
   bin_upload: ['baris', 'sku', 'pcs'],
-  master: ['harga']
+  master: ['harga'],
+  target_ra: ['target']
 };
 const DSR_FIELDS = TABS.dsr.filter(function (f) { return f !== 'upload_id'; }); // urutan kolom yang dikirim web
 
@@ -1649,13 +1654,18 @@ Object.assign(API, {
     const batasLama = addDays_(today, -60);
     const log = read_('notifikasi').filter(function (n) {
       const to = String(n.untuk);
-      return (to === u.username || (admin && to === 'admin')) && String(n.waktu).slice(0, 10) >= batasLama;
+      return (to === u.username || to === 'semua' || (admin && to === 'admin')) && String(n.waktu).slice(0, 10) >= batasLama;
     }).slice(-60).reverse().map(function (n) {
       const dib = String(n.dibaca || '').split(',').indexOf(u.username) >= 0;
       return { id: String(n.id), live: false, level: String(n.level), jenis: String(n.jenis), waktu: String(n.waktu),
         judul: String(n.judul), isi: String(n.isi), link: String(n.link), dibaca: dib };
     });
 
+    try {
+      const sudah = {};
+      read_('pengumuman_baca').forEach(function (x) { if (x.username === u.username) sudah[String(x.id)] = 1; });
+      badges.peng = read_('pengumuman').filter(function (p) { return p.aktif !== 'tidak' && !sudah[String(p.id)]; }).length;
+    } catch (e) { badges.peng = 0; }
     const live = items.sort(function (a, b) { return a.level === b.level ? (a.waktu < b.waktu ? 1 : -1) : (a.level === 'aksi' ? -1 : 1); });
     const unread = live.length + log.filter(function (n) { return !n.dibaca && n.level !== 'info'; }).length;
     return { items: live.concat(log), unread: unread, badges: badges, waktu: now_() };
@@ -1669,7 +1679,7 @@ Object.assign(API, {
       let n = 0;
       all.forEach(function (x) {
         const to = String(x.untuk);
-        if (!(to === u.username || (u.role === 'admin' && to === 'admin'))) return;
+        if (!(to === u.username || to === 'semua' || (u.role === 'admin' && to === 'admin'))) return;
         if (ids && ids.indexOf(String(x.id)) < 0) return;
         const list = String(x.dibaca || '').split(',').filter(String);
         if (list.indexOf(u.username) >= 0) return;
@@ -1785,7 +1795,7 @@ Object.assign(API, {
     read_('varian_pertama').forEach(function (x) { pertama[String(x.varian)] = x.baseline === 'ya' ? '' : String(x.pertama); });
     return {
       upload: last ? { waktu: String(last.waktu), nama: namaUser_(last.username), file: String(last.nama_file), pcs: Number(last.pcs), sku: Number(last.sku) } : null,
-      kolom: F, rows: rows, pertama: pertama, today: today_(), naHari: CFG.NA_HARI, baruHari: CFG.BARU_TOKO_HARI
+      kolom: F, rows: rows, pertama: pertama, today: today_(), naHari: Number(settings_().na_hari) || CFG.NA_HARI
     };
   },
 
@@ -1803,7 +1813,7 @@ Object.assign(API, {
     const F = TABS.master;
     const out = {};
     read_('master').forEach(function (o) { out[String(o.varian)] = F.slice(1).map(function (k) { return o[k]; }); });
-    return { kolom: F.slice(1), map: out, info: prop_('master_loaded'), today: today_(), naHari: CFG.NA_HARI };
+    return { kolom: F.slice(1), map: out, info: prop_('master_loaded'), today: today_(), naHari: Number(settings_().na_hari) || CFG.NA_HARI };
   },
 
   masterStatus: function (req) {
@@ -2113,16 +2123,18 @@ Object.assign(API, {
 function dokBaca_(bulan) {
   const root = DriveApp.getFolderById(DOK_FOLDER_ID);
   const out = [];
+  const ambil = function (folder, depth) {
+    const fi = folder.getFiles();
+    while (fi.hasNext()) {
+      const x = fi.next(), m = String(x.getName()).match(DOK_RE);
+      if (m) out.push({ id: x.getId(), nama: x.getName(), tanggal: m[1], jenis: m[2], oleh: m[3], jam: m[4].slice(0, 2) + ':' + m[4].slice(2), size: x.getSize() });
+    }
+    if (depth > 0) { const sub = folder.getFolders(); while (sub.hasNext()) ambil(sub.next(), depth - 1); }
+  };
   const it = root.getFolders();
   while (it.hasNext()) {
     const f = it.next();
-    if (String(f.getName()).indexOf(bulan) !== 0) continue;
-    const fi = f.getFiles();
-    while (fi.hasNext()) {
-      const x = fi.next(), m = String(x.getName()).match(DOK_RE);
-      if (!m) continue;
-      out.push({ id: x.getId(), nama: x.getName(), tanggal: m[1], jenis: m[2], oleh: m[3], jam: m[4].slice(0, 2) + ':' + m[4].slice(2), size: x.getSize() });
-    }
+    if (String(f.getName()).indexOf(bulan) === 0) ambil(f, 1); // folder bulan + subfolder harian
   }
   return out.sort(function (a, b) { return a.tanggal === b.tanggal ? (a.jam < b.jam ? -1 : 1) : (a.tanggal < b.tanggal ? 1 : -1); });
 }
@@ -2146,4 +2158,320 @@ function cekDokumentasi_() {
     const jam = pad_(Math.floor(c[1] / 60)) + '.' + pad_(c[1] % 60);
     withLock_(function () { notif_('admin', 'cek', 'video', 'Video ' + c[0].toLowerCase() + ' hari ini belum diunggah', 'Batas pukul ' + jam + ' sudah lewat', '#/dokumentasi'); });
   });
+}
+
+/* =====================================================================
+ * TAHAP 8: performa produk, target RA, laporan mingguan, pengumuman, handover
+ * ===================================================================== */
+
+Object.assign(API, {
+  /** Data penjualan per generic untuk kriteria laku & saran request. */
+  perfData: function (req) {
+    auth_(req);
+    const today = today_();
+    return cached_('perf_' + today, 1800, function () {
+      const d180 = addDays_(today, -182), d30 = addDays_(today, -30);
+      const G = {}, V = {};
+      read_('dsr').forEach(function (r) {
+        if (!isSalesLine_(r)) return;
+        const t = String(r.tanggal), q = Number(r.qty) || 0, sku = String(r.sku);
+        const g = sku.length > 9 ? sku.slice(0, 9) : sku;
+        const o = G[g] || (G[g] = { q6: 0, q30: 0, first: t, last: t });
+        if (t < o.first) o.first = t;
+        if (t > o.last) o.last = t;
+        if (t >= d180) o.q6 += q;
+        if (t >= d30) {
+          o.q30 += q;
+          const vk = varianKey_(sku, r.nama_sku);
+          V[vk] = (V[vk] || 0) + q;
+        }
+      });
+      const firstBin = {};
+      read_('varian_pertama').forEach(function (x) {
+        const g = String(x.generic), t = String(x.pertama);
+        if (t && (!firstBin[g] || t < firstBin[g])) firstBin[g] = t;
+      });
+      return {
+        today: today, dari6: d180,
+        gen: Object.keys(G).map(function (k) { const o = G[k]; return [k, o.q6, o.q30, o.first, o.last]; }),
+        firstBin: firstBin,
+        var30: V
+      };
+    });
+  },
+
+  /* ---------- target per RA ---------- */
+  raTarget: function (req) {
+    const u = auth_(req);
+    const bulan = /^\d{4}-\d{2}$/.test(String(req.bulan || '')) ? String(req.bulan) : today_().slice(0, 7);
+    const targets = {};
+    read_('target_ra').filter(function (x) { return String(x.bulan) === bulan; }).forEach(function (x) { targets[String(x.ra)] = Number(x.target) || 0; });
+    const ras = raNames_(bulan);
+    const t = read_('targets').filter(function (x) { return String(x.bulan) === bulan; })[0];
+    const users = u.role === 'admin' ? read_('users').filter(function (x) { return x.status === 'aktif'; }).map(function (x) {
+      return { username: x.username, nama: x.nama, namaDsr: resolveNamaDsr_(x, ras), manual: String(x.nama_dsr || '') };
+    }) : null;
+    return { bulan: bulan, targets: targets, ras: ras, targetToko: t ? Number(t.target) : null, users: users };
+  },
+
+  raTargetSet: function (req) {
+    const a = auth_(req, true);
+    const bulan = String(req.bulan || '');
+    if (!/^\d{4}-\d{2}$/.test(bulan)) throw new Error('Bulan tidak valid');
+    const list = (req.list || []).map(function (x) {
+      const n = Number(x.target);
+      if (!isFinite(n) || n < 0) throw new Error('Target ' + x.ra + ' tidak valid');
+      return { bulan: bulan, ra: String(x.ra || '').trim(), target: Math.round(n), diubah: now_(), oleh: a.username };
+    }).filter(function (x) { return x.ra; });
+    return withLock_(function () {
+      const keep = read_('target_ra').filter(function (x) { return String(x.bulan) !== bulan; });
+      writeAll_('target_ra', keep.concat(list));
+      log_(a.username, 'target RA', bulan + ' · ' + list.length + ' orang');
+      return true;
+    });
+  },
+
+  setNamaDsr: function (req) {
+    const a = auth_(req, true);
+    const target = cleanUser_(req.username);
+    const nd = String(req.namaDsr || '').trim();
+    return withLock_(function () {
+      if (!updateRow_('users', 'username', target, { nama_dsr: nd })) throw new Error('User tidak ditemukan');
+      log_(a.username, 'nama di DSR', target + ' → ' + (nd || '(otomatis)'));
+      return true;
+    });
+  },
+
+  /** Pencapaian pribadi bulan ini untuk Beranda. */
+  saya: function (req) {
+    const u = auth_(req);
+    const today = today_(), bulan = today.slice(0, 7);
+    const ras = raNames_(bulan);
+    const nama = resolveNamaDsr_(u, ras);
+    const by = {};
+    read_('dsr').forEach(function (r) {
+      if (String(r.tanggal).slice(0, 7) !== bulan || !isSalesLine_(r)) return;
+      const sp = String(r.sales_person || '').trim();
+      if (!sp) return;
+      const o = by[sp] || (by[sp] = { b: 0, n: 0, q: 0, inv: {} });
+      o.b += Number(r.gross) || 0; o.n += Number(r.net) || 0; o.q += Number(r.qty) || 0; o.inv[String(r.invoice)] = 1;
+    });
+    const list = Object.keys(by).map(function (k) { const o = by[k]; return { ra: k, b: Math.round(o.b), n: Math.round(o.n), q: o.q, trx: Object.keys(o.inv).length }; });
+    const tg = read_('target_ra').filter(function (x) { return String(x.bulan) === bulan && String(x.ra) === nama; })[0];
+    const p = today.split('-').map(Number), dim = new Date(Date.UTC(p[0], p[1], 0)).getUTCDate();
+    return { bulan: bulan, nama: nama, list: list, target: tg ? Number(tg.target) : null, dataSampai: latestDate_(), sisaHari: dim - p[2] + 1 };
+  },
+
+  /* ---------- laporan mingguan ---------- */
+  mingguan: function (req) {
+    auth_(req);
+    const dari = String(req.dari || ''), sampai = String(req.sampai || '');
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dari) || !/^\d{4}-\d{2}-\d{2}$/.test(sampai) || dari > sampai) throw new Error('Rentang tanggal tidak valid');
+    return cached_('ming_' + dari + '_' + sampai, 600, function () {
+      const rows = read_('dsr').filter(function (r) { const t = String(r.tanggal); return t >= dari && t <= sampai; });
+      const H = {}, inv = {}, vr = {}, ra = {};
+      rows.forEach(function (r) {
+        if (!isSalesLine_(r)) return;
+        const t = String(r.tanggal), g = Number(r.gross) || 0, n = Number(r.net) || 0, q = Number(r.qty) || 0, k = String(r.invoice);
+        const h = H[t] || (H[t] = { b: 0, n: 0, q: 0, inv: {} });
+        h.b += g; h.n += n; h.q += q; h.inv[k] = 1;
+        const I = inv[k] || (inv[k] = { q: 0, b: 0, n: 0, ws: false });
+        I.q += q; I.b += g; I.n += n; if (String(r.tipe || '').toLowerCase().indexOf('wholesale') >= 0) I.ws = true;
+        const vk = varianKey_(r.sku, r.nama_sku), parts = String(r.nama_sku).split(',');
+        const V = vr[vk] || (vr[vk] = { nama: parts.length >= 3 ? parts.slice(0, parts.length - 2).join(',').trim() + ' ' + parts[parts.length - 2].trim() : String(r.nama_sku), q: 0, b: 0, n: 0 });
+        V.q += q; V.b += g; V.n += n;
+        const sp = String(r.sales_person || '').trim() || '(tanpa nama)';
+        const R = ra[sp] || (ra[sp] = { b: 0, n: 0, q: 0, inv: {} });
+        R.b += g; R.n += n; R.q += q; R.inv[k] = 1;
+      });
+      // target harian = target bulan × bobot hari itu
+      const tg = {}; read_('targets').forEach(function (x) { tg[String(x.bulan)] = Number(x.target); });
+      const bb = {}; read_('bobot').forEach(function (x) { bb[String(x.tanggal)] = Number(x.harian); });
+      const tr = {}; read_('traffic').forEach(function (x) { if (x.traffic !== '') tr[String(x.tanggal)] = Number(x.traffic); });
+      const hari = [];
+      for (let t = dari; t <= sampai; t = addDays_(t, 1)) {
+        const h = H[t] || { b: 0, n: 0, q: 0, inv: {} };
+        const target = tg[t.slice(0, 7)] && bb[t] != null ? Math.round(tg[t.slice(0, 7)] * bb[t]) : null;
+        hari.push({ tanggal: t, bruto: Math.round(h.b), netto: Math.round(h.n), qty: h.q, trx: Object.keys(h.inv).length, target: target, traffic: tr[t] != null ? tr[t] : null });
+      }
+      let kp = { q: 0, b: 0, n: 0, t: 0, partai: 0 };
+      Object.keys(inv).forEach(function (k) { const o = inv[k]; if (o.ws || o.q >= PARTAI_MIN_QTY) { kp.partai++; return; } kp.q += o.q; kp.b += o.b; kp.n += o.n; kp.t++; });
+      const kas = read_('kas').filter(function (x) { const t = String(x.tanggal); return t >= dari && t <= sampai; }).map(kasOut_);
+      const kasSum = { hitung: kas.length, selisih: 0, kurang: 0, lebih: 0, list: [] };
+      kas.forEach(function (x) {
+        if (x.selisih == null || !x.selisih) return;
+        kasSum.selisih++;
+        if (x.selisih < 0) kasSum.kurang += -x.selisih; else kasSum.lebih += x.selisih;
+        kasSum.list.push([x.tanggal, x.nama, x.pos, x.selisih, x.catatan]);
+      });
+      let dok = null;
+      try {
+        const items = dokBaca_(dari.slice(0, 7)).concat(dari.slice(0, 7) !== sampai.slice(0, 7) ? dokBaca_(sampai.slice(0, 7)) : []);
+        const d = {}; items.forEach(function (x) { if (x.tanggal >= dari && x.tanggal <= sampai) (d[x.tanggal] = d[x.tanggal] || {})[x.jenis] = 1; });
+        let lengkap = 0; Object.keys(d).forEach(function (k) { if (d[k].OPENING && d[k].CLOSING) lengkap++; });
+        dok = { lengkap: lengkap, hari: hari.length, ada: Object.keys(d).length };
+      } catch (e) { dok = null; }
+      return {
+        dari: dari, sampai: sampai, hari: hari,
+        kpi: { upt: kp.t ? kp.q / kp.t : null, basketB: kp.t ? kp.b / kp.t : null, basketN: kp.t ? kp.n / kp.t : null, trx: kp.t, partai: kp.partai },
+        varian: Object.keys(vr).map(function (k) { const x = vr[k]; return [k, x.nama, x.q, Math.round(x.b), Math.round(x.n)]; }).sort(function (a, b) { return b[4] - a[4]; }),
+        ra: Object.keys(ra).map(function (k) { const x = ra[k]; return [k, Math.round(x.b), Math.round(x.n), x.q, Object.keys(x.inv).length]; }).sort(function (a, b) { return b[2] - a[2]; }),
+        kas: kasSum, dok: dok, dataSampai: latestDate_()
+      };
+    });
+  },
+
+  /* ---------- pengumuman ---------- */
+  pengList: function (req) {
+    const u = auth_(req);
+    const baca = read_('pengumuman_baca');
+    const users = read_('users').filter(function (x) { return x.status === 'aktif'; });
+    const list = read_('pengumuman').filter(function (p) { return p.aktif !== 'tidak' || u.role === 'admin'; }).reverse().map(function (p) {
+      const b = baca.filter(function (x) { return String(x.id) === String(p.id); });
+      const o = { id: String(p.id), dibuat: String(p.dibuat), nama: String(p.nama), judul: String(p.judul), isi: String(p.isi), penting: p.penting === 'ya', aktif: p.aktif !== 'tidak', diubah: String(p.diubah || ''),
+        dibaca: b.some(function (x) { return x.username === u.username; }), jumlahBaca: b.length, jumlahTim: users.length };
+      if (u.role === 'admin') {
+        const sudah = {}; b.forEach(function (x) { sudah[x.username] = String(x.waktu); });
+        o.pembaca = users.map(function (x) { return { nama: x.nama, waktu: sudah[x.username] || '' }; });
+      }
+      return o;
+    });
+    return { list: list };
+  },
+
+  pengSave: function (req) {
+    const a = auth_(req, true);
+    const judul = String(req.judul || '').trim().slice(0, 120), isi = String(req.isi || '').trim().slice(0, 3000);
+    if (!judul) throw new Error('Judul wajib diisi');
+    if (!isi) throw new Error('Isi pengumuman wajib diisi');
+    return withLock_(function () {
+      if (req.id) {
+        if (!updateRow_('pengumuman', 'id', String(req.id), { judul: judul, isi: isi, penting: req.penting ? 'ya' : '', diubah: now_() })) throw new Error('Pengumuman tidak ditemukan');
+        if (req.ulangBaca) writeAll_('pengumuman_baca', read_('pengumuman_baca').filter(function (x) { return String(x.id) !== String(req.id); }));
+        log_(a.username, 'ubah pengumuman', judul);
+        return { id: String(req.id) };
+      }
+      const id = Utilities.formatDate(new Date(), CFG.TZ, 'yyyyMMddHHmmss');
+      append_('pengumuman', { id: id, dibuat: now_(), oleh: a.username, nama: a.nama, judul: judul, isi: isi, penting: req.penting ? 'ya' : '', aktif: 'ya', diubah: '' });
+      append_('pengumuman_baca', { id: id, username: a.username, waktu: now_() });
+      notif_('semua', req.penting ? 'cek' : 'info', 'pengumuman', '📢 ' + judul, isi.slice(0, 140), '#/pengumuman');
+      log_(a.username, 'pengumuman baru', judul);
+      return { id: id };
+    });
+  },
+
+  pengArsip: function (req) {
+    const a = auth_(req, true);
+    return withLock_(function () {
+      if (!updateRow_('pengumuman', 'id', String(req.id), { aktif: req.aktif ? 'ya' : 'tidak' })) throw new Error('Pengumuman tidak ditemukan');
+      log_(a.username, req.aktif ? 'aktifkan pengumuman' : 'arsipkan pengumuman', String(req.id));
+      return true;
+    });
+  },
+
+  pengBaca: function (req) {
+    const u = auth_(req);
+    return withLock_(function () {
+      const ada = read_('pengumuman_baca').some(function (x) { return String(x.id) === String(req.id) && x.username === u.username; });
+      if (!ada) append_('pengumuman_baca', { id: String(req.id), username: u.username, waktu: now_() });
+      return true;
+    });
+  },
+
+  /* ---------- handover dari foto buku ---------- */
+  hoOcr: function (req) {
+    const u = auth_(req);
+    const b64 = String(req.gambar || '');
+    if (!b64 || b64.length > 8 * 1024 * 1024) throw new Error('Foto tidak valid atau terlalu besar');
+    const tgl = today_();
+    const blob = Utilities.newBlob(Utilities.base64Decode(b64), 'image/jpeg', tgl + ' handover ' + u.username + ' ' + Utilities.formatDate(new Date(), CFG.TZ, 'HHmmss') + '.jpg');
+    const foto = folderHandover_(tgl).createFile(blob);
+    try { foto.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW); } catch (e) {}
+    let teks = '';
+    try { teks = ocr_(blob); } catch (e) { teks = ''; Logger.log('OCR: ' + e); }
+    return { teks: teks, foto: foto.getId() };
+  },
+
+  hoSave: function (req) {
+    const u = auth_(req);
+    const isi = String(req.isi || '').trim().slice(0, 5000);
+    const tgl = /^\d{4}-\d{2}-\d{2}$/.test(String(req.tanggal || '')) ? String(req.tanggal) : today_();
+    const shift = ['Pagi → Siang', 'Siang → Closing', 'Closing → Pagi', 'Lainnya'].indexOf(req.shift) >= 0 ? req.shift : 'Lainnya';
+    const foto = (req.foto || []).map(String).filter(function (x) { return /^[\w-]{20,}$/.test(x); }).slice(0, 6).join(',');
+    if (!isi && !foto) throw new Error('Isi handover atau foto wajib ada');
+    return withLock_(function () {
+      const id = Utilities.formatDate(new Date(), CFG.TZ, 'yyyyMMddHHmmss') + '-' + u.username;
+      append_('handover', { id: id, waktu: now_(), tanggal: tgl, shift: shift, username: u.username, nama: u.nama, isi: isi, foto: foto });
+      notif_('semua', 'info', 'handover', 'Handover ' + shift + ' dari ' + u.nama, isi.slice(0, 140) || '(foto)', '#/handover');
+      log_(u.username, 'handover', shift + ' ' + tgl);
+      return { id: id };
+    });
+  },
+
+  hoList: function (req) {
+    auth_(req);
+    return read_('handover').slice(-60).reverse().map(function (x) {
+      return { id: String(x.id), waktu: String(x.waktu), tanggal: String(x.tanggal), shift: String(x.shift), nama: String(x.nama), username: String(x.username), isi: String(x.isi), foto: String(x.foto || '').split(',').filter(String) };
+    });
+  }
+});
+
+function normDsr_(s) { return String(s || '').toUpperCase().replace(/[^A-Z ]/g, ' ').replace(/\s+/g, ' ').trim(); }
+/** Nama sales person (RA) di DSR bulan ini & bulan lalu. */
+function raNames_(bulan) {
+  const p = bulan.split('-').map(Number);
+  const lm = p[1] === 1 ? (p[0] - 1) + '-12' : p[0] + '-' + pad_(p[1] - 1);
+  const set = {};
+  const sh = sh_('dsr'), last = sh.getLastRow();
+  if (last < 2) return [];
+  const iT = TABS.dsr.indexOf('tanggal'), iS = TABS.dsr.indexOf('sales_person');
+  sh.getRange(2, 1, last - 1, TABS.dsr.length).getValues().forEach(function (r) {
+    const m = String(r[iT]).slice(0, 7);
+    const sp = String(r[iS] || '').trim();
+    if (sp && (m === bulan || m === lm)) set[sp] = 1;
+  });
+  return Object.keys(set).sort();
+}
+function resolveNamaDsr_(user, ras) {
+  if (!user) return '';
+  if (String(user.nama_dsr || '').trim()) return String(user.nama_dsr).trim();
+  const n = normDsr_(user.nama);
+  if (!n) return '';
+  const exact = ras.filter(function (s) { return normDsr_(s) === n; })[0];
+  if (exact) return exact;
+  const w = n.split(' ');
+  const part = ras.filter(function (s) { const x = normDsr_(s); return x.indexOf(n) === 0 || n.indexOf(x) === 0 || (w.length > 1 && x.indexOf(w[0] + ' ' + w[1]) === 0); });
+  if (part.length === 1) return part[0];
+  const first = ras.filter(function (s) { return normDsr_(s).split(' ')[0] === w[0]; });
+  return first.length === 1 ? first[0] : '';
+}
+
+function folderHandover_(tgl) {
+  const it = DriveApp.getFoldersByName('Handover Basecamp 2299');
+  const root = it.hasNext() ? it.next() : DriveApp.createFolder('Handover Basecamp 2299');
+  const name = tgl.slice(0, 7);
+  const s = root.getFoldersByName(name);
+  return s.hasNext() ? s.next() : root.createFolder(name);
+}
+
+/** Baca teks dari gambar memakai OCR Google Drive (gambar → Google Docs → teks). */
+function ocr_(blob) {
+  const boundary = 'bc2299' + Date.now();
+  const meta = { name: 'ocr-tmp-' + Date.now(), mimeType: 'application/vnd.google-apps.document' };
+  const head = '--' + boundary + '\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n' + JSON.stringify(meta) + '\r\n--' + boundary + '\r\nContent-Type: image/jpeg\r\n\r\n';
+  const tail = '\r\n--' + boundary + '--';
+  const payload = Utilities.newBlob(head).getBytes().concat(blob.getBytes()).concat(Utilities.newBlob(tail).getBytes());
+  const tok = ScriptApp.getOAuthToken();
+  const r = UrlFetchApp.fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&ocrLanguage=id&fields=id', {
+    method: 'post', contentType: 'multipart/related; boundary=' + boundary, payload: payload, muteHttpExceptions: true,
+    headers: { Authorization: 'Bearer ' + tok }
+  });
+  if (r.getResponseCode() !== 200) throw new Error('OCR gagal (' + r.getResponseCode() + ')');
+  const id = JSON.parse(r.getContentText()).id;
+  try {
+    const t = UrlFetchApp.fetch('https://www.googleapis.com/drive/v3/files/' + id + '/export?mimeType=text/plain', { headers: { Authorization: 'Bearer ' + tok }, muteHttpExceptions: true });
+    return t.getResponseCode() === 200 ? t.getContentText().replace(/^﻿/, '').replace(/\r/g, '').replace(/\n{3,}/g, '\n\n').trim() : '';
+  } finally {
+    try { DriveApp.getFileById(id).setTrashed(true); } catch (e) {}
+  }
 }

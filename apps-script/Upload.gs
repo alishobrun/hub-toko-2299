@@ -70,6 +70,27 @@ function folderBulan_(tgl) {
   const it = root.getFoldersByName(name);
   return it.hasNext() ? it.next() : root.createFolder(name);
 }
+/** Folder harian di dalam folder bulan, mis. "2026-10 OKTOBER/2026-10-26". */
+function folderHari_(tgl) {
+  const m = folderBulan_(tgl);
+  const it = m.getFoldersByName(tgl);
+  return it.hasNext() ? it.next() : m.createFolder(tgl);
+}
+/** Sekali jalan: pindahkan video yang masih di folder bulan ke folder harian. */
+function rapikanHarian() {
+  const subs = DriveApp.getFolderById(UP.FOLDER_ID).getFolders();
+  let n = 0;
+  while (subs.hasNext()) {
+    const files = subs.next().getFiles();
+    while (files.hasNext()) {
+      const f = files.next(), m = String(f.getName()).match(/^(\d{4}-\d{2}-\d{2}) (OPENING|CLOSING) /);
+      if (!m) continue;
+      f.moveTo(folderHari_(m[1])); n++;
+    }
+  }
+  Logger.log('Dipindah: ' + n);
+  return n;
+}
 function bersihNama_(s) { return String(s || '').replace(/[\\/:*?"<>|#%]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 40); }
 
 /* ---------- unggah (Drive resumable upload) ---------- */
@@ -79,7 +100,7 @@ function start_(req, t) {
   if (size > t.max) throw new Error('Video ' + Math.round(size / 1048576) + ' MB, maksimal ' + Math.round(t.max / 1048576) + ' MB');
   const mime = /^video\//.test(String(req.mime || '')) ? String(req.mime) : 'video/mp4';
   const ext = String(req.ext || 'mp4').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 5) || 'mp4';
-  const folder = folderBulan_(t.t);
+  const folder = folderHari_(t.t);
   const nama = t.t + ' ' + t.j + ' - ' + bersihNama_(t.n) + ' ' + t.h + '.' + ext;
   const meta = { name: nama, parents: [folder.getId()], mimeType: mime, description: 'Basecamp 2299 · ' + t.j + ' · ' + t.n + ' (' + t.u + ')' };
   const r = UrlFetchApp.fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable&supportsAllDrives=true&fields=id,name,size', {
@@ -148,12 +169,13 @@ function bersihkan() {
   const hari = Number(PropertiesService.getScriptProperties().getProperty('RETENSI_HARI') || 0);
   if (!hari) return;
   const batas = Date.now() - hari * 864e5;
-  const subs = DriveApp.getFolderById(UP.FOLDER_ID).getFolders();
-  while (subs.hasNext()) {
-    const files = subs.next().getFiles();
+  const sapu = function (folder, depth) {
+    const files = folder.getFiles();
     while (files.hasNext()) {
       const f = files.next();
       if (/^\d{4}-\d{2}-\d{2} (OPENING|CLOSING) /.test(f.getName()) && f.getDateCreated().getTime() < batas) f.setTrashed(true);
     }
-  }
+    if (depth > 0) { const sub = folder.getFolders(); while (sub.hasNext()) sapu(sub.next(), depth - 1); }
+  };
+  sapu(DriveApp.getFolderById(UP.FOLDER_ID), 2);
 }
