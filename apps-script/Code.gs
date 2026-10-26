@@ -11,7 +11,7 @@
 /** Versi kode. WAJIB dinaikkan setiap kali Code.gs diubah (format yyyy-MM-dd.n),
  *  lalu simpan ke GitHub (alishobrun/hub-toko-2299) SEBELUM dipasang. Halaman Kesehatan Data
  *  membandingkan angka ini dengan GitHub supaya kode yang dipasang di luar GitHub ketahuan. */
-const KODE_VERSI = '2026-10-27.1';
+const KODE_VERSI = '2026-10-27.2';
 
 const CFG = {
   STORE: '2299',
@@ -864,7 +864,7 @@ Object.assign(API, {
     auth_(req);
     const bulan = /^\d{4}-\d{2}$/.test(String(req.bulan || '')) ? String(req.bulan) : latestDate_().slice(0, 7);
     return cached_('lap_' + bulan, 600, function () {
-      const rows = read_('dsr').filter(function (r) { return String(r.tanggal).slice(0, 7) === bulan; });
+      const rows = dsrBulan_(bulan);
       const out = laporan_(rows);
       try { out.raHO = raHO_(rows, raToko_(bulan, rows)); } catch (e) { out.raHO = null; }
       out.bulan = bulan;
@@ -1567,7 +1567,7 @@ Object.assign(API, {
     const tgl = /^\d{4}-\d{2}-\d{2}$/.test(String(req.tanggal || '')) ? String(req.tanggal) : latestDate_();
     syncTrafficIfNeeded_();
     return cached_('hari_' + tgl, 600, function () {
-      const rows = read_('dsr').filter(function (r) { return String(r.tanggal) === tgl; });
+      const rows = dsrRange_(tgl, tgl);
       const out = hari_(rows);
       out.tanggal = tgl;
       const tr = read_('traffic').filter(function (x) { return String(x.tanggal) === tgl; })[0];
@@ -2340,7 +2340,7 @@ Object.assign(API, {
       return { username: x.username, nama: x.nama, namaDsr: resolveNamaDsr_(x, ras), manual: String(x.nama_dsr || '') };
     }) : null;
     let toko = [];
-    try { toko = raToko_(bulan, read_('dsr').filter(function (r) { return String(r.tanggal).slice(0, 7) === bulan; })); } catch (e) { toko = []; }
+    try { toko = raToko_(bulan, dsrBulan_(bulan)); } catch (e) { toko = []; }
     return { bulan: bulan, targets: targets, ras: ras, raToko: toko, targetToko: t ? Number(t.target) : null, users: users };
   },
 
@@ -2378,7 +2378,7 @@ Object.assign(API, {
     const today = today_(), bulan = today.slice(0, 7);
     const ras = raNames_(bulan);
     const nama = resolveNamaDsr_(u, ras);
-    const rowsM = read_('dsr').filter(function (r) { return String(r.tanggal).slice(0, 7) === bulan; });
+    const rowsM = dsrBulan_(bulan);
     const H = raHO_(rowsM, raToko_(bulan, rowsM));
     const list = H.list.map(function (x) { return { ra: x.nama, b: x.b, n: x.n, q: x.q, trx: x.trx, ownB: x.ownB, ownN: x.ownN, shareB: H.share.b, shareN: H.share.n }; });
     const tg = read_('target_ra').filter(function (x) { return String(x.bulan) === bulan && String(x.ra) === nama; })[0];
@@ -2392,7 +2392,7 @@ Object.assign(API, {
     const dari = String(req.dari || ''), sampai = String(req.sampai || '');
     if (!/^\d{4}-\d{2}-\d{2}$/.test(dari) || !/^\d{4}-\d{2}-\d{2}$/.test(sampai) || dari > sampai) throw new Error('Rentang tanggal tidak valid');
     return cached_('ming_' + dari + '_' + sampai, 600, function () {
-      const rows = read_('dsr').filter(function (r) { const t = String(r.tanggal); return t >= dari && t <= sampai; });
+      const rows = dsrRange_(dari, sampai);
       const H = {}, inv = {}, vr = {}, ra = {};
       rows.forEach(function (r) {
         if (!isSalesLine_(r)) return;
@@ -2550,13 +2550,9 @@ function raNames_(bulan) {
   const p = bulan.split('-').map(Number);
   const lm = p[1] === 1 ? (p[0] - 1) + '-12' : p[0] + '-' + pad_(p[1] - 1);
   const set = {};
-  const sh = sh_('dsr'), last = sh.getLastRow();
-  if (last < 2) return [];
-  const iT = TABS.dsr.indexOf('tanggal'), iS = TABS.dsr.indexOf('sales_person');
-  sh.getRange(2, 1, last - 1, TABS.dsr.length).getValues().forEach(function (r) {
-    const m = String(r[iT]).slice(0, 7);
-    const sp = String(r[iS] || '').trim();
-    if (sp && (m === bulan || m === lm)) set[sp] = 1;
+  dsrBulan_(lm).concat(dsrBulan_(bulan)).forEach(function (r) {
+    const sp = String(r.sales_person || '').trim();
+    if (sp) set[sp] = 1;
   });
   return Object.keys(set).sort();
 }
@@ -2945,8 +2941,7 @@ Object.assign(API, {
     const bulan = /^\d{4}-\d{2}$/.test(String(req.bulan || '')) ? String(req.bulan) : latestDate_().slice(0, 7);
     const act = {}, trx = [];
     OMNI_JENIS.forEach(function (j) { act[j[0]] = 0; });
-    read_('dsr').forEach(function (r) {
-      if (String(r.tanggal).slice(0, 7) !== bulan) return;
+    dsrBulan_(bulan).forEach(function (r) {
       OMNI_JENIS.forEach(function (j) {
         if (!j[2](r)) return;
         const g = Number(r.gross) || 0;
@@ -2998,6 +2993,7 @@ function simpanDsr_(rows, u, fileName) {
       writeAll_('dsr', res.all);
       writeAll_('ringkasan', aggregateDaily_(res.all));
       bumpVersion_();
+      try { dsrCachePut_(res.all, null); } catch (e) { Logger.log('cache dsr: ' + e); } // rekap bulan terbaru langsung siap
     }
     log_(u.username, 'unggah DSR', res.dari + ' s/d ' + res.sampai + ': ' + res.baru + ' baru, ' + res.diperbarui + ' diperbarui');
     if (u.role !== 'admin') notif_('admin', 'info', 'dsr', u.username === 'email' ? 'DSR otomatis masuk dari email CARE' : 'DSR diunggah oleh ' + u.nama,
@@ -3093,6 +3089,7 @@ function labelOf_(name) { return GmailApp.getUserLabelByName(name) || GmailApp.c
 
 /** Dijalankan tiap 15 menit oleh pemicu waktu. */
 function cekEmailDsr() {
+  try { hangatkanDsr_(); } catch (e) { Logger.log('hangat dsr: ' + e); }
   const lab = labelOf_(DSR_EMAIL.LABEL), labGagal = labelOf_(DSR_EMAIL.LABEL_GAGAL);
   const threads = GmailApp.search('from:' + DSR_EMAIL.FROM + ' -label:' + DSR_EMAIL.LABEL + ' -label:' + DSR_EMAIL.LABEL_GAGAL + ' newer_than:3d', 0, 30);
   const msgs = [];
@@ -3952,4 +3949,76 @@ function versiGithub_() {
       return { versi: m ? m[1] : null };
     } catch (e) { return { versi: null, galat: String(e.message || e).slice(0, 60) }; }
   });
+}
+
+/* ===================== Cache DSR per bulan =====================
+ * Membaca seluruh tab dsr (±14 ribu baris) butuh beberapa detik. Baris tiap bulan disimpan
+ * di CacheService (dipotong per ~80 KB, 6 jam) dan langsung disiapkan ulang setiap DSR masuk,
+ * jadi menu RA, Saya, Target, Laporan, Mingguan & Omni tidak perlu membaca sheet lagi. */
+const DSR_CACHE_DETIK = 21600, DSR_POTONG = 80000;
+var DSR_MEMO_ = {};
+function dsrKunci_(bulan) { return 'dsrm_' + bulan + '_v' + (PropertiesService.getScriptProperties().getProperty('ver') || '0'); }
+function bulanIni_(iso) { return iso.slice(0, 7); }
+function geserBulan_(bulan, k) { const p = bulan.split('-').map(Number); let y = p[0], m = p[1] + k; while (m < 1) { m += 12; y--; } while (m > 12) { m -= 12; y++; } return y + '-' + pad_(m); }
+/** Simpan baris DSR ke cache untuk bulan-bulan tertentu (null = 3 bulan terakhir dari data). */
+function dsrCachePut_(all, months) {
+  if (!months) {
+    let mx = '';
+    all.forEach(function (r) { const t = String(r.tanggal); if (t > mx) mx = t; });
+    if (!mx) return;
+    const b = bulanIni_(mx); months = [geserBulan_(b, -2), geserBulan_(b, -1), b];
+  }
+  const by = {}; months.forEach(function (m) { by[m] = []; });
+  const H = TABS.dsr, NUM = NUM_COLS.dsr || [];
+  const val = function (r, k) { const v = r[k]; if (v == null || v === '') return ''; if (NUM.indexOf(k) >= 0) { const n = Number(v); return isNaN(n) ? v : n; } return v instanceof Date ? v : String(v); };
+  all.forEach(function (r) { const m = String(r.tanggal).slice(0, 7); if (by[m]) by[m].push(H.map(function (k) { return val(r, k); })); });
+  const c = CacheService.getScriptCache();
+  months.forEach(function (m) {
+    const key = dsrKunci_(m), txt = JSON.stringify(by[m]), put = {};
+    let n = 0;
+    for (let i = 0; i < txt.length; i += DSR_POTONG) put[key + '_' + (n++)] = txt.slice(i, i + DSR_POTONG);
+    put[key + '_n'] = String(n);
+    try { c.putAll(put, DSR_CACHE_DETIK); } catch (e) { Logger.log('cache dsr ' + m + ': ' + e); }
+    DSR_MEMO_[key] = by[m].map(function (a) { const o = {}; H.forEach(function (k, i) { o[k] = a[i]; }); return o; });
+  });
+}
+/** Baris DSR satu bulan (yyyy-MM), dari cache bila ada. */
+function dsrBulan_(bulan) {
+  const key = dsrKunci_(bulan);
+  if (DSR_MEMO_[key]) return DSR_MEMO_[key];
+  const c = CacheService.getScriptCache();
+  const n = Number(c.get(key + '_n') || 0);
+  if (n > 0) {
+    const keys = []; for (let i = 0; i < n; i++) keys.push(key + '_' + i);
+    const got = c.getAll(keys);
+    if (keys.every(function (k) { return got[k] != null; })) {
+      try {
+        const H = TABS.dsr;
+        const rows = JSON.parse(keys.map(function (k) { return got[k]; }).join('')).map(function (a) { const o = {}; H.forEach(function (k, i) { o[k] = a[i]; }); return o; });
+        DSR_MEMO_[key] = rows;
+        return rows;
+      } catch (e) { /* rusak → baca ulang */ }
+    }
+  }
+  // tidak ada di cache: baca sheet sekali, sekaligus siapkan bulan ini & 2 bulan terakhir
+  const all = read_('dsr');
+  const months = [bulan];
+  let mx = ''; all.forEach(function (r) { const t = String(r.tanggal); if (t > mx) mx = t; });
+  if (mx) { const b = bulanIni_(mx); [geserBulan_(b, -2), geserBulan_(b, -1), b].forEach(function (m) { if (months.indexOf(m) < 0) months.push(m); }); }
+  dsrCachePut_(all, months);
+  return DSR_MEMO_[key] || [];
+}
+/** Baris DSR dalam rentang tanggal (inklusif). */
+function dsrRange_(dari, sampai) {
+  const out = [];
+  for (let m = dari.slice(0, 7); m <= sampai.slice(0, 7); m = geserBulan_(m, 1)) {
+    dsrBulan_(m).forEach(function (r) { const t = String(r.tanggal); if (t >= dari && t <= sampai) out.push(r); });
+  }
+  return out;
+}
+/** Dipanggil pemicu 15 menit: pastikan cache bulan berjalan selalu siap. */
+function hangatkanDsr_() {
+  const b = bulanIni_(latestDate_());
+  const c = CacheService.getScriptCache();
+  if (!c.get(dsrKunci_(b) + '_n')) dsrBulan_(b);
 }
