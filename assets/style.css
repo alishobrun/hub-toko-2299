@@ -953,3 +953,7 @@ a.dok-home{display:block;color:inherit;text-decoration:none}
 .fb-item.saran{background:#FFFBEB}
 .fb-top{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .fb-top small{margin-left:auto}
+.scan-holder{position:relative}
+.scan-aim{position:absolute;left:4%;right:4%;top:50%;height:34%;transform:translateY(-50%);border:3px solid rgba(242,107,58,.95);border-radius:12px;box-shadow:0 0 0 2000px rgba(0,0,0,.28);pointer-events:none}
+.scan-aim::after{content:'';position:absolute;left:6px;right:6px;top:50%;height:2px;background:#F26B3A;opacity:.8}
+.scan-acts{display:flex;gap:8px;justify-content:center;padding:0 16px 14px;flex-wrap:wrap}

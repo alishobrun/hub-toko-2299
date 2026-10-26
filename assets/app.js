@@ -2726,44 +2726,101 @@
       document.head.appendChild(sc);
     });
   }
+  var H5Q = 'https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js';
+  var BC_FORMATS = ['code_128', 'ean_13', 'ean_8', 'code_39', 'upc_a', 'upc_e', 'itf', 'qr_code'];
+  function nativeDetector() {
+    if (!('BarcodeDetector' in window)) return Promise.resolve(null);
+    var get = window.BarcodeDetector.getSupportedFormats ? window.BarcodeDetector.getSupportedFormats() : Promise.resolve(BC_FORMATS);
+    return get.then(function (sup) {
+      var f = BC_FORMATS.filter(function (x) { return sup.indexOf(x) >= 0; });
+      if (f.indexOf('code_128') < 0 && f.indexOf('code_39') < 0) return null; // label EIGER: barcode garis (Code 128/39)
+      return new window.BarcodeDetector({ formats: f });
+    }).catch(function () { return null; });
+  }
+  function h5Formats() {
+    var F = window.Html5QrcodeSupportedFormats || {};
+    return ['CODE_128', 'EAN_13', 'EAN_8', 'CODE_39', 'UPC_A', 'UPC_E', 'ITF', 'QR_CODE'].map(function (k) { return F[k]; }).filter(function (x) { return x != null; });
+  }
+  /** Baca barcode dari foto (resolusi penuh, paling andal untuk barcode panjang). */
+  function decodePhoto(file) {
+    return nativeDetector().then(function (det) {
+      if (det && window.createImageBitmap) {
+        return createImageBitmap(file).then(function (bmp) { return det.detect(bmp); }).then(function (r) {
+          if (r && r.length) return r[0].rawValue;
+          throw new Error('Barcode tidak terbaca dari foto');
+        });
+      }
+      return loadScript(H5Q).then(function () {
+        var tmp = document.getElementById('scan-file-tmp') || document.body.appendChild(el('div', { id: 'scan-file-tmp', style: 'display:none' }));
+        var q = new window.Html5Qrcode('scan-file-tmp', { formatsToSupport: h5Formats(), verbose: false });
+        return q.scanFile(file, false).then(function (t) { try { q.clear(); } catch (e) {} return t; }, function () { try { q.clear(); } catch (e) {} throw new Error('Barcode tidak terbaca dari foto'); });
+      });
+    });
+  }
   function openScanner(onCode) {
-    var done = false, stream = null, timer = null, h5 = null;
+    var done = false, stream = null, timer = null, h5 = null, torchOn = false, hintT = null;
     var video = el('video', { class: 'scan-video', playsinline: true, muted: true, autoplay: true });
     var holder = el('div', { id: 'scan-holder', class: 'scan-holder' });
-    var msg = el('p', { class: 'scan-msg', text: 'Arahkan kamera ke barcode di label produk…' });
+    var aim = el('div', { class: 'scan-aim' });
+    var msg = el('p', { class: 'scan-msg', text: 'Pegang HP mendatar, barcode memenuhi garis bidik, jarak ±10–15 cm.' });
+    var torchBtn = el('button', { class: 'btn btn-ghost btn-sm', type: 'button', text: '🔦 Senter', style: 'display:none', onclick: function () {
+      if (!stream) return;
+      torchOn = !torchOn;
+      stream.getVideoTracks()[0].applyConstraints({ advanced: [{ torch: torchOn }] }).catch(function () { toast('Senter tidak didukung HP ini', true); });
+    } });
+    var fileIn = el('input', { type: 'file', accept: 'image/*', capture: 'environment', style: 'display:none' });
+    var photoBtn = el('button', { class: 'btn btn-orange btn-sm', type: 'button', onclick: function () { fileIn.click(); } }, icon('scan'), 'Foto barcode');
+    fileIn.addEventListener('change', function () {
+      var f = fileIn.files && fileIn.files[0]; fileIn.value = '';
+      if (!f) return;
+      msg.textContent = 'Membaca barcode dari foto…';
+      decodePhoto(f).then(got, function (e) { msg.textContent = e.message + '. Coba foto lebih dekat, lurus, dan tidak silau.'; });
+    });
     var wrap = el('div', { class: 'sheet-wrap vid-wrap' }, el('div', { class: 'vid-box scan-box' },
       el('div', { class: 'sheet-head' }, el('b', { text: 'Scan barcode' }), el('button', { class: 'sheet-x', 'aria-label': 'Tutup', html: IC.x, onclick: function () { stop(); } })),
-      holder, msg));
+      holder, msg, el('div', { class: 'scan-acts' }, photoBtn, torchBtn), fileIn));
     document.body.appendChild(wrap); document.body.classList.add('no-scroll');
+    hintT = setTimeout(function () { if (!done) msg.textContent = 'Belum tertangkap? Dekatkan sedikit, nyalakan senter, atau pakai "Foto barcode".'; }, 6000);
     function stop() {
       done = true;
       if (timer) clearTimeout(timer);
+      if (hintT) clearTimeout(hintT);
       if (stream) stream.getTracks().forEach(function (t) { t.stop(); });
       if (h5) { try { h5.stop().catch(function () {}); } catch (e) {} }
       wrap.remove(); document.body.classList.remove('no-scroll');
     }
     function got(code) { if (done) return; if (navigator.vibrate) navigator.vibrate(80); stop(); onCode(code); }
-    if ('BarcodeDetector' in window) {
-      var det;
-      try { det = new window.BarcodeDetector({ formats: ['ean_13', 'ean_8', 'code_128', 'code_39', 'upc_a', 'upc_e', 'qr_code', 'itf'] }); } catch (e) { det = null; }
+    var cam = { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 }, advanced: [{ focusMode: 'continuous' }] };
+    function afterStream(s) {
+      stream = s;
+      var tr = s.getVideoTracks()[0], caps = tr && tr.getCapabilities ? tr.getCapabilities() : {};
+      if (caps.torch) torchBtn.style.display = '';
+    }
+    nativeDetector().then(function (det) {
+      if (done) return;
       if (det) {
-        holder.append(video);
-        navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } }).then(function (s) {
-          stream = s; video.srcObject = s;
+        holder.append(video, aim);
+        return navigator.mediaDevices.getUserMedia({ video: cam }).then(function (s) {
+          afterStream(s); video.srcObject = s;
           (function tick() {
             if (done) return;
-            det.detect(video).then(function (r) { if (r && r.length) got(r[0].rawValue); else timer = setTimeout(tick, 250); }, function () { timer = setTimeout(tick, 400); });
+            det.detect(video).then(function (r) { if (r && r.length) got(r[0].rawValue); else timer = setTimeout(tick, 150); }, function () { timer = setTimeout(tick, 300); });
           })();
-        }).catch(function () { msg.textContent = 'Kamera tidak bisa dibuka. Izinkan akses kamera di browser.'; });
-        return;
+        });
       }
-    }
-    // Safari/iPhone: pakai pustaka html5-qrcode
-    loadScript('https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js').then(function () {
-      if (done) return;
-      h5 = new window.Html5Qrcode('scan-holder');
-      return h5.start({ facingMode: 'environment' }, { fps: 10, qrbox: { width: 260, height: 140 } }, function (txt) { got(txt); }, function () {});
-    }).catch(function (e) { msg.textContent = 'Kamera tidak bisa dibuka: ' + (e && e.message ? e.message : e); });
+      // iPhone / HP tanpa pembaca bawaan: html5-qrcode (ZXing)
+      return loadScript(H5Q).then(function () {
+        if (done) return;
+        h5 = new window.Html5Qrcode('scan-holder', { formatsToSupport: h5Formats(), verbose: false });
+        return h5.start({ facingMode: 'environment' }, {
+          fps: 15, disableFlip: true,
+          videoConstraints: cam,
+          qrbox: function (w, h) { var bw = Math.floor(w * 0.92); return { width: bw, height: Math.max(80, Math.floor(Math.min(h * 0.4, bw * 0.45))) }; }
+        }, function (txt) { got(txt); }, function () {}).then(function () {
+          var v = holder.querySelector('video'); if (v && v.srcObject) afterStream(v.srcObject);
+        });
+      });
+    }).catch(function (e) { msg.textContent = 'Kamera tidak bisa dibuka (' + (e && e.message ? e.message : e) + '). Izinkan akses kamera, atau pakai "Foto barcode".'; });
   }
 
   /* ---------- Cari Barang ---------- */
@@ -2778,7 +2835,7 @@
       var search = el('input', { class: 'hb-search big', type: 'search', placeholder: 'Ketik nama artikel, SKU atau generic…', autofocus: true, value: S.cariQ || '' });
       var scanBtn = el('button', { type: 'button', class: 'btn btn-primary scan-btn', onclick: function () {
         openScanner(function (code) {
-          var c = String(code).trim();
+          var c = String(code).replace(/[^0-9A-Za-z]/g, '').toUpperCase();
           var hit = rows.filter(function (r) { return r.sku === c || r.generic === c; })[0];
           if (!hit && /^\d{13}$/.test(c)) hit = rows.filter(function (r) { return c.indexOf(r.sku) >= 0 || r.sku.indexOf(c.slice(0, 12)) >= 0; })[0];
           search.value = hit ? hit.sku : c;
