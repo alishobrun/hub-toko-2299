@@ -2768,6 +2768,7 @@
       torchOn = !torchOn;
       stream.getVideoTracks()[0].applyConstraints({ advanced: [{ torch: torchOn }] }).catch(function () { toast('Senter tidak didukung HP ini', true); });
     } });
+    var info = el('small', { class: 'muted', style: 'display:block;text-align:center;padding:0 16px 12px;font-size:11px', text: 'Scanner v2 · menyiapkan kamera…' });
     var fileIn = el('input', { type: 'file', accept: 'image/*', capture: 'environment', style: 'display:none' });
     var photoBtn = el('button', { class: 'btn btn-orange btn-sm', type: 'button', onclick: function () { fileIn.click(); } }, icon('scan'), 'Foto barcode');
     fileIn.addEventListener('change', function () {
@@ -2778,7 +2779,7 @@
     });
     var wrap = el('div', { class: 'sheet-wrap vid-wrap' }, el('div', { class: 'vid-box scan-box' },
       el('div', { class: 'sheet-head' }, el('b', { text: 'Scan barcode' }), el('button', { class: 'sheet-x', 'aria-label': 'Tutup', html: IC.x, onclick: function () { stop(); } })),
-      holder, msg, el('div', { class: 'scan-acts' }, photoBtn, torchBtn), fileIn));
+      holder, msg, el('div', { class: 'scan-acts' }, photoBtn, torchBtn), info, fileIn));
     document.body.appendChild(wrap); document.body.classList.add('no-scroll');
     hintT = setTimeout(function () { if (!done) msg.textContent = 'Belum tertangkap? Dekatkan sedikit, nyalakan senter, atau pakai "Foto barcode".'; }, 6000);
     function stop() {
@@ -2802,6 +2803,8 @@
         holder.append(video, aim);
         return navigator.mediaDevices.getUserMedia({ video: cam }).then(function (s) {
           afterStream(s); video.srcObject = s;
+          var st = s.getVideoTracks()[0].getSettings ? s.getVideoTracks()[0].getSettings() : {};
+          info.textContent = 'Pembaca bawaan HP · kamera ' + (st.width || '?') + '×' + (st.height || '?');
           (function tick() {
             if (done) return;
             det.detect(video).then(function (r) { if (r && r.length) got(r[0].rawValue); else timer = setTimeout(tick, 150); }, function () { timer = setTimeout(tick, 300); });
@@ -2818,6 +2821,7 @@
           qrbox: function (w, h) { var bw = Math.floor(w * 0.92); return { width: bw, height: Math.max(80, Math.floor(Math.min(h * 0.4, bw * 0.45))) }; }
         }, function (txt) { got(txt); }, function () {}).then(function () {
           var v = holder.querySelector('video'); if (v && v.srcObject) afterStream(v.srcObject);
+          info.textContent = 'Pembaca ZXing · kamera ' + (v ? v.videoWidth + '×' + v.videoHeight : '?');
         });
       });
     }).catch(function (e) { msg.textContent = 'Kamera tidak bisa dibuka (' + (e && e.message ? e.message : e) + '). Izinkan akses kamera, atau pakai "Foto barcode".'; });
