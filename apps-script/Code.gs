@@ -335,6 +335,20 @@ const API = {
     return readJadwal_(Utilities.formatDate(new Date(), CFG.TZ, 'yyyy-MM-dd'));
   },
 
+  /* Satu request untuk pemuatan awal halaman (beranda): menghemat beberapa
+   * kali bolak-balik ke Apps Script. Struktur: { user, notif, jadwal, mon }. */
+  bootstrap: function (req) {
+    const u = auth_(req);
+    const out = { user: publicUser_(u) };
+    if (u.role === 'admin') {
+      out.user.menunggu = read_('users').filter(function (x) { return x.status === 'menunggu'; }).length;
+    }
+    out.notif = API.notif(req);
+    out.jadwal = readJadwal_(Utilities.formatDate(new Date(), CFG.TZ, 'yyyy-MM-dd'));
+    out.mon = API.monitoring(req);
+    return out;
+  },
+
   /* ---------- Cek kas till ---------- */
   settings: function (req) {
     auth_(req);
