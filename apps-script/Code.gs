@@ -68,7 +68,8 @@ const TABS = {
   // feedback anonim: SENGAJA tanpa kolom pengirim
   feedback: ['id', 'tanggal', 'kirim', 'untuk', 'jenis', 'isi', 'dibaca', 'dilaporkan', 'alasan_lapor'],
   apresiasi: ['id', 'waktu', 'username', 'nama', 'untuk', 'untuk_nama', 'isi', 'aktif'],
-  omni_target: ['bulan', 'jenis', 'target', 'diubah', 'oleh']
+  omni_target: ['bulan', 'jenis', 'target', 'diubah', 'oleh'],
+  push_sub: ['username', 'endpoint', 'p256dh', 'auth', 'ua', 'dibuat', 'terakhir']
 };
 
 const PECAHAN = [100000, 50000, 20000, 10000, 5000, 2000, 1000, 500, 200, 100];
@@ -1591,99 +1592,7 @@ function readArea_() {
 
 Object.assign(API, {
   notif: function (req) {
-    const u = auth_(req);
-    const admin = u.role === 'admin';
-    const today = today_();
-    const items = [];
-    const badges = { admin: 0, request: 0, tukar: 0 };
-
-    const reqs = read_('request_jadwal');
-    const tukar = read_('tukar_shift');
-
-    if (admin) {
-      const users = read_('users').filter(function (x) { return x.status === 'menunggu'; });
-      reqs.filter(function (r) { return r.status === 'menunggu'; }).forEach(function (r) {
-        const simp = String(r.pakai_simpanan) === 'ya';
-        items.push({ id: 'live-req-' + r.id, live: true, level: 'aksi', jenis: simp ? 'simpanan' : 'request', waktu: String(r.dibuat),
-          judul: r.nama + (simp ? ' pakai simpanan OFF' : ' minta ' + r.jenis), isi: tglPendek_(r.tanggal) + ' · ' + String(r.alasan || ''),
-          link: '#/request', aksi: { tipe: 'req', id: String(r.id) } });
-      });
-      tukar.filter(function (t) { return t.status === 'menunggu_admin'; }).forEach(function (t) {
-        items.push({ id: 'live-tukar-' + t.id, live: true, level: 'aksi', jenis: 'tukar', waktu: String(t.dibuat),
-          judul: 'Tukar shift ' + t.nama_pemohon + ' ↔ ' + t.nama_rekan, isi: tglPendek_(t.tanggal) + ' · ' + t.shift_pemohon + ' ↔ ' + t.shift_rekan + ' · sudah diterima rekan',
-          link: '#/tukar', aksi: { tipe: 'tukar', id: String(t.id) } });
-      });
-      users.forEach(function (x) {
-        items.push({ id: 'live-user-' + x.username, live: true, level: 'aksi', jenis: 'akun', waktu: String(x.dibuat),
-          judul: 'Akun baru: ' + x.nama, isi: '@' + x.username + ' menunggu disetujui', link: '#/admin', aksi: { tipe: 'akun', id: x.username } });
-      });
-      badges.admin = users.length;
-      badges.request = reqs.filter(function (r) { return r.status === 'menunggu'; }).length;
-      badges.tukar = tukar.filter(function (t) { return t.status === 'menunggu_admin'; }).length;
-
-      // batas request periode berikutnya sudah dekat
-      const nx = periodOf_(addDays_(periodOf_(today).end, 1));
-      const batas = deadlineOf_(nx).slice(0, 10);
-      const pend = reqs.filter(function (r) { return r.status === 'menunggu' && String(r.tanggal) >= nx.start && String(r.tanggal) <= nx.end; }).length;
-      if (pend && today >= addDays_(batas, -4) && today < nx.start) {
-        const sisa = Math.round((Date.parse(batas) - Date.parse(today)) / 864e5);
-        items.push({ id: 'live-batas-' + nx.start, live: true, level: 'cek', jenis: 'batas', waktu: today + ' 00:00:00',
-          judul: pend + ' request ' + nx.label + ' belum diputuskan',
-          isi: sisa > 0 ? 'Batas request ' + tglPendek_(batas) + ' (' + sisa + ' hari lagi)' : sisa === 0 ? 'Batas request hari ini' : 'Batas request sudah lewat, periode mulai ' + tglPendek_(nx.start),
-          link: '#/request' });
-      }
-
-      // DSR kemarin belum masuk (setelah jam 11)
-      const mnt = menitNow_(), bData = Number(settings_().data_batas) || 660;
-      const jamB = pad_(Math.floor(bData / 60)) + ':' + pad_(bData % 60);
-      const kemarin = addDays_(today, -1);
-      const latest = latestDate_();
-      if (mnt >= bData && latest < kemarin) {
-        items.push({ id: 'live-dsr-' + today, live: true, level: 'cek', jenis: 'dsr', waktu: today + ' ' + jamB + ':00',
-          judul: 'DSR kemarin belum diunggah', isi: 'Data terakhir sampai ' + tglPendek_(latest), link: '#/unggah' });
-      }
-      if (mnt >= bData) {
-        const bu = read_('bin_upload'), lb = bu.length ? String(bu[bu.length - 1].waktu).slice(0, 10) : '';
-        if (lb < today) items.push({ id: 'live-bin-' + today, live: true, level: 'cek', jenis: 'bin', waktu: today + ' ' + jamB + ':00',
-          judul: 'By Bin hari ini belum diunggah', isi: lb ? 'Unggahan terakhir ' + tglPendek_(lb) : 'Belum pernah diunggah', link: '#/unggahbin' });
-      }
-    } else {
-      tukar.filter(function (t) { return t.status === 'menunggu_rekan' && t.rekan === u.username; }).forEach(function (t) {
-        items.push({ id: 'live-ajak-' + t.id, live: true, level: 'aksi', jenis: 'tukar', waktu: String(t.dibuat),
-          judul: t.nama_pemohon + ' mengajak tukar shift', isi: tglPendek_(t.tanggal) + ' · kamu ' + t.shift_rekan + ' → ' + t.shift_pemohon + ' · ' + String(t.alasan || ''),
-          link: '#/tukar', aksi: { tipe: 'ajak', id: String(t.id) } });
-      });
-      badges.tukar = items.length;
-    }
-
-    // tugas video opening/closing sesuai shift hari ini
-    try { dokTugas_(u, today).forEach(function (x) { items.push(x); }); } catch (e) { /* jadwal/Drive belum siap */ }
-    try { badges.fb = fbMasuk_(u).filter(function (x) { return !x.dibaca; }).length; } catch (e) { badges.fb = 0; }
-    try {
-      const hb = {}; read_('handover_baca').forEach(function (x) { if (x.username === u.username) hb[String(x.id)] = 1; });
-      const lastHo = read_('handover').filter(function (x) { return String(x.tanggal) >= addDays_(today, -1) && x.username !== u.username; }).pop();
-      badges.ho = lastHo && !hb[String(lastHo.id)] ? 1 : 0;
-    } catch (e) { badges.ho = 0; }
-
-    // catatan kejadian (60 hari terakhir, maks 60)
-    const batasLama = addDays_(today, -60);
-    const log = read_('notifikasi').filter(function (n) {
-      const to = String(n.untuk);
-      return (to === u.username || to === 'semua' || (admin && to === 'admin')) && String(n.waktu).slice(0, 10) >= batasLama;
-    }).slice(-60).reverse().map(function (n) {
-      const dib = String(n.dibaca || '').split(',').indexOf(u.username) >= 0;
-      return { id: String(n.id), live: false, level: String(n.level), jenis: String(n.jenis), waktu: String(n.waktu),
-        judul: String(n.judul), isi: String(n.isi), link: String(n.link), dibaca: dib };
-    });
-
-    try {
-      const sudah = {};
-      read_('pengumuman_baca').forEach(function (x) { if (x.username === u.username) sudah[String(x.id)] = 1; });
-      badges.peng = read_('pengumuman').filter(function (p) { return p.aktif !== 'tidak' && !sudah[String(p.id)]; }).length;
-    } catch (e) { badges.peng = 0; }
-    const live = items.sort(function (a, b) { return a.level === b.level ? (a.waktu < b.waktu ? 1 : -1) : (a.level === 'aksi' ? -1 : 1); });
-    const unread = live.length + log.filter(function (n) { return !n.dibaca && n.level !== 'info'; }).length;
-    return { items: live.concat(log), unread: unread, badges: badges, waktu: now_() };
+    return notifFor_(auth_(req));
   },
 
   notifRead: function (req) {
@@ -1707,6 +1616,103 @@ Object.assign(API, {
     });
   }
 });
+
+
+/** Isi lonceng notifikasi untuk satu user (dipakai web & push). */
+function notifFor_(u) {
+    const admin = u.role === 'admin';
+  const today = today_();
+  const items = [];
+  const badges = { admin: 0, request: 0, tukar: 0 };
+
+  const reqs = read_('request_jadwal');
+  const tukar = read_('tukar_shift');
+
+  if (admin) {
+    const users = read_('users').filter(function (x) { return x.status === 'menunggu'; });
+    reqs.filter(function (r) { return r.status === 'menunggu'; }).forEach(function (r) {
+      const simp = String(r.pakai_simpanan) === 'ya';
+      items.push({ id: 'live-req-' + r.id, live: true, level: 'aksi', jenis: simp ? 'simpanan' : 'request', waktu: String(r.dibuat),
+        judul: r.nama + (simp ? ' pakai simpanan OFF' : ' minta ' + r.jenis), isi: tglPendek_(r.tanggal) + ' · ' + String(r.alasan || ''),
+        link: '#/request', aksi: { tipe: 'req', id: String(r.id) } });
+    });
+    tukar.filter(function (t) { return t.status === 'menunggu_admin'; }).forEach(function (t) {
+      items.push({ id: 'live-tukar-' + t.id, live: true, level: 'aksi', jenis: 'tukar', waktu: String(t.dibuat),
+        judul: 'Tukar shift ' + t.nama_pemohon + ' ↔ ' + t.nama_rekan, isi: tglPendek_(t.tanggal) + ' · ' + t.shift_pemohon + ' ↔ ' + t.shift_rekan + ' · sudah diterima rekan',
+        link: '#/tukar', aksi: { tipe: 'tukar', id: String(t.id) } });
+    });
+    users.forEach(function (x) {
+      items.push({ id: 'live-user-' + x.username, live: true, level: 'aksi', jenis: 'akun', waktu: String(x.dibuat),
+        judul: 'Akun baru: ' + x.nama, isi: '@' + x.username + ' menunggu disetujui', link: '#/admin', aksi: { tipe: 'akun', id: x.username } });
+    });
+    badges.admin = users.length;
+    badges.request = reqs.filter(function (r) { return r.status === 'menunggu'; }).length;
+    badges.tukar = tukar.filter(function (t) { return t.status === 'menunggu_admin'; }).length;
+
+    // batas request periode berikutnya sudah dekat
+    const nx = periodOf_(addDays_(periodOf_(today).end, 1));
+    const batas = deadlineOf_(nx).slice(0, 10);
+    const pend = reqs.filter(function (r) { return r.status === 'menunggu' && String(r.tanggal) >= nx.start && String(r.tanggal) <= nx.end; }).length;
+    if (pend && today >= addDays_(batas, -4) && today < nx.start) {
+      const sisa = Math.round((Date.parse(batas) - Date.parse(today)) / 864e5);
+      items.push({ id: 'live-batas-' + nx.start, live: true, level: 'cek', jenis: 'batas', waktu: today + ' 00:00:00',
+        judul: pend + ' request ' + nx.label + ' belum diputuskan',
+        isi: sisa > 0 ? 'Batas request ' + tglPendek_(batas) + ' (' + sisa + ' hari lagi)' : sisa === 0 ? 'Batas request hari ini' : 'Batas request sudah lewat, periode mulai ' + tglPendek_(nx.start),
+        link: '#/request' });
+    }
+
+    // DSR kemarin belum masuk (setelah jam 11)
+    const mnt = menitNow_(), bData = Number(settings_().data_batas) || 660;
+    const jamB = pad_(Math.floor(bData / 60)) + ':' + pad_(bData % 60);
+    const kemarin = addDays_(today, -1);
+    const latest = latestDate_();
+    if (mnt >= bData && latest < kemarin) {
+      items.push({ id: 'live-dsr-' + today, live: true, level: 'cek', jenis: 'dsr', waktu: today + ' ' + jamB + ':00',
+        judul: 'DSR kemarin belum diunggah', isi: 'Data terakhir sampai ' + tglPendek_(latest), link: '#/unggah' });
+    }
+    if (mnt >= bData) {
+      const bu = read_('bin_upload'), lb = bu.length ? String(bu[bu.length - 1].waktu).slice(0, 10) : '';
+      if (lb < today) items.push({ id: 'live-bin-' + today, live: true, level: 'cek', jenis: 'bin', waktu: today + ' ' + jamB + ':00',
+        judul: 'By Bin hari ini belum diunggah', isi: lb ? 'Unggahan terakhir ' + tglPendek_(lb) : 'Belum pernah diunggah', link: '#/unggahbin' });
+    }
+  } else {
+    tukar.filter(function (t) { return t.status === 'menunggu_rekan' && t.rekan === u.username; }).forEach(function (t) {
+      items.push({ id: 'live-ajak-' + t.id, live: true, level: 'aksi', jenis: 'tukar', waktu: String(t.dibuat),
+        judul: t.nama_pemohon + ' mengajak tukar shift', isi: tglPendek_(t.tanggal) + ' · kamu ' + t.shift_rekan + ' → ' + t.shift_pemohon + ' · ' + String(t.alasan || ''),
+        link: '#/tukar', aksi: { tipe: 'ajak', id: String(t.id) } });
+    });
+    badges.tukar = items.length;
+  }
+
+  // tugas video opening/closing sesuai shift hari ini
+  try { dokTugas_(u, today).forEach(function (x) { items.push(x); }); } catch (e) { /* jadwal/Drive belum siap */ }
+  try { badges.fb = fbMasuk_(u).filter(function (x) { return !x.dibaca; }).length; } catch (e) { badges.fb = 0; }
+  try {
+    const hb = {}; read_('handover_baca').forEach(function (x) { if (x.username === u.username) hb[String(x.id)] = 1; });
+    const lastHo = read_('handover').filter(function (x) { return String(x.tanggal) >= addDays_(today, -1) && x.username !== u.username; }).pop();
+    badges.ho = lastHo && !hb[String(lastHo.id)] ? 1 : 0;
+  } catch (e) { badges.ho = 0; }
+
+  // catatan kejadian (60 hari terakhir, maks 60)
+  const batasLama = addDays_(today, -60);
+  const log = read_('notifikasi').filter(function (n) {
+    const to = String(n.untuk);
+    return (to === u.username || to === 'semua' || (admin && to === 'admin')) && String(n.waktu).slice(0, 10) >= batasLama;
+  }).slice(-60).reverse().map(function (n) {
+    const dib = String(n.dibaca || '').split(',').indexOf(u.username) >= 0;
+    return { id: String(n.id), live: false, level: String(n.level), jenis: String(n.jenis), waktu: String(n.waktu),
+      judul: String(n.judul), isi: String(n.isi), link: String(n.link), dibaca: dib };
+  });
+
+  try {
+    const sudah = {};
+    read_('pengumuman_baca').forEach(function (x) { if (x.username === u.username) sudah[String(x.id)] = 1; });
+    badges.peng = read_('pengumuman').filter(function (p) { return p.aktif !== 'tidak' && !sudah[String(p.id)]; }).length;
+  } catch (e) { badges.peng = 0; }
+  const live = items.sort(function (a, b) { return a.level === b.level ? (a.waktu < b.waktu ? 1 : -1) : (a.level === 'aksi' ? -1 : 1); });
+  const unread = live.length + log.filter(function (n) { return !n.dibaca && n.level !== 'info'; }).length;
+  return { items: live.concat(log), unread: unread, badges: badges, waktu: now_() };
+}
 
 /** Catat notifikasi. Dipanggil di dalam withLock_ yang sudah berjalan. */
 function notif_(untuk, level, jenis, judul, isi, link) {
@@ -3013,6 +3019,7 @@ function cekEmailDsr() {
     }
   });
   Logger.log(hasil.join('\n') || 'Tidak ada email DSR baru');
+  try { pushTick_(); } catch (e) { Logger.log('push: ' + e); }
   return hasil;
 }
 
@@ -3024,3 +3031,165 @@ function pasangDsrEmail() {
   Logger.log('Pemicu DSR email terpasang. ' + (h.length ? h.join(' | ') : ''));
   return 'ok';
 }
+
+/* =====================================================================
+ * TAHAP 12: notifikasi push ke HP (Web Push + VAPID, tanpa Firebase)
+ * Push dikirim tanpa isi; HP lalu mengambil isi notifikasi dari API (aman, tanpa enkripsi payload).
+ * ===================================================================== */
+/* ---------- ECDSA P-256 (ES256) murni JS untuk VAPID Web Push ---------- */
+const EC_ = (function () {
+  const P = BigInt('0xffffffff00000001000000000000000000000000ffffffffffffffffffffffff');
+  const N = BigInt('0xffffffff00000000ffffffffffffffffbce6faada7179e84f3b9cac2fc632551');
+  const A = P - 3n;
+  const G = [BigInt('0x6b17d1f2e12c4247f8bce6e563a440f277037d812deb33a0f4a13945d898c296'), BigInt('0x4fe342e2fe1a7f9b8ee7eb4a7c0f9e162bce33576b315ececbb6406837bf51f5')];
+  const mod = function (a, m) { const r = a % m; return r >= 0n ? r : r + m; };
+  const inv = function (a, m) { let t = 0n, nt = 1n, r = m, nr = mod(a, m); while (nr) { const q = r / nr; [t, nt] = [nt, t - q * nt]; [r, nr] = [nr, r - q * nr]; } return mod(t, m); };
+  // titik Jacobian [X,Y,Z]
+  const dbl = function (p) {
+    if (!p[2]) return p;
+    const [X, Y, Z] = p;
+    const YY = mod(Y * Y, P), S = mod(4n * X * YY, P), ZZ = mod(Z * Z, P);
+    const M = mod(3n * X * X + A * ZZ * ZZ, P);
+    const X3 = mod(M * M - 2n * S, P);
+    return [X3, mod(M * (S - X3) - 8n * YY * YY, P), mod(2n * Y * Z, P)];
+  };
+  const add = function (p, q) {
+    if (!p[2]) return q; if (!q[2]) return p;
+    const Z1Z1 = mod(p[2] * p[2], P), Z2Z2 = mod(q[2] * q[2], P);
+    const U1 = mod(p[0] * Z2Z2, P), U2 = mod(q[0] * Z1Z1, P);
+    const S1 = mod(p[1] * q[2] * Z2Z2, P), S2 = mod(q[1] * p[2] * Z1Z1, P);
+    if (U1 === U2) return S1 === S2 ? dbl(p) : [0n, 1n, 0n];
+    const H = mod(U2 - U1, P), R = mod(S2 - S1, P), HH = mod(H * H, P), HHH = mod(H * HH, P), V = mod(U1 * HH, P);
+    const X3 = mod(R * R - HHH - 2n * V, P);
+    return [X3, mod(R * (V - X3) - S1 * HHH, P), mod(p[2] * q[2] * H, P)];
+  };
+  const mul = function (k, pt) {
+    let r = [0n, 1n, 0n], q = [pt[0], pt[1], 1n];
+    while (k > 0n) { if (k & 1n) r = add(r, q); q = dbl(q); k >>= 1n; }
+    const zi = inv(r[2], P), zi2 = mod(zi * zi, P);
+    return [mod(r[0] * zi2, P), mod(r[1] * zi2 * zi, P)];
+  };
+  const toHex = function (n, len) { let h = n.toString(16); while (h.length < len * 2) h = '0' + h; return h; };
+  const hexToBytes = function (h) { const out = []; for (let i = 0; i < h.length; i += 2) { const v = parseInt(h.substr(i, 2), 16); out.push(v > 127 ? v - 256 : v); } return out; };
+  const bytesToHex = function (b) { return b.map(function (x) { return ('0' + ((x + 256) % 256).toString(16)).slice(-2); }).join(''); };
+  return {
+    N: N,
+    /** kunci baru: {d: hex32, pub: hex65 (04|X|Y)} */
+    keygen: function (randHex) {
+      let d = mod(BigInt('0x' + randHex), N - 1n) + 1n;
+      const Q = mul(d, G);
+      return { d: toHex(d, 32), pub: '04' + toHex(Q[0], 32) + toHex(Q[1], 32) };
+    },
+    /** tanda tangan hash (hex32) → hex64 r||s. randHex: angka acak 32 byte hex */
+    sign: function (hashHex, dHex, randHex) {
+      const z = BigInt('0x' + hashHex), d = BigInt('0x' + dHex);
+      for (let i = 0; i < 8; i++) {
+        const k = mod(BigInt('0x' + randHex) + BigInt(i), N - 1n) + 1n;
+        const R = mul(k, G), r = mod(R[0], N);
+        if (!r) continue;
+        let s = mod(inv(k, N) * (z + r * d), N);
+        if (!s) continue;
+        if (s > N / 2n) s = N - s;
+        return toHex(r, 32) + toHex(s, 32);
+      }
+      throw new Error('ECDSA gagal');
+    },
+    hexToBytes: hexToBytes, bytesToHex: bytesToHex
+  };
+})();
+
+function b64u_(bytes) { return Utilities.base64EncodeWebSafe(bytes).replace(/=+$/, ''); }
+function randHex_() { return EC_.bytesToHex(Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, Utilities.getUuid() + Date.now() + Math.random())); }
+/** Kunci VAPID dibuat sekali oleh server & disimpan di Script Properties. */
+function vapid_() {
+  const p = PropertiesService.getScriptProperties();
+  let d = p.getProperty('VAPID_D'), pub = p.getProperty('VAPID_PUB');
+  if (!d || !pub) { const k = EC_.keygen(randHex_()); d = k.d; pub = k.pub; p.setProperties({ VAPID_D: d, VAPID_PUB: pub }); }
+  return { d: d, pub: pub, pubB64: b64u_(EC_.hexToBytes(pub)) };
+}
+function vapidJwt_(aud) {
+  const v = vapid_();
+  const enc = function (o) { return b64u_(Utilities.newBlob(JSON.stringify(o)).getBytes()); };
+  const input = enc({ typ: 'JWT', alg: 'ES256' }) + '.' + enc({ aud: aud, exp: Math.floor(Date.now() / 1000) + 12 * 3600, sub: 'https://alishobrun.github.io/hub-toko-2299/' });
+  const h = EC_.bytesToHex(Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, input, Utilities.Charset.UTF_8));
+  return { jwt: input + '.' + b64u_(EC_.hexToBytes(EC_.sign(h, v.d, randHex_()))), k: v.pubB64 };
+}
+/** Kirim satu push kosong. true = terkirim, false = langganan sudah tidak berlaku. */
+function kirimPush_(endpoint) {
+  const aud = endpoint.match(/^https:\/\/[^/]+/)[0];
+  const t = vapidJwt_(aud);
+  const r = UrlFetchApp.fetch(endpoint, { method: 'post', muteHttpExceptions: true, payload: '',
+    headers: { Authorization: 'vapid t=' + t.jwt + ', k=' + t.k, TTL: '86400', Urgency: 'high' } });
+  const c = r.getResponseCode();
+  if (c === 404 || c === 410) return false;
+  if (c >= 400) throw new Error('Push ' + c + ': ' + r.getContentText().slice(0, 120));
+  return true;
+}
+function idsNotif_(u) {
+  const n = notifFor_(u);
+  return n.items.filter(function (x) { return x.live || (!x.dibaca); }).map(function (x) { return x.id; });
+}
+/** Tiap 15 menit: kirim push ke user yang punya notifikasi baru sejak push terakhir. */
+function pushTick_() {
+  const subs = read_('push_sub');
+  if (!subs.length) return;
+  const p = PropertiesService.getScriptProperties();
+  const users = {}; read_('users').forEach(function (x) { if (x.status === 'aktif') users[x.username] = x; });
+  const byUser = {}; subs.forEach(function (s) { (byUser[s.username] = byUser[s.username] || []).push(s); });
+  const mati = {};
+  Object.keys(byUser).forEach(function (un) {
+    const u = users[un]; if (!u) return;
+    let ids; try { ids = idsNotif_(u); } catch (e) { return; }
+    const key = 'push_seen_' + un;
+    const seen = JSON.parse(p.getProperty(key) || '[]');
+    const baru = ids.filter(function (id) { return seen.indexOf(id) < 0; });
+    p.setProperty(key, JSON.stringify(ids.slice(0, 150)));
+    if (!baru.length) return;
+    byUser[un].forEach(function (s) {
+      try { if (!kirimPush_(String(s.endpoint))) mati[s.endpoint] = 1; } catch (e) { Logger.log(e); }
+    });
+  });
+  if (Object.keys(mati).length) withLock_(function () { writeAll_('push_sub', read_('push_sub').filter(function (s) { return !mati[s.endpoint]; })); });
+}
+
+Object.assign(API, {
+  pushKunci: function (req) { auth_(req); return { pub: vapid_().pubB64 }; },
+  pushDaftar: function (req) {
+    const u = auth_(req);
+    const sub = req.sub || {};
+    const ep = String(sub.endpoint || '');
+    if (!/^https:\/\//.test(ep)) throw new Error('Langganan notifikasi tidak valid');
+    return withLock_(function () {
+      const all = read_('push_sub').filter(function (s) { return s.endpoint !== ep; });
+      all.push({ username: u.username, endpoint: ep, p256dh: String((sub.keys || {}).p256dh || ''), auth: String((sub.keys || {}).auth || ''),
+        ua: String(req.ua || '').slice(0, 120), dibuat: now_(), terakhir: now_() });
+      writeAll_('push_sub', all);
+      // tandai notifikasi yang sudah ada supaya tidak dikirim ulang
+      try { PropertiesService.getScriptProperties().setProperty('push_seen_' + u.username, JSON.stringify(idsNotif_(u).slice(0, 150))); } catch (e) {}
+      return { perangkat: all.filter(function (s) { return s.username === u.username; }).length };
+    });
+  },
+  pushHapus: function (req) {
+    const u = auth_(req);
+    const ep = String(req.endpoint || '');
+    return withLock_(function () {
+      writeAll_('push_sub', read_('push_sub').filter(function (s) { return !(s.endpoint === ep && s.username === u.username); }));
+      return true;
+    });
+  },
+  pushStatus: function (req) {
+    const u = auth_(req);
+    return { perangkat: read_('push_sub').filter(function (s) { return s.username === u.username; }).map(function (s) { return { ua: String(s.ua), dibuat: String(s.dibuat), ep: String(s.endpoint).slice(-12) }; }) };
+  },
+  /** Kirim push percobaan ke perangkat sendiri. */
+  pushTes: function (req) {
+    const u = auth_(req);
+    const subs = read_('push_sub').filter(function (s) { return s.username === u.username; });
+    if (!subs.length) throw new Error('Belum ada perangkat yang mengaktifkan notifikasi');
+    withLock_(function () { notif_(u.username, 'info', 'info', 'Tes notifikasi Basecamp 2299', 'Notifikasi di HP sudah aktif 👍', '#/akun'); });
+    let ok = 0;
+    subs.forEach(function (s) { try { if (kirimPush_(String(s.endpoint))) ok++; } catch (e) { Logger.log(e); } });
+    try { PropertiesService.getScriptProperties().setProperty('push_seen_' + u.username, JSON.stringify(idsNotif_(u).slice(0, 150))); } catch (e) {}
+    return { terkirim: ok, perangkat: subs.length };
+  }
+});

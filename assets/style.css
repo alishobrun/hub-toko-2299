@@ -962,3 +962,9 @@ a.dok-home{display:block;color:inherit;text-decoration:none}
 .brand-sm{gap:10px}
 .brand-sm img.bc-mini{height:32px;width:32px;border-radius:9px}
 .auth-badge{width:84px;height:84px;border-radius:22px;display:block;margin:0;box-shadow:0 10px 30px rgba(10,26,79,.25)}
+.app-st{display:flex;gap:8px;flex-wrap:wrap;margin-top:6px}
+.app-guide{margin-top:14px}
+.app-guide summary{cursor:pointer;font-weight:700;color:var(--navy-700)}
+.app-steps{font-size:14px;margin-top:8px}
+.app-steps ol{margin:4px 0 10px;padding-left:20px}
+.app-steps li{margin:3px 0}

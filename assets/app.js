@@ -102,6 +102,7 @@
   function setSession(token, user) {
     S.token = token; S.user = user;
     store.set('token', token); store.set('user', user ? JSON.stringify(user) : null);
+    kirimSesiSW();
     S.mon = null; S.jadwal = null; S.info = null;
   }
 
@@ -357,6 +358,7 @@
   function setBadge(node, n) { if (!node) return; node.setAttribute('data-n', n || 0); node.textContent = n ? (n > 99 ? '99+' : String(n)) : ''; }
   function paintBadges() {
     setBadge($('.bell-n'), S.notif ? S.notif.unread : 0);
+    try { if (navigator.setAppBadge && S.notif) { if (S.notif.unread) navigator.setAppBadge(S.notif.unread); else navigator.clearAppBadge(); } } catch (e) {}
     document.querySelectorAll('.snav-item').forEach(function (a) { setBadge(a.querySelector('.nbadge'), badgeCount(a.getAttribute('data-id'))); });
     document.querySelectorAll('.snav-group').forEach(function (gEl, i) {
       var g = GROUPS.filter(function (x) { return x.id !== 'beranda'; })[i];
@@ -466,6 +468,7 @@
 
   function logout() {
     var t = S.token;
+    try { if (pushSupported()) matikanPush().catch(function () {}); } catch (e) {}
     setSession(null, null); S.notif = null; S.badges = { admin: 0, request: 0, tukar: 0 };
     if (t) api('logout', { token: t }).catch(function () {});
     location.hash = '#/login';
@@ -2098,6 +2101,7 @@
   function viewAkun(v) {
     v.append(el('section', { class: 'hero' }, el('div', null, el('h2', { text: S.user ? S.user.nama : 'Akun' }),
       el('p', { text: S.user ? '@' + S.user.username + ' · ' + (S.user.role === 'admin' ? 'Admin' : 'Staf') : '' }))));
+    v.append(appCard());
     var o = el('input', { type: 'password', id: 'pw-o', autocomplete: 'current-password', required: true });
     var n = el('input', { type: 'password', id: 'pw-n', autocomplete: 'new-password', required: true, minlength: 6 });
     var n2 = el('input', { type: 'password', id: 'pw-n2', autocomplete: 'new-password', required: true });
@@ -2118,6 +2122,83 @@
         el('div', { class: 'field' }, el('label', { for: 'pw-n2', text: 'Ulangi password baru' }), n2),
         btn, out)),
       el('button', { class: 'btn btn-danger section', text: 'Keluar dari akun ini', onclick: logout }));
+  }
+
+  /* ---------- Aplikasi (PWA) & notifikasi push ---------- */
+  var SW = null, installEvt = null;
+  function kirimSesiSW() {
+    try { if (SW && SW.active) SW.active.postMessage({ type: 'sesi', token: S.token || null, api: CFG.API_URL }); } catch (e) {}
+  }
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then(function (r) {
+      SW = r; return navigator.serviceWorker.ready;
+    }).then(function (r) { SW = r; kirimSesiSW(); }).catch(function () {});
+  }
+  window.addEventListener('beforeinstallprompt', function (e) { e.preventDefault(); installEvt = e; });
+  function isIOS() { return /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1); }
+  function isStandalone() { return window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true; }
+  function b64uToBytes(s) { s = s.replace(/-/g, '+').replace(/_/g, '/'); while (s.length % 4) s += '='; var b = atob(s), a = new Uint8Array(b.length); for (var i = 0; i < b.length; i++) a[i] = b.charCodeAt(i); return a; }
+  function pushSupported() { return 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window; }
+  function aktifkanPush() {
+    if (!pushSupported()) return Promise.reject(new Error(isIOS() ? 'Pasang Basecamp ke layar utama dulu (lihat panduan), lalu buka dari ikonnya' : 'Browser ini belum mendukung notifikasi'));
+    return Notification.requestPermission().then(function (p) {
+      if (p !== 'granted') throw new Error('Izin notifikasi ditolak. Buka pengaturan browser/HP untuk mengizinkan.');
+      return Promise.all([navigator.serviceWorker.ready, api('pushKunci')]);
+    }).then(function (v) {
+      var reg = v[0]; SW = reg; kirimSesiSW();
+      return reg.pushManager.getSubscription().then(function (old) { return old || reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64uToBytes(v[1].pub) }); });
+    }).then(function (sub) {
+      var j = sub.toJSON();
+      return api('pushDaftar', { sub: { endpoint: j.endpoint, keys: j.keys }, ua: (isIOS() ? 'iPhone/iPad' : /android/i.test(navigator.userAgent) ? 'Android' : 'Komputer') + (isStandalone() ? ' · aplikasi' : ' · browser') });
+    });
+  }
+  function matikanPush() {
+    return navigator.serviceWorker.ready.then(function (reg) { return reg.pushManager.getSubscription(); }).then(function (sub) {
+      if (!sub) return true;
+      var ep = sub.endpoint;
+      return sub.unsubscribe().then(function () { return api('pushHapus', { endpoint: ep }); });
+    });
+  }
+  function appCard() {
+    var box = el('div', { class: 'card section', style: 'max-width:520px' });
+    function draw() {
+      var izin = 'Notification' in window ? Notification.permission : 'tidak-didukung';
+      var st = el('div', { class: 'app-st' });
+      var btns = el('div', { class: 'inline', style: 'gap:8px;flex-wrap:wrap;margin-top:12px' });
+      var aktif = el('button', { class: 'btn btn-orange', type: 'button', text: 'Aktifkan notifikasi di perangkat ini', onclick: function () {
+        aktif.disabled = true; aktif.textContent = 'Mengaktifkan…';
+        aktifkanPush().then(function (r) { toast('Notifikasi aktif di ' + r.perangkat + ' perangkat'); draw(); }).catch(function (err) { toast(err.message, true); draw(); });
+      } });
+      var tes = el('button', { class: 'btn btn-ghost', type: 'button', text: 'Kirim notifikasi percobaan', onclick: function () {
+        tes.disabled = true;
+        api('pushTes').then(function (r) { toast('Terkirim ke ' + r.terkirim + ' perangkat. Tunggu beberapa detik.'); tes.disabled = false; }).catch(function (err) { tes.disabled = false; toast(err.message, true); });
+      } });
+      var mati = el('button', { class: 'btn btn-ghost', type: 'button', text: 'Matikan di perangkat ini', onclick: function () {
+        matikanPush().then(function () { toast('Notifikasi dimatikan di perangkat ini'); draw(); }).catch(function (err) { toast(err.message, true); });
+      } });
+      var pasang = installEvt ? el('button', { class: 'btn btn-primary', type: 'button', text: 'Pasang aplikasi', onclick: function () { installEvt.prompt(); installEvt.userChoice.then(function () { installEvt = null; draw(); }); } }) : null;
+      var subP = pushSupported() ? Promise.race([navigator.serviceWorker.ready.then(function (r) { return r.pushManager.getSubscription(); }), new Promise(function (ok) { setTimeout(function () { ok(null); }, 3000); })]).catch(function () { return null; }) : Promise.resolve(null);
+      subP.then(function (sub) {
+        var on = !!sub && izin === 'granted';
+        st.replaceChildren.apply(st, [el('span', { class: 'tag ' + (on ? 'tag-good' : 'tag-warn'), text: on ? '✓ Notifikasi aktif di perangkat ini' : 'Notifikasi belum aktif di perangkat ini' }),
+          isStandalone() ? el('span', { class: 'tag', text: 'Dibuka sebagai aplikasi' }) : null].filter(Boolean));
+        btns.replaceChildren.apply(btns, [pasang, on ? tes : aktif, on ? mati : null].filter(Boolean));
+      });
+      var panduan = el('details', { class: 'app-guide', open: isIOS() && !isStandalone() },
+        el('summary', { text: 'Cara memasang Basecamp di layar utama HP' }),
+        el('div', { class: 'app-steps' },
+          el('b', { text: 'iPhone (wajib untuk notifikasi, iOS 16.4 ke atas):' }),
+          el('ol', null, el('li', { text: 'Buka Basecamp di Safari.' }), el('li', { text: 'Ketuk tombol Bagikan (kotak dengan panah ke atas).' }), el('li', { text: 'Pilih "Tambah ke Layar Utama", lalu Tambah.' }), el('li', { text: 'Buka Basecamp dari ikon baru di layar utama, login, lalu tekan "Aktifkan notifikasi".' })),
+          el('b', { text: 'Android (Chrome):' }),
+          el('ol', null, el('li', { text: 'Tekan tombol "Pasang aplikasi" di atas, atau menu ⋮ → "Instal aplikasi" / "Tambahkan ke layar utama".' }), el('li', { text: 'Tekan "Aktifkan notifikasi" lalu Izinkan.' }))));
+      box.replaceChildren(el('h3', { text: 'Aplikasi & notifikasi HP' }),
+        el('p', { class: 'sub', text: 'Notifikasi lonceng (request jadwal, pengingat video, pengumuman, handover, DSR, dll.) ikut muncul di HP walau Basecamp sedang ditutup. Dicek tiap 15 menit.' }),
+        st, btns,
+        isIOS() && !isStandalone() ? el('div', { class: 'err-box warn-box', style: 'margin-top:12px', text: 'Di iPhone, notifikasi hanya bisa diaktifkan dari Basecamp yang sudah dipasang di layar utama.' }) : null,
+        panduan);
+    }
+    draw();
+    return box;
   }
 
   /* =================== Analisa PICA & laporan WA =================== */
