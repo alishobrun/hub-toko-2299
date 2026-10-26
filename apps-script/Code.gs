@@ -69,7 +69,8 @@ const TABS = {
   feedback: ['id', 'tanggal', 'kirim', 'untuk', 'jenis', 'isi', 'dibaca', 'dilaporkan', 'alasan_lapor'],
   apresiasi: ['id', 'waktu', 'username', 'nama', 'untuk', 'untuk_nama', 'isi', 'aktif'],
   omni_target: ['bulan', 'jenis', 'target', 'diubah', 'oleh'],
-  push_sub: ['username', 'endpoint', 'p256dh', 'auth', 'ua', 'dibuat', 'terakhir']
+  push_sub: ['username', 'endpoint', 'p256dh', 'auth', 'ua', 'dibuat', 'terakhir'],
+  jadwal_draf: ['periode', 'status', 'dibuat', 'diubah', 'oleh', 'data']
 };
 
 const PECAHAN = [100000, 50000, 20000, 10000, 5000, 2000, 1000, 500, 200, 100];
@@ -940,9 +941,14 @@ Object.assign(API, {
       if (!r) throw new Error('Request tidak ditemukan');
       if (r.status !== 'menunggu') throw new Error('Request ini sudah diputuskan');
       const patch = { status: setuju ? 'disetujui' : 'ditolak', diputus_oleh: a.username, diputus_pada: now_(), catatan_admin: String(req.catatan || '').slice(0, 200) };
-      let info = '';
+      let info = '', keDraf = null;
       if (setuju) {
-        try {
+        const pr = periodOf_(String(r.tanggal));
+        if (jdMasihDraf_(pr)) {
+          keDraf = pr;
+          patch.tertulis = 'draf ' + pr.label;
+          info = 'Masuk ke draf jadwal ' + pr.label + '. Draf disusun ulang otomatis; cek di menu Susun Jadwal lalu terbitkan.';
+        } else try {
           const user = read_('users').filter(function (x) { return x.username === r.username; })[0];
           const w = writeShift_(user, String(r.tanggal), String(r.jenis));
           patch.tertulis = 'ya · tab ' + w.tab;
@@ -957,8 +963,11 @@ Object.assign(API, {
       log_(a.username, setuju ? 'setujui request' : 'tolak request', r.nama + ' ' + r.jenis + ' ' + r.tanggal);
       const lbl = (String(r.pakai_simpanan) === 'ya' ? 'OFF (simpanan)' : r.jenis) + ' ' + tglPendek_(r.tanggal);
       if (r.username !== a.username) notif_(r.username, setuju ? 'ok' : 'tolak', 'request', 'Request ' + lbl + (setuju ? ' disetujui' : ' ditolak'),
-        patch.catatan_admin ? 'Catatan admin: ' + patch.catatan_admin : (setuju ? 'Jadwal kamu sudah diperbarui.' : ''), '#/request');
-      if (setuju) {
+        patch.catatan_admin ? 'Catatan admin: ' + patch.catatan_admin : (setuju ? (keDraf ? 'Sudah masuk jadwal ' + keDraf.label + ' (terbit setelah disahkan admin).' : 'Jadwal kamu sudah diperbarui.') : ''), '#/request');
+      if (setuju && keDraf) {
+        try { jdBuat_(keDraf, a.username, 'request ' + r.nama + ' ' + r.jenis + ' ' + tglPendek_(r.tanggal)); }
+        catch (e) { info += ' (Draf belum bisa disusun: ' + e.message + ')'; }
+      } else if (setuju) {
         if (String(patch.tertulis).indexOf('gagal') === 0) notif_('admin', 'cek', 'sheet', 'Gagal menulis ke sheet jadwal', r.nama + ' · ' + lbl + ' · ' + String(patch.tertulis).replace(/^gagal:\s*/, ''), '#/request');
         else notif_('admin', 'info', 'sheet', 'Jadwal tertulis ke sheet', r.nama + ' · ' + lbl + ' · ' + String(patch.tertulis).replace(/^ya · /, ''), '#/jadwal');
       }
@@ -2238,7 +2247,9 @@ Object.assign(API, {
     const users = u.role === 'admin' ? read_('users').filter(function (x) { return x.status === 'aktif'; }).map(function (x) {
       return { username: x.username, nama: x.nama, namaDsr: resolveNamaDsr_(x, ras), manual: String(x.nama_dsr || '') };
     }) : null;
-    return { bulan: bulan, targets: targets, ras: ras, targetToko: t ? Number(t.target) : null, users: users };
+    let toko = [];
+    try { toko = raToko_(bulan, read_('dsr').filter(function (r) { return String(r.tanggal).slice(0, 7) === bulan; })); } catch (e) { toko = []; }
+    return { bulan: bulan, targets: targets, ras: ras, raToko: toko, targetToko: t ? Number(t.target) : null, users: users };
   },
 
   raTargetSet: function (req) {
@@ -3301,5 +3312,533 @@ Object.assign(API, {
     subs.forEach(function (s) { dev[s.username] = (dev[s.username] || 0) + 1; });
     const tim = read_('users').filter(function (x) { return x.status === 'aktif'; }).map(function (x) { return { nama: x.nama, username: x.username, perangkat: dev[x.username] || 0 }; });
     return { waktu: now_(), cek: out, tim: tim };
+  }
+});
+
+/* ===================== Penyusun jadwal ===================== */
+/**
+ * Penyusun draf jadwal (simulated annealing di seluruh tabel).
+ * inp = {
+ *   tanggal: ['yyyy-MM-dd'...], dow: [0..6] (0 = Minggu),
+ *   nama: ['YERIKO ...', ...], admin: indeks Store Leader (-1 bila tidak ada),
+ *   prev: { nama: [kode periode lalu...] }, tetap: { nama: { idx: kode } },
+ *   jatahOff: { nama: n }, ramai: [0..1 per tanggal] (1 = paling ramai), seed
+ * }
+ */
+const JD_REST = { OFF: 1, CT: 1 };
+const JD_MID = { MD: 1, MC: 1 };
+const JD_H = 1000;
+
+function jdRng_(seed) {
+  let s = (seed >>> 0) || 1;
+  return function () { s ^= s << 13; s >>>= 0; s ^= s >>> 17; s ^= s << 5; s >>>= 0; return s / 4294967296; };
+}
+
+function jdPrep_(inp) {
+  const N = inp.nama.length, T = inp.tanggal.length;
+  const tail = [], last = [], fixed = [];
+  for (let p = 0; p < N; p++) {
+    const pv = (inp.prev && inp.prev[inp.nama[p]]) || [];
+    let n = 0;
+    for (let i = pv.length - 1; i >= 0; i--) { if (JD_REST[pv[i]] || !pv[i]) break; n++; }
+    tail.push(n);
+    last.push(pv.length ? pv[pv.length - 1] : '');
+    const f = [];
+    const tp = (inp.tetap && inp.tetap[inp.nama[p]]) || {};
+    for (let t = 0; t < T; t++) f.push(tp[t] != null ? tp[t] : (tp[String(t)] != null ? tp[String(t)] : null));
+    fixed.push(f);
+  }
+  const wkend = inp.dow.map(function (d) { return d === 0 || d === 6; });
+  const jatah = inp.nama.map(function (n) { return inp.jatahOff && inp.jatahOff[n] != null ? inp.jatahOff[n] : 4; });
+  return { N: N, T: T, tail: tail, last: last, fixed: fixed, wkend: wkend, jatah: jatah, dow: inp.dow, admin: inp.admin, ramai: inp.ramai };
+}
+
+/** Biaya total + (opsional) daftar catatan. */
+function jdCost_(G, P, notes) {
+  const N = P.N, T = P.T;
+  let c = 0;
+  const add = function (v, p, t, msg, lvl) { c += v; if (notes && msg) notes.push({ p: p, t: t, msg: msg, lvl: lvl || 'merah' }); };
+  // per hari
+  for (let t = 0; t < T; t++) {
+    let pd = 0, sb = 0, mid = 0, w = 0, midP = -1;
+    for (let p = 0; p < N; p++) {
+      const x = G[p][t];
+      if (JD_REST[x]) continue;
+      w++;
+      if (x === 'PD') pd++; else if (x === 'SB') sb++; else if (JD_MID[x]) { mid++; midP = p; }
+    }
+    if (pd < 2) add(JD_H * (2 - pd), -1, t, 'Shift pagi kurang dari 2 orang');
+    if (sb < 2) add(JD_H * (2 - sb), -1, t, 'Shift siang kurang dari 2 orang');
+    if (w >= 5 && mid !== 1) add(200, -1, t, w + ' orang masuk tetapi ' + (mid ? mid + ' orang middle' : 'tidak ada MC/MD'), 'kuning');
+    if (w <= 4 && mid > 0) add(150, -1, t, 'Middle dipakai saat hanya ' + w + ' orang', 'kuning');
+    if (P.wkend[t]) { if (w < 5) add(40, -1, t, null); if (mid && midP !== P.admin && P.admin >= 0 && !JD_REST[G[P.admin][t]]) add(10, -1, t, null); }
+    else if (w >= 5) add(6 + 30 * (1 - (P.ramai[t] || 0)), -1, t, null);
+  }
+  // per orang
+  const midCnt = [];
+  for (let p = 0; p < N; p++) {
+    const g = G[p], f = P.fixed[p];
+    let off = 0, run = P.tail[p], wkOff = 0, mids = 0;
+    for (let t = 0; t < T; t++) {
+      const x = g[t];
+      const prevX = t > 0 ? g[t - 1] : P.last[p];
+      const nextX = t < T - 1 ? g[t + 1] : null;
+      if (x === 'OFF') off++;
+      if (JD_MID[x]) mids++;
+      if (JD_REST[x]) {
+        run = 0;
+        // H-1 harus PD
+        if (prevX && !JD_REST[prevX] && prevX !== 'PD' && !(t > 0 && f[t - 1])) add(JD_H, p, t > 0 ? t - 1 : t, t > 0 ? 'Sehari sebelum ' + x + ' bukan PD' : x + ' di hari pertama, padahal shift terakhir periode lalu bukan PD');
+        if (x === 'OFF' && t < T - 1 && nextX === 'OFF' && !f[t] && !f[t + 1]) add(30, p, t, null);
+        if (p === P.admin && P.dow[t] === 1 && !f[t]) add(JD_H, p, t, 'Store Leader libur di hari Senin (seharusnya PD)');
+        if (x === 'OFF' && P.wkend[t] && !f[t]) {
+          if (p === P.admin) add(JD_H, p, t, 'Store Leader OFF di weekend');
+          else { wkOff++; add(60, p, t, 'OFF di weekend', 'kuning'); }
+        }
+      } else {
+        run++;
+        if (run > 6) add(100 * (run - 6) * (run - 6), p, t, 'Hari kerja ke-' + run + ' berturut-turut', run === 7 ? 'kuning' : 'merah');
+        // H+1 tidak boleh PD
+        if (x === 'PD' && prevX && JD_REST[prevX] && !f[t]) add(JD_H, p, t, 'PD sehari setelah ' + prevX);
+        if (x === 'PD' && prevX === 'SB') add(8, p, t, null);
+        if (p === P.admin && P.dow[t] === 1 && x !== 'PD' && !f[t]) add(JD_H, p, t, 'Store Leader bukan PD di hari Senin');
+        if (p === P.admin && JD_MID[x] && !P.wkend[t]) add(4, p, t, null);
+      }
+    }
+    if (run > 4) add(20 * (run - 4), p, -1, null);
+    if (off !== P.jatah[p]) add(JD_H * Math.abs(off - P.jatah[p]), p, -1, 'Jumlah OFF ' + off + ' (seharusnya ' + P.jatah[p] + ')');
+    if (wkOff > 1) add(400 * (wkOff - 1), p, -1, 'OFF weekend ' + wkOff + '× dalam satu periode');
+    // keseimbangan PD/SB per minggu
+    for (let s = 0; s < T; s += 7) {
+      let a = 0, b = 0;
+      for (let t = s; t < Math.min(T, s + 7); t++) { if (g[t] === 'PD') a++; else if (g[t] === 'SB') b++; }
+      const d = Math.abs(a - b); if (d > 1) add(3 * (d - 1), p, -1, null);
+    }
+    let tpd = 0, tsb = 0; g.forEach(function (x) { if (x === 'PD') tpd++; else if (x === 'SB') tsb++; });
+    if (Math.abs(tpd - tsb) > 2) add(4 * (Math.abs(tpd - tsb) - 2), p, -1, null);
+    if (p !== P.admin) midCnt.push(mids);
+  }
+  if (midCnt.length) {
+    const m = midCnt.reduce(function (a, b) { return a + b; }, 0) / midCnt.length;
+    midCnt.forEach(function (x) { c += 4 * (x - m) * (x - m); });
+  }
+  return c;
+}
+
+/* ---- tahap 1: letak OFF ---- */
+function jdForced_(P, R, p, t) {
+  // bit 1 = wajib PD, bit 2 = tidak boleh PD, 3 = bentrok, 6 = middle tetap (bukan PD/SB)
+  const f = P.fixed[p][t];
+  if (f) return f === 'PD' ? 1 : f === 'SB' ? 2 : 6;
+  const prevRest = t > 0 ? R[p][t - 1] : !!JD_REST[P.last[p]];
+  const nextRest = t < P.T - 1 ? R[p][t + 1] : false;
+  let m = 0;
+  if (nextRest) m |= 1;
+  if (p === P.admin && P.dow[t] === 1) m |= 1;
+  if (prevRest) m |= 2;
+  return m;
+}
+function jdOffCost_(R, P) {
+  const N = P.N, T = P.T;
+  let c = 0;
+  for (let t = 0; t < T; t++) {
+    let w = 0, fPD = 0, fNo = 0, fMid = 0, bentrok = 0;
+    for (let p = 0; p < N; p++) {
+      if (R[p][t]) continue;
+      w++;
+      const m = jdForced_(P, R, p, t);
+      if (m === 3) bentrok++; else if (m === 1) fPD++; else if (m === 2) fNo++; else if (m === 6) fMid++;
+    }
+    if (w - fMid < 4) c += JD_H * (4 - w + fMid);
+    c += JD_H * bentrok;
+    if (w - fNo - fMid - bentrok < 2) c += JD_H;   // tidak cukup orang untuk PD
+    if (w - fPD - fMid - bentrok < 2) c += JD_H;   // tidak cukup orang untuk SB
+    if (fMid > 1) c += 200;
+    if (w >= 5 && fPD > w - 3) c += 200;           // 5 orang tapi tidak bisa ada middle
+    if (w <= 4 && fMid) c += 150;
+    if (P.wkend[t]) { if (w < 5) c += 40; }
+    else if (w >= 5) c += 6 + 30 * (1 - (P.ramai[t] || 0));
+  }
+  for (let p = 0; p < N; p++) {
+    const r = R[p], f = P.fixed[p];
+    let run = P.tail[p], wkOff = 0;
+    for (let t = 0; t < T; t++) {
+      if (r[t]) {
+        run = 0;
+        if (!f[t]) {
+          if (t === 0 && P.last[p] && !JD_REST[P.last[p]] && P.last[p] !== 'PD') c += JD_H;
+          if (P.wkend[t]) { if (p === P.admin) c += JD_H; else { wkOff++; c += 60; } }
+          if (p === P.admin && P.dow[t] === 1) c += JD_H;
+          if (t < T - 1 && r[t + 1] && !f[t + 1]) c += 30;
+        }
+      } else { run++; if (run > 6) c += 100 * (run - 6) * (run - 6); }
+    }
+    if (run > 4) c += 20 * (run - 4); // jangan wariskan rangkaian panjang ke periode berikutnya
+    if (wkOff > 1) c += 400 * (wkOff - 1);
+  }
+  return c;
+}
+function jdOffAnneal_(P, rnd, iters) {
+  const N = P.N, T = P.T;
+  const R = [], offs = [], need = [];
+  for (let p = 0; p < N; p++) {
+    const r = [];
+    let fixedOff = 0;
+    for (let t = 0; t < T; t++) { const f = P.fixed[p][t]; r.push(!!(f && JD_REST[f])); if (f === 'OFF') fixedOff++; }
+    R.push(r); offs.push([]); need.push(Math.max(0, P.jatah[p] - fixedOff));
+  }
+  // awal: yang rangkaian kerjanya paling panjang dapat OFF paling awal, sisanya berjarak rata
+  const used = []; for (let t = 0; t < T; t++) used.push(0);
+  for (let p = 0; p < N; p++) for (let t = 0; t < T; t++) if (R[p][t]) used[t]++;
+  const ord = []; for (let p = 0; p < N; p++) ord.push(p);
+  ord.sort(function (a, b) { return P.tail[b] - P.tail[a] + (rnd() - 0.5) * 0.5; });
+  const okDay = function (p, t) {
+    if (P.fixed[p][t] || R[p][t] || P.wkend[t]) return false;
+    if (p === P.admin && P.dow[t] === 1) return false;
+    if (t === 0 && P.last[p] && !JD_REST[P.last[p]] && P.last[p] !== 'PD') return false;
+    return true;
+  };
+  ord.forEach(function (p) {
+    let pos = Math.max(0, 6 - P.tail[p]);
+    while (need[p] > 0) {
+      let t = -1;
+      for (let d = 0; d < T; d++) {
+        const cand = [pos - d, pos + d];
+        for (let k = 0; k < 2; k++) { const x = cand[k]; if (x >= 0 && x < T && okDay(p, x) && used[x] === 0) { t = x; break; } }
+        if (t >= 0) break;
+      }
+      if (t < 0) for (let x = 0; x < T; x++) if (okDay(p, x)) { t = x; break; }
+      if (t < 0) break;
+      R[p][t] = true; offs[p].push(t); used[t]++; need[p]--;
+      pos = t + 7;
+    }
+  });
+  let c = jdOffCost_(R, P), best = c, bestR = R.map(function (x) { return x.slice(); });
+  let Tmp = 80;
+  const people = []; for (let p = 0; p < N; p++) if (offs[p].length) people.push(p);
+  if (!people.length) return bestR;
+  for (let it = 0; it < iters; it++) {
+    const p = people[Math.floor(rnd() * people.length)];
+    const k = Math.floor(rnd() * offs[p].length), from = offs[p][k];
+    if (rnd() < 0.25) { // tukar hari OFF dengan orang lain
+      const q = people[Math.floor(rnd() * people.length)];
+      if (q === p) continue;
+      const kq = Math.floor(rnd() * offs[q].length), b = offs[q][kq];
+      if (b === from || R[p][b] || R[q][from] || P.fixed[p][b] || P.fixed[q][from]) continue;
+      R[p][from] = false; R[p][b] = true; R[q][b] = false; R[q][from] = true; offs[p][k] = b; offs[q][kq] = from;
+      const c3 = jdOffCost_(R, P);
+      if (c3 <= c || rnd() < Math.exp((c - c3) / Tmp)) {
+        c = c3;
+        if (c < best) { best = c; bestR = R.map(function (x) { return x.slice(); }); }
+      } else { R[p][b] = false; R[p][from] = true; R[q][from] = false; R[q][b] = true; offs[p][k] = from; offs[q][kq] = b; }
+      Tmp = Math.max(0.5, Tmp * 0.9998);
+      continue;
+    }
+    let to;
+    if (rnd() < 0.5) to = from + (rnd() < 0.5 ? -1 : 1) * (1 + Math.floor(rnd() * 3)); else to = Math.floor(rnd() * T);
+    if (to < 0 || to >= T || R[p][to] || P.fixed[p][to]) continue;
+    R[p][from] = false; R[p][to] = true; offs[p][k] = to;
+    const c2 = jdOffCost_(R, P);
+    if (c2 <= c || rnd() < Math.exp((c - c2) / Tmp)) {
+      c = c2;
+      if (c < best) { best = c; bestR = R.map(function (x) { return x.slice(); }); }
+    } else { R[p][to] = false; R[p][from] = true; offs[p][k] = from; }
+    Tmp = Math.max(0.5, Tmp * 0.9998);
+  }
+  return bestR;
+}
+
+/* ---- tahap 2: shift per hari ---- */
+function jdShifts_(P, R, rnd) {
+  const N = P.N, T = P.T;
+  const G = [];
+  for (let p = 0; p < N; p++) { const g = []; for (let t = 0; t < T; t++) g.push(R[p][t] ? (P.fixed[p][t] || 'OFF') : ''); G.push(g); }
+  const midCnt = []; for (let p = 0; p < N; p++) midCnt.push(0);
+  const wk = [], tot = []; for (let p = 0; p < N; p++) { wk.push({ pd: 0, sb: 0 }); tot.push({ pd: 0, sb: 0 }); }
+  for (let t = 0; t < T; t++) {
+    if (t % 7 === 0) wk.forEach(function (x) { x.pd = 0; x.sb = 0; });
+    const W = [];
+    for (let p = 0; p < N; p++) if (!R[p][t]) W.push(p);
+    const w = W.length;
+    let bestS = null, bestA = null;
+    const total = Math.pow(3, w), opt = ['PD', 'SB', 'MD'];
+    for (let code = 0; code < total; code++) {
+      let x = code, pd = 0, sb = 0, mid = 0, ok = true, sc = 0;
+      const a = [];
+      for (let i = 0; i < w; i++) {
+        const p = W[i];
+        let v = opt[x % 3]; x = Math.floor(x / 3);
+        const f = P.fixed[p][t];
+        if (f) { if (v !== (f === 'PD' ? 'PD' : f === 'SB' ? 'SB' : 'MD')) { ok = false; break; } v = f; }
+        else {
+          const m = jdForced_(P, R, p, t);
+          if (m === 1 && v !== 'PD') { ok = false; break; }
+          if ((m & 2) && v === 'PD') { ok = false; break; }
+        }
+        a.push(v);
+        if (v === 'PD') pd++; else if (v === 'SB') sb++; else mid++;
+      }
+      if (!ok || pd < 2 || sb < 2) continue;
+      if (mid > 1) continue;
+      if (w >= 5 && mid !== 1) sc += 200;
+      for (let i = 0; i < w; i++) {
+        const p = W[i], v = a[i];
+        const prev = t > 0 ? G[p][t - 1] : P.last[p];
+        if (v === 'PD' && prev === 'SB') sc += 8;
+        if (v === 'PD') sc += 5 * Math.max(0, wk[p].pd - wk[p].sb) + 2 * Math.max(0, tot[p].pd - tot[p].sb); else if (v === 'SB') sc += 5 * Math.max(0, wk[p].sb - wk[p].pd) + 2 * Math.max(0, tot[p].sb - tot[p].pd);
+        if (JD_MID[v]) {
+          if (p === P.admin) sc += P.wkend[t] ? 0 : 4;
+          else sc += (P.wkend[t] && P.admin >= 0 && !R[P.admin][t] ? 10 : 0) + 4 * midCnt[p];
+        }
+      }
+      sc += rnd() * 0.5;
+      if (bestS === null || sc < bestS) { bestS = sc; bestA = a; }
+    }
+    if (!bestA) { // tidak ada susunan sah: isi bergiliran
+      bestA = W.map(function (p, i) { return P.fixed[p][t] || (i % 2 ? 'SB' : 'PD'); });
+    }
+    W.forEach(function (p, i) {
+      const v = bestA[i]; G[p][t] = v;
+      if (v === 'PD') { wk[p].pd++; tot[p].pd++; } else if (v === 'SB') { wk[p].sb++; tot[p].sb++; }
+      if (JD_MID[v]) midCnt[p]++;
+    });
+  }
+  return G;
+}
+
+/** Hasil: { shift: {nama: [kode]}, skor, catatan: [{nama, tanggal, pesan, level}] } */
+function susunJadwal_(inp) {
+  const P = jdPrep_(inp);
+  const ulang = inp.ulang || 6, iters = inp.iters || 25000;
+  const rnd = jdRng_((inp.seed || 7) * 7919 + 13);
+  let best = null;
+  for (let r = 0; r < ulang; r++) {
+    const R = jdOffAnneal_(P, rnd, iters);
+    for (let k = 0; k < 3; k++) {
+      const G = jdShifts_(P, R, rnd);
+      const c = jdCost_(G, P);
+      if (!best || c < best.c) best = { G: G, c: c };
+    }
+  }
+  const G = best.G;
+  // middle di weekend = MC, hari biasa = MD (kecuali dari request)
+  for (let p = 0; p < P.N; p++) for (let t = 0; t < P.T; t++) {
+    if (!P.fixed[p][t] && JD_MID[G[p][t]]) G[p][t] = P.wkend[t] ? 'MC' : 'MD';
+  }
+  const out = {};
+  inp.nama.forEach(function (n, p) { out[n] = G[p]; });
+  return { shift: out, skor: Math.round(best.c), catatan: jdCatatan_(P, G, inp) };
+}
+
+/** Catatan pelanggaran aturan untuk tabel jadi (dipakai juga setelah diubah manual). */
+function jdCatatan_(P, G, inp) {
+  const notes0 = [];
+  jdCost_(G, P, notes0);
+  const seen = {};
+  return notes0.filter(function (x) { const k = x.p + '|' + x.t + '|' + x.msg; if (seen[k]) return false; seen[k] = 1; return true; })
+    .map(function (x) { return { nama: x.p >= 0 ? inp.nama[x.p] : '', tanggal: x.t >= 0 ? inp.tanggal[x.t] : '', pesan: x.msg, level: x.lvl }; });
+}
+function nilaiJadwal_(inp, shift) {
+  const P = jdPrep_(inp);
+  const G = inp.nama.map(function (n) { return shift[n].slice(); });
+  return jdCatatan_(P, G, inp);
+}
+
+
+/* ===================== Draf jadwal otomatis ===================== */
+
+const JD_KODE_SAH = ['PD', 'SB', 'MD', 'MC', 'OFF', 'CT', 'SC', 'NS'];
+
+function jdTgl_(p) { const out = []; for (let d = p.start; d <= p.end; d = addDays_(d, 1)) out.push(d); return out; }
+function jdDow_(iso) { const q = iso.split('-').map(Number); return new Date(Date.UTC(q[0], q[1] - 1, q[2])).getUTCDay(); }
+
+function jdBaca_(mulai) {
+  const r = read_('jadwal_draf').filter(function (x) { return String(x.periode) === mulai; })[0];
+  if (!r) return null;
+  let data = null;
+  try { data = JSON.parse(String(r.data || '')); } catch (e) { data = null; }
+  return { periode: String(r.periode), status: String(r.status), dibuat: String(r.dibuat), diubah: String(r.diubah), oleh: String(r.oleh), data: data };
+}
+function jdSimpan_(mulai, status, data, oleh) {
+  const rows = read_('jadwal_draf');
+  const i = rows.findIndex(function (x) { return String(x.periode) === mulai; });
+  const rec = { periode: mulai, status: status, dibuat: i >= 0 ? rows[i].dibuat : now_(), diubah: now_(), oleh: oleh || '', data: JSON.stringify(data) };
+  if (i >= 0) updateRow_('jadwal_draf', 'periode', mulai, rec); else append_('jadwal_draf', rec);
+}
+
+/** Seberapa ramai tiap hari (0 = paling sepi, 1 = paling ramai) dari median sales per hari 120 hari terakhir. */
+function jdRamai_(tanggal) {
+  const by = [[], [], [], [], [], [], []];
+  const dari = addDays_(today_(), -120);
+  ringkasan_().forEach(function (r) { if (r.tanggal >= dari && r.bruto > 0) by[jdDow_(r.tanggal)].push(r.bruto); });
+  const med = by.map(function (a) { if (!a.length) return null; a.sort(function (x, y) { return x - y; }); const m = Math.floor(a.length / 2); return a.length % 2 ? a[m] : (a[m - 1] + a[m]) / 2; });
+  const def = [1, 0.2, 0.2, 0.2, 0.5, 0.5, 0.9]; // cadangan bila data kurang (Minggu..Sabtu)
+  const v = med.filter(function (x) { return x != null; });
+  const mn = Math.min.apply(null, v.length ? v : [0]), mx = Math.max.apply(null, v.length ? v : [1]);
+  return tanggal.map(function (t) { const m = med[jdDow_(t)]; return m == null || mx === mn ? def[jdDow_(t)] : (m - mn) / (mx - mn); });
+}
+
+/** Bahan penyusun: staf, sisa periode lalu, request yang disetujui, kunci manual. */
+function jdBahan_(p, kunci) {
+  const tanggal = jdTgl_(p);
+  const prevJ = readJadwalPeriode_(addDays_(p.start, -1));
+  if (!prevJ || !prevJ.staf.length) throw new Error('Tab jadwal periode sebelumnya tidak ditemukan, staf tidak bisa ditentukan');
+  const staf = prevJ.staf.filter(function (s) { return !/^HL\b/i.test(String(s.nama).trim()); });
+  const nama = staf.map(function (s) { return s.nama; });
+  const prev = {};
+  staf.forEach(function (s) { prev[s.nama] = s.shift.slice(-10); });
+  const users = read_('users').filter(function (u) { return u.status === 'aktif'; });
+  const admins = users.filter(function (u) { return u.role === 'admin'; }).map(function (u) { return resolveNamaJadwal_(u, nama); }).filter(Boolean);
+  const admin = admins.length ? nama.map(normName_).indexOf(normName_(admins[0])) : -1;
+  const tetap = {}, jatah = {}, req = {};
+  nama.forEach(function (n) { tetap[n] = {}; jatah[n] = 4; req[n] = []; });
+  // kunci manual admin dulu, lalu request (request menang bila bentrok)
+  Object.keys(kunci || {}).forEach(function (n) {
+    if (!tetap[n]) return;
+    Object.keys(kunci[n]).forEach(function (i) { tetap[n][Number(i)] = kunci[n][i]; });
+  });
+  read_('request_jadwal').forEach(function (r) {
+    if (r.status !== 'disetujui') return;
+    const t = String(r.tanggal), i = tanggal.indexOf(t);
+    if (i < 0) return;
+    const u = users.filter(function (x) { return x.username === r.username; })[0] || { nama: r.nama };
+    const nj = resolveNamaJadwal_(u, nama);
+    const n = nama.filter(function (x) { return normName_(x) === normName_(nj); })[0];
+    if (!n) return;
+    tetap[n][i] = String(r.jenis).toUpperCase();
+    req[n].push(i);
+    if (String(r.pakai_simpanan) === 'ya' && String(r.jenis).toUpperCase() === 'OFF') jatah[n]++;
+  });
+  return {
+    inp: { tanggal: tanggal, dow: tanggal.map(jdDow_), nama: nama, admin: admin, prev: prev, tetap: tetap, jatahOff: jatah, ramai: jdRamai_(tanggal) },
+    req: req, tabLalu: prevJ.tab
+  };
+}
+
+function jdBuat_(p, oleh, alasan) {
+  const lama = jdBaca_(p.start);
+  const kunci = lama && lama.data ? (lama.data.kunci || {}) : {};
+  const B = jdBahan_(p, kunci);
+  const hasil = susunJadwal_(Object.assign({ seed: Math.floor(Math.random() * 1e6) + 1, ulang: 4, iters: 20000 }, B.inp));
+  const data = {
+    mulai: p.start, selesai: p.end, label: p.label, tanggal: B.inp.tanggal,
+    hari: B.inp.tanggal.map(function (t) { return HARI_KODE[jdDow_(t)]; }),
+    staf: B.inp.nama.map(function (n) { return { nama: n, shift: hasil.shift[n], req: B.req[n] }; }),
+    kunci: kunci, catatan: hasil.catatan, skor: hasil.skor, dibuat: now_(), alasan: alasan || '', tabLalu: B.tabLalu
+  };
+  jdSimpan_(p.start, 'draf', data, oleh);
+  return data;
+}
+
+/** Periode yang belum terbit (tab belum ada atau drafnya masih draf) → request disetujui masuk draf. */
+function jdMasihDraf_(p) {
+  const d = jdBaca_(p.start);
+  if (d && d.status === 'draf') return true;
+  if (d && d.status === 'terbit') return false;
+  try { return !findTab_(SpreadsheetApp.openById(CFG.JADWAL_SHEET_ID), p); } catch (e) { return false; }
+}
+
+function jdTerbitkan_(p, oleh) {
+  const d = jdBaca_(p.start);
+  if (!d || !d.data) throw new Error('Draf periode ' + p.label + ' belum ada');
+  const data = d.data;
+  const ss = SpreadsheetApp.openById(CFG.JADWAL_SHEET_ID);
+  let sh = findTab_(ss, p), baru = false;
+  if (!sh) { sh = createTab_(ss, p); baru = true; }
+  const names = sh.getRange(5, 2, Math.max(1, sh.getLastRow() - 4), 1).getDisplayValues().map(function (r) { return String(r[0]).trim(); });
+  const staf = [];
+  for (let i = 0; i < names.length && names[i]; i++) staf.push(names[i]);
+  const cols = dayCols_(sh);
+  const dayRow = sh.getRange(2, 1, 1, sh.getLastColumn()).getDisplayValues()[0];
+  const colOf = {};
+  cols.forEach(function (c) { colOf[Number(dayRow[c - 1])] = c; });
+  const c0 = cols[0], n = cols.length;
+  const hilang = [];
+  data.staf.forEach(function (s) {
+    const ri = staf.map(normName_).indexOf(normName_(s.nama));
+    if (ri < 0) { hilang.push(s.nama); return; }
+    const row = [], bg = [];
+    for (let k = 0; k < n; k++) {
+      const day = Number(dayRow[c0 - 1 + k]);
+      const i = data.tanggal.findIndex(function (t) { return Number(t.slice(8)) === day; });
+      row.push(i >= 0 ? s.shift[i] : '');
+      bg.push(i >= 0 && (s.req || []).indexOf(i) >= 0 ? CFG.REQUEST_COLOR : null);
+    }
+    sh.getRange(5 + ri, c0, 1, n).setValues([row]).setBackgrounds([bg]);
+  });
+  if (hilang.length) throw new Error('Nama tidak ada di tab ' + sh.getName() + ': ' + hilang.join(', '));
+  jdSimpan_(p.start, 'terbit', data, oleh);
+  bumpVersion_();
+  return { tab: sh.getName(), tabBaru: baru };
+}
+
+Object.assign(API, {
+  /** Draf jadwal periode (default: periode berikutnya). Admin. */
+  jdDraf: function (req) {
+    const a = auth_(req, true);
+    const cur = periodOf_(today_());
+    const p = req.mulai ? periodOf_(String(req.mulai)) : periodOf_(addDays_(cur.end, 1));
+    if (p.start < CFG.JADWAL_MIN_START || p.end < today_()) throw new Error('Periode ' + p.label + ' sudah lewat');
+    let d = jdBaca_(p.start);
+    let tabAda = false;
+    try { tabAda = !!findTab_(SpreadsheetApp.openById(CFG.JADWAL_SHEET_ID), p); } catch (e) {}
+    if (!d && !tabAda && req.buat) {
+      withLock_(function () { jdBuat_(p, a.username, 'dibuat pertama'); });
+      d = jdBaca_(p.start);
+    }
+    return { periode: periodInfo_(p), tabAda: tabAda, draf: d };
+  },
+
+  jdSusun: function (req) {
+    const a = auth_(req, true);
+    const p = periodOf_(String(req.mulai || ''));
+    if (p.start < CFG.JADWAL_MIN_START || p.end < today_()) throw new Error('Periode ' + p.label + ' sudah lewat');
+    const d = jdBaca_(p.start);
+    if (d && d.status === 'terbit' && !req.paksa) throw new Error('Jadwal periode ini sudah terbit. Susun ulang akan mengganti jadwal yang sudah dibagikan.');
+    const data = withLock_(function () { return jdBuat_(p, a.username, 'disusun ulang'); }, 60000);
+    log_(a.username, 'susun jadwal', p.label + ' · skor ' + data.skor);
+    return { draf: jdBaca_(p.start) };
+  },
+
+  /** Ubah satu sel draf secara manual (dikunci saat disusun ulang). kode '' = buka kunci. */
+  jdUbah: function (req) {
+    const a = auth_(req, true);
+    const p = periodOf_(String(req.mulai || ''));
+    const kode = String(req.kode || '').toUpperCase();
+    if (kode && JD_KODE_SAH.indexOf(kode) < 0) throw new Error('Kode shift tidak dikenal');
+    return withLock_(function () {
+      const d = jdBaca_(p.start);
+      if (!d || !d.data) throw new Error('Draf belum ada');
+      if (d.status !== 'draf') throw new Error('Jadwal sudah terbit; ubah lewat Request atau Tukar Shift');
+      const data = d.data, i = data.tanggal.indexOf(String(req.tanggal));
+      const s = data.staf.filter(function (x) { return x.nama === req.nama; })[0];
+      if (!s || i < 0) throw new Error('Sel tidak ditemukan');
+      data.kunci = data.kunci || {};
+      data.kunci[s.nama] = data.kunci[s.nama] || {};
+      if (kode) { data.kunci[s.nama][i] = kode; s.shift[i] = kode; } else delete data.kunci[s.nama][i];
+      const B = jdBahan_(p, data.kunci);
+      const shift = {}; data.staf.forEach(function (x) { shift[x.nama] = x.shift; });
+      data.catatan = nilaiJadwal_(B.inp, shift);
+      jdSimpan_(p.start, 'draf', data, a.username);
+      return { draf: jdBaca_(p.start) };
+    });
+  },
+
+  jdTerbit: function (req) {
+    const a = auth_(req, true);
+    const p = periodOf_(String(req.mulai || ''));
+    if (p.start < CFG.JADWAL_MIN_START) throw new Error('Periode ' + p.label + ' sudah ditutup');
+    const w = withLock_(function () { return jdTerbitkan_(p, a.username); }, 60000);
+    log_(a.username, 'terbitkan jadwal', p.label + ' → tab ' + w.tab);
+    notif_('semua', 'ok', 'jadwal', 'Jadwal ' + p.label + ' sudah terbit', 'Cek shift kamu ' + tglPendek_(p.start) + ' – ' + tglPendek_(p.end) + '.', '#/jadwal');
+    return w;
+  },
+
+  /** Jadwal satu periode dari sheet (untuk lihat & unduh). */
+  jadwalPeriode: function (req) {
+    auth_(req);
+    const p = periodOf_(String(req.mulai || today_()));
+    const j = readJadwalPeriode_(p.start);
+    return { periode: periodInfo_(p), jadwal: j };
   }
 });
