@@ -2980,9 +2980,11 @@ function labelOf_(name) { return GmailApp.getUserLabelByName(name) || GmailApp.c
 /** Dijalankan tiap 15 menit oleh pemicu waktu. */
 function cekEmailDsr() {
   const lab = labelOf_(DSR_EMAIL.LABEL), labGagal = labelOf_(DSR_EMAIL.LABEL_GAGAL);
-  const threads = GmailApp.search('from:' + DSR_EMAIL.FROM + ' subject:ItemDSRReport -label:' + DSR_EMAIL.LABEL + ' -label:' + DSR_EMAIL.LABEL_GAGAL + ' newer_than:3d', 0, 10);
+  const threads = GmailApp.search('from:' + DSR_EMAIL.FROM + ' -label:' + DSR_EMAIL.LABEL + ' -label:' + DSR_EMAIL.LABEL_GAGAL + ' newer_than:3d', 0, 30);
   const msgs = [];
-  threads.forEach(function (th) { th.getMessages().forEach(function (m) { msgs.push({ th: th, m: m }); }); });
+  threads.forEach(function (th) {
+    th.getMessages().forEach(function (m) { if (/ItemDSRReport/i.test(m.getSubject())) msgs.push({ th: th, m: m }); });
+  });
   msgs.sort(function (a, b) { return a.m.getDate() - b.m.getDate(); });
   const bot = { username: 'email', nama: 'Email CARE', role: 'sistem' };
   const hasil = [];
