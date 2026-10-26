@@ -2361,6 +2361,30 @@
     }).then(function (r) { SW = r; kirimSesiSW(); }).catch(function () {});
   }
   window.addEventListener('beforeinstallprompt', function (e) { e.preventDefault(); installEvt = e; });
+
+  /* ---------- Pembaruan otomatis: cek versi tiap dibuka / kembali ke layar ---------- */
+  var APP_VER = (function () { var sc = document.querySelector('script[src*="assets/app.js"]'); var m = sc && sc.src.match(/[?&]v=(\w+)/); return m ? m[1] : ''; })();
+  var verAt = 0, verBanner = null, formDirty = false;
+  document.addEventListener('input', function (e) { if (e.target && e.target.closest && e.target.closest('#view')) formDirty = true; }, true);
+  window.addEventListener('hashchange', function () { formDirty = false; });
+  function cekVersi(force) {
+    if (!APP_VER || (!force && Date.now() - verAt < 60000)) return;
+    verAt = Date.now();
+    try { if (SW && SW.update) SW.update(); } catch (e) {}
+    fetch('index.html?cek=' + Date.now(), { cache: 'no-store' }).then(function (r) { return r.ok ? r.text() : ''; }).then(function (html) {
+      var m = html.match(/assets\/app\.js\?v=(\w+)/);
+      if (!m || m[1] === APP_VER) return;
+      if (!formDirty && !document.querySelector('.modal-back, .sheet-wrap')) { location.reload(); return; }
+      if (verBanner) return;
+      verBanner = el('button', { class: 'ver-banner', type: 'button', onclick: function () { location.reload(); } },
+        el('b', { text: 'Versi baru Basecamp tersedia' }), el('span', { text: 'Ketuk untuk memperbarui (simpan isian dulu)' }));
+      document.body.appendChild(verBanner);
+    }).catch(function () {});
+  }
+  document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible') cekVersi(false); });
+  window.addEventListener('focus', function () { cekVersi(false); });
+  setTimeout(function () { cekVersi(true); }, 4000);
+  setInterval(function () { if (document.visibilityState === 'visible') cekVersi(false); }, 10 * 60000);
   function isIOS() { return /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1); }
   function isStandalone() { return window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true; }
   function b64uToBytes(s) { s = s.replace(/-/g, '+').replace(/_/g, '/'); while (s.length % 4) s += '='; var b = atob(s), a = new Uint8Array(b.length); for (var i = 0; i < b.length; i++) a[i] = b.charCodeAt(i); return a; }
@@ -2387,6 +2411,7 @@
   }
   function appCard() {
     var box = el('div', { class: 'card section', style: 'max-width:520px' });
+    setTimeout(function () { box.after(el('p', { class: 'sub', style: 'max-width:520px;margin-top:8px', text: 'Versi Basecamp di perangkat ini: ' + (APP_VER || '—') + ' · diperbarui otomatis saat ada versi baru.' })); }, 0);
     function draw() {
       var izin = 'Notification' in window ? Notification.permission : 'tidak-didukung';
       var st = el('div', { class: 'app-st' });

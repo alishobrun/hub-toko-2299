@@ -8,7 +8,7 @@ Proyek ini dikerjakan lebih dari satu asisten (Claude & Cindy). Supaya tidak sal
    Halaman *Kesehatan Data* membandingkan versi mesin yang aktif dengan GitHub; merah = ada kode di luar GitHub.
 3. **Pasang ke deployment yang sama** (Kelola deployment → edit → Versi baru). Jangan buat deployment baru,
    karena alamat API di `assets/config.js` akan berbeda.
-4. **Naikkan `?v=` di `index.html`** setiap kali file di `assets/` berubah (supaya HP tidak memakai file lama).
+4. **Naikkan `?v=` di `index.html`** setiap kali file di `assets/` berubah. Angka `?v=` pada app.js juga dipakai HP untuk mendeteksi versi baru dan memperbarui otomatis — kalau lupa dinaikkan, HP tidak tahu ada versi baru.
 5. **Encoding:** UTF-8 tanpa BOM, akhir baris LF (sudah diatur `.gitattributes`). Periksa tidak ada teks rusak
    seperti `â€¦` / `Ã`.
 6. **Data:** jangan menghapus baris/tab di sheet "DB Hub Toko 2299" atau sheet JADWAL secara langsung.
