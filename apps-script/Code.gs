@@ -661,16 +661,16 @@ function readJadwal_(today) {
 function auth_(req, needAdmin) {
   const t = String(req.token || '');
   if (!t) throw new Error('AUTH: Silakan masuk dulu');
-  const ses = read_('sessions').filter(function (s) { return s.token === t; })[0];
+  const ses = readCached_('sessions', 30).filter(function (s) { return s.token === t; })[0];
   if (!ses || String(ses.kedaluwarsa) < now_()) throw new Error('AUTH: Sesi berakhir, silakan masuk lagi');
-  const u = read_('users').filter(function (x) { return x.username === ses.username; })[0];
+  const u = readCached_('users', 60).filter(function (x) { return x.username === ses.username; })[0];
   if (!u || u.status !== 'aktif') throw new Error('AUTH: Akun tidak aktif');
   if (needAdmin && u.role !== 'admin') throw new Error('Menu ini khusus admin');
   return u;
 }
 
 function publicUser_(u) { return { username: u.username, nama: u.nama, role: u.role }; }
-function namaUser_(username) { const u = read_('users').filter(function (x) { return x.username === username; })[0]; return u ? u.nama : username; }
+function namaUser_(username) { const u = readCached_('users', 60).filter(function (x) { return x.username === username; })[0]; return u ? u.nama : username; }
 function cleanUser_(u) { return String(u || '').trim().toLowerCase(); }
 function now_() { return Utilities.formatDate(new Date(), CFG.TZ, 'yyyy-MM-dd HH:mm:ss'); }
 function pad_(n) { return (n < 10 ? '0' : '') + n; }
@@ -771,17 +771,35 @@ function read_(n) {
   });
 }
 
+/* Baca sheet dengan cache pendek — untuk tab yang sering dibaca & jarang berubah
+ * (sessions, users). Otomatis batal saat tab itu ditulis (lihat bump di
+ * writeAll_/append_/updateRow_). */
+function readCached_(n, seconds) {
+  const c = CacheService.getScriptCache();
+  const k = 'rc_' + n + '_v' + (PropertiesService.getScriptProperties().getProperty('ver') || '0');
+  const hit = c.get(k);
+  if (hit) { try { return JSON.parse(hit); } catch (e) { /* lanjut baca sheet */ } }
+  const out = read_(n);
+  try { c.put(k, JSON.stringify(out), seconds || 60); } catch (e) { /* terlalu besar */ }
+  return out;
+}
+
+function invalidateReadCache_(n) {
+  if (n === 'users' || n === 'sessions') bumpVersion_();
+}
+
 function writeAll_(n, objs) {
   const s = sh_(n), h = TABS[n];
   const last = s.getLastRow();
   if (last > 1) s.getRange(2, 1, last - 1, h.length).clearContent();
-  if (!objs.length) return;
+  if (!objs.length) { invalidateReadCache_(n); return; }
   const need = objs.length + 1;
   if (s.getMaxRows() < need) s.insertRowsAfter(s.getMaxRows(), need - s.getMaxRows());
   formatCols_(s, n, 2, objs.length);
   s.getRange(2, 1, objs.length, h.length).setValues(objs.map(function (o) {
     return h.map(function (k) { return o[k] == null ? '' : o[k]; });
   }));
+  invalidateReadCache_(n);
 }
 
 function append_(n, o) {
@@ -790,6 +808,7 @@ function append_(n, o) {
   if (s.getMaxRows() < r) s.insertRowsAfter(s.getMaxRows(), 1);
   formatCols_(s, n, r, 1);
   s.getRange(r, 1, 1, h.length).setValues([h.map(function (k) { return o[k] == null ? '' : o[k]; })]);
+  invalidateReadCache_(n);
 }
 
 function updateRow_(n, keyCol, keyVal, patch) {
@@ -799,6 +818,7 @@ function updateRow_(n, keyCol, keyVal, patch) {
   if (i < 0) return false;
   Object.keys(patch).forEach(function (k) { rows[i][k] = patch[k]; });
   s.getRange(i + 2, 1, 1, h.length).setValues([h.map(function (k) { return rows[i][k] == null ? '' : rows[i][k]; })]);
+  invalidateReadCache_(n);
   return true;
 }
 
