@@ -12,5 +12,5 @@ Proyek ini dikerjakan lebih dari satu asisten (Claude & Cindy). Supaya tidak sal
 5. **Encoding:** UTF-8 tanpa BOM, akhir baris LF (sudah diatur `.gitattributes`). Periksa tidak ada teks rusak
    seperti `â€¦` / `Ã`.
 6. **Data:** jangan menghapus baris/tab di sheet "DB Hub Toko 2299" atau sheet JADWAL secara langsung.
-   Cadangan otomatis ada di folder Drive "Cadangan Hub 2299" (DB harian 30 hari, JADWAL mingguan).
+   Semua file buatan Basecamp ada di Drive pemilik: "01 Eiger / Basecamp 2299" (database, Cadangan: DB harian 30 hari & JADWAL mingguan, Handover, Sistem). Jangan membuat file/folder baru di halaman utama Drive.
 7. Pemilik: Ali Muhammad Shobrun (Store Leader 2299). Perubahan fitur dibahas dulu; dibangun setelah ia bilang "gass".

@@ -11,7 +11,7 @@
 /** Versi kode. WAJIB dinaikkan setiap kali Code.gs diubah (format yyyy-MM-dd.n),
  *  lalu simpan ke GitHub (alishobrun/hub-toko-2299) SEBELUM dipasang. Halaman Kesehatan Data
  *  membandingkan angka ini dengan GitHub supaya kode yang dipasang di luar GitHub ketahuan. */
-const KODE_VERSI = '2026-10-27.3';
+const KODE_VERSI = '2026-10-27.4';
 
 const CFG = {
   STORE: '2299',
@@ -28,7 +28,9 @@ const CFG = {
   // Folder "MASTER ARTIKEL 2026" (subfolder per bulan berisi file Excel master artikel)
   MASTER_FOLDER_ID: '191L_XnHi-Z6bLlbgkA4vGpKBSU_7XXDf',
   MASTER_CHUNK: 2 * 1024 * 1024, // potongan teks base64 (kelipatan 4)
-  MASTER_CACHE_FOLDER: 'Cache Master Artikel Basecamp 2299',
+  MASTER_CACHE_FOLDER: 'Cache Master Artikel Basecamp 2299', // nama lama, dipindah otomatis ke Basecamp 2299/Sistem
+  EIGER_FOLDER_ID: '19YlV2JrKC3Tl53mupQWjS_tFTmiMHgtB',      // folder "01 Eiger" di Drive pemilik
+  BASECAMP_FOLDER: 'Basecamp 2299',                          // semua file buatan Basecamp ada di sini
   NA_HARI: 60,          // New Arrival: dibuat (Created On) maksimal 60 hari lalu
   BARU_TOKO_HARI: 30,   // Baru di toko: pertama kali ada stok maksimal 30 hari lalu
   REQUEST_DEADLINE_DAY: 21,
@@ -1339,9 +1341,43 @@ function namesMap_() {
 }
 
 /* ---------- cadangan: DB harian (30 hari), sheet JADWAL mingguan ---------- */
-function folderCadangan_() {
-  const it = DriveApp.getFoldersByName(CFG.BACKUP_FOLDER);
-  return it.hasNext() ? it.next() : DriveApp.createFolder(CFG.BACKUP_FOLDER);
+function folderCadangan_() { return subFolder_('Cadangan', CFG.BACKUP_FOLDER); }
+
+/* ---------- folder Drive: 01 Eiger / Basecamp 2299 / {Cadangan, Handover, Sistem} ---------- */
+function folderBasecamp_() {
+  const p = PropertiesService.getScriptProperties(), id = p.getProperty('BASECAMP_FOLDER_ID');
+  if (id) { try { const f = DriveApp.getFolderById(id); if (!f.isTrashed()) return f; } catch (e) { /* cari ulang */ } }
+  let parent;
+  try { parent = DriveApp.getFolderById(CFG.EIGER_FOLDER_ID); } catch (e) { parent = DriveApp.getRootFolder(); }
+  const it = parent.getFoldersByName(CFG.BASECAMP_FOLDER);
+  const f = it.hasNext() ? it.next() : parent.createFolder(CFG.BASECAMP_FOLDER);
+  p.setProperty('BASECAMP_FOLDER_ID', f.getId());
+  return f;
+}
+/** Subfolder di Basecamp 2299. Folder bernama lama (dulu di halaman utama Drive) dipindah & diganti nama. */
+function subFolder_(nama, namaLama) {
+  const bc = folderBasecamp_();
+  const it = bc.getFoldersByName(nama);
+  if (it.hasNext()) return it.next();
+  if (namaLama) {
+    const old = DriveApp.getFoldersByName(namaLama);
+    while (old.hasNext()) { const f = old.next(); if (!f.isTrashed()) { f.moveTo(bc); f.setName(nama); return f; } }
+  }
+  return bc.createFolder(nama);
+}
+function folderSistem_() { return subFolder_('Sistem (jangan diubah)', CFG.MASTER_CACHE_FOLDER); }
+/** Sekali jalan: kumpulkan database & folder lama ke 01 Eiger / Basecamp 2299. */
+function rapikanDrive_() {
+  const p = PropertiesService.getScriptProperties();
+  if (p.getProperty('drive_rapi') === '2') return false;
+  const bc = folderBasecamp_();
+  const db = DriveApp.getFileById(SpreadsheetApp.getActive().getId());
+  let di = false; const par = db.getParents(); while (par.hasNext()) if (par.next().getId() === bc.getId()) di = true;
+  if (!di) db.moveTo(bc);
+  folderCadangan_(); subFolder_('Handover', 'Handover Basecamp 2299'); folderSistem_();
+  p.setProperty('drive_rapi', '2');
+  log_('sistem', 'rapikan drive', 'database & folder Basecamp dipindah ke 01 Eiger / ' + CFG.BASECAMP_FOLDER);
+  return true;
 }
 function rapikanCadangan_(folder, awalan, simpan) {
   const files = [];
@@ -1672,7 +1708,7 @@ function syncTraffic_() {
   return { tanggal: tgl, traffic: traffic };
 }
 /** Dipanggil pemicu per jam supaya traffic tiap hari tetap tercatat walau web tidak dibuka. */
-function catatTraffic() { try { cadanganHarian_(); } catch (e) { Logger.log('cadangan: ' + e); } try { bersihSesi_(); } catch (e) { Logger.log('sesi: ' + e); } try { cekDokumentasi_(); } catch (e) { Logger.log('dok: ' + e); } try { kirimFeedback_(); } catch (e) { Logger.log('fb: ' + e); } return syncTraffic_(); }
+function catatTraffic() { try { rapikanDrive_(); } catch (e) { Logger.log('drive: ' + e); } try { cadanganHarian_(); } catch (e) { Logger.log('cadangan: ' + e); } try { bersihSesi_(); } catch (e) { Logger.log('sesi: ' + e); } try { cekDokumentasi_(); } catch (e) { Logger.log('dok: ' + e); } try { kirimFeedback_(); } catch (e) { Logger.log('fb: ' + e); } return syncTraffic_(); }
 function pasangCatatTraffic_() {
   ScriptApp.getProjectTriggers().forEach(function (t) { if (t.getHandlerFunction() === 'catatTraffic') ScriptApp.deleteTrigger(t); });
   ScriptApp.newTrigger('catatTraffic').timeBased().everyHours(1).create();
@@ -2109,10 +2145,7 @@ function siapkanMaster() {
     withLock_(function () { notif_('admin', 'cek', 'master', 'Master artikel gagal disiapkan', String(e.message || e).slice(0, 200), '#/unggahbin'); });
   }
 }
-function folderCacheMaster_() {
-  const it = DriveApp.getFoldersByName(CFG.MASTER_CACHE_FOLDER);
-  return it.hasNext() ? it.next() : DriveApp.createFolder(CFG.MASTER_CACHE_FOLDER);
-}
+function folderCacheMaster_() { return folderSistem_(); }
 function hapusCacheMaster_() {
   try {
     const it = folderCacheMaster_().getFiles();
@@ -2587,8 +2620,7 @@ function resolveNamaDsr_(user, ras) {
 }
 
 function folderHandover_(tgl) {
-  const it = DriveApp.getFoldersByName('Handover Basecamp 2299');
-  const root = it.hasNext() ? it.next() : DriveApp.createFolder('Handover Basecamp 2299');
+  const root = subFolder_('Handover', 'Handover Basecamp 2299');
   const name = tgl.slice(0, 7);
   const s = root.getFoldersByName(name);
   return s.hasNext() ? s.next() : root.createFolder(name);
@@ -2597,7 +2629,7 @@ function folderHandover_(tgl) {
 /** Baca teks dari gambar memakai OCR Google Drive (gambar → Google Docs → teks). */
 function ocr_(blob) {
   const boundary = 'bc2299' + Date.now();
-  const meta = { name: 'ocr-tmp-' + Date.now(), mimeType: 'application/vnd.google-apps.document' };
+  const meta = { name: 'ocr-tmp-' + Date.now(), mimeType: 'application/vnd.google-apps.document', parents: [folderSistem_().getId()] };
   const head = '--' + boundary + '\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n' + JSON.stringify(meta) + '\r\n--' + boundary + '\r\nContent-Type: image/jpeg\r\n\r\n';
   const tail = '\r\n--' + boundary + '--';
   const payload = Utilities.newBlob(head).getBytes().concat(blob.getBytes()).concat(Utilities.newBlob(tail).getBytes());
@@ -3026,7 +3058,7 @@ function simpanDsr_(rows, u, fileName) {
 /** Baca file xlsx → array baris (lewat konversi sementara ke Google Sheet). */
 function xlsxAoa_(blob) {
   const boundary = 'bc2299x' + Date.now();
-  const meta = { name: 'dsr-tmp-' + Date.now(), mimeType: 'application/vnd.google-apps.spreadsheet' };
+  const meta = { name: 'dsr-tmp-' + Date.now(), mimeType: 'application/vnd.google-apps.spreadsheet', parents: [folderSistem_().getId()] };
   const head = '--' + boundary + '\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n' + JSON.stringify(meta) + '\r\n--' + boundary + '\r\nContent-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet\r\n\r\n';
   const tail = '\r\n--' + boundary + '--';
   const payload = Utilities.newBlob(head).getBytes().concat(blob.getBytes()).concat(Utilities.newBlob(tail).getBytes());
@@ -3356,6 +3388,7 @@ const PUSH_SEGERA_AKSI = {
 Object.assign(API, {
   kesehatan: function (req) {
     auth_(req, true);
+    try { rapikanDrive_(); } catch (e) { Logger.log('drive: ' + e); }
     const today = today_(), p = PropertiesService.getScriptProperties();
     const lag = function (d) { return d ? Math.round((Date.parse(today) - Date.parse(String(d).slice(0, 10))) / 864e5) : null; };
     const out = [];
@@ -3407,13 +3440,12 @@ Object.assign(API, {
     const pt = p.getProperty('push_tick');
     add('Otomatisasi', 'Notifikasi HP terakhir dicek', pt ? 'ok' : 'warn', pt ? pt.slice(0, 16) : 'belum pernah', '');
     try {
-      const it = DriveApp.getFoldersByName(CFG.BACKUP_FOLDER);
       let last = null;
-      if (it.hasNext()) { const fi = it.next().getFiles(); while (fi.hasNext()) { const f = fi.next(); if (f.getName().indexOf('Cadangan DB Hub 2299') === 0 && (!last || f.getDateCreated() > last)) last = f.getDateCreated(); } }
+      { const fi = folderCadangan_().getFiles(); while (fi.hasNext()) { const f = fi.next(); if (f.getName().indexOf('Cadangan DB Hub 2299') === 0 && (!last || f.getDateCreated() > last)) last = f.getDateCreated(); } }
       const cL = last ? Math.round((Date.now() - last.getTime()) / 864e5) : null;
       add('Keamanan', 'Cadangan database terakhir', cL == null ? 'bad' : cL <= 1 ? 'ok' : 'warn', last ? Utilities.formatDate(last, CFG.TZ, 'yyyy-MM-dd HH:mm') : 'belum ada', (cL != null ? cL + ' hari lalu · ' : '') + 'harian, disimpan ' + CFG.BACKUP_KEEP + ' hari');
       const jt = p.getProperty('cadangan_jadwal_tgl');
-      add('Keamanan', 'Cadangan sheet JADWAL', jt ? 'ok' : 'warn', jt || 'belum ada', 'mingguan · folder ' + CFG.BACKUP_FOLDER);
+      add('Keamanan', 'Cadangan sheet JADWAL', jt ? 'ok' : 'warn', jt || 'belum ada', 'mingguan · folder 01 Eiger / ' + CFG.BASECAMP_FOLDER + ' / Cadangan');
     } catch (e) {}
     try {
       const gh = versiGithub_();
