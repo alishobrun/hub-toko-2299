@@ -1056,3 +1056,27 @@ a.dok-home{display:block;color:inherit;text-decoration:none}
 .sheet-hit .tile svg{width:18px;height:18px}
 .sheet-hit b{display:block;font-size:14.5px}.sheet-hit small{display:block;font-size:12.5px;color:var(--muted)}
 .sheet-fav .sheet-tile{background:#FFF4EE;border-color:#FAD3C0}
+
+/* ===== Kartu pencapaian (Bulan ini / Kumulatif / Harian) ===== */
+.ach-card{background:#fff;border:1px solid var(--line);border-radius:16px;padding:14px 16px 16px;box-shadow:0 6px 18px -12px rgba(10,26,79,.35);min-width:0}
+.ach-top{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+.ach-lab b{display:inline-flex;align-items:center;gap:6px;background:var(--navy-900,#0A1A4F);color:#fff;font-size:13px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;padding:6px 12px 6px 10px;border-radius:999px;border-left:4px solid var(--orange,#F26B3A);white-space:nowrap}
+.ach-lab b svg{width:15px;height:15px}
+.ach-lab small{display:block;font-weight:700;color:#5E6A85;font-size:13px;margin:7px 0 0 4px}
+.ach-pct{font-size:clamp(30px,8.5vw,38px);font-weight:800;line-height:1;letter-spacing:-.02em;white-space:nowrap}
+.ach-bar{display:block;height:8px;border-radius:9px;background:#E8ECF4;margin:12px 0 10px;overflow:hidden}
+.ach-bar i{display:block;height:100%;border-radius:9px}
+.ach-nums{display:flex;justify-content:space-between;gap:6px 12px;flex-wrap:wrap}
+.ach-nums span{display:flex;flex-direction:column;min-width:0}
+.ach-nums span.r{text-align:right;margin-left:auto}
+.ach-nums small{font-size:12.5px;color:#5E6A85}
+.ach-nums b{font-size:15px;color:var(--fg);white-space:nowrap}
+.ach-extra{margin-top:10px;display:inline-block;font-weight:700;font-size:13px;padding:6px 10px;border-radius:9px;background:#F1F5F9;color:#334155}
+.ach-extra.t-bad{background:var(--bad-50);color:#9F2A1F}.ach-extra.t-warn{background:var(--warn-50);color:#8A5F00}.ach-extra.t-good{background:var(--good-50);color:#0B6B53}
+/* baris pengaturan: tanggal + Netto/Bruto dibagi rata */
+.mini-bar{overflow:visible}
+.mini-bar>.mini-date,.mini-bar>.seg{flex:1 1 0;min-width:0}
+.mini-date{position:relative;justify-content:center;height:44px;font-size:14.5px}
+.mini-date b{font-weight:700;color:var(--fg)}
+.mini-date input{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer}
+.mini-bar .seg button{flex:1;padding:8px 10px;font-size:14px}

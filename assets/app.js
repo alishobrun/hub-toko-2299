@@ -723,6 +723,26 @@
         note ? el('span', { text: note }) : null,
         extra ? el('em', { class: 'k-extra c-' + c, text: extra }) : null));
   }
+  /** Kartu pencapaian: label menonjol + periode, persen besar, batang progres, Sales & Target. */
+  function achCard(tag, ic, periode, A, extra) {
+    var c = achClass(A.ach);
+    var w = A.ach == null || isNaN(A.ach) ? 0 : Math.max(0, Math.min(1, A.ach)) * 100;
+    return el('div', { class: 'ach-card' },
+      el('div', { class: 'ach-top' },
+        el('div', { class: 'ach-lab' }, el('b', null, icon(ic), tag), el('small', { text: periode })),
+        el('div', { class: 'ach-pct c-' + c, text: fPct(A.ach) })),
+      el('i', { class: 'ach-bar' }, el('i', { class: 'bg-' + c, style: 'width:' + w.toFixed(1) + '%' })),
+      el('div', { class: 'ach-nums' },
+        el('span', null, el('small', { text: 'Sales' }), el('b', { text: fRpShort(A.sales) })),
+        el('span', { class: 'r' }, el('small', { text: 'Target' }), el('b', { text: fRpShort(A.target) }))),
+      extra ? el('div', { class: 'ach-extra t-' + c, text: extra }) : null);
+  }
+  function achCards(d, sm) {
+    var p = dParts(d.tanggal);
+    return [achCard('Bulan ini', 'cal', BULAN[p.m - 1] + ' ' + p.y, sm.monthly, butuhPerHari(d, sm)),
+      achCard('Kumulatif', 'trend', '1–' + p.d + ' ' + BUL3[p.m - 1], sm.kum),
+      achCard('Harian', 'sun', dShort(d.tanggal), sm.daily)];
+  }
   /** "Butuh Rp X/hari · N hari lagi" untuk mengejar target bulan. */
   function butuhPerHari(d, sm) {
     var p = dParts(d.tanggal), dim = new Date(Date.UTC(p.y, p.m, 0)).getUTCDate(), sisaHari = dim - p.d;
@@ -860,10 +880,7 @@
     loadMon().then(function (d) {
       var sm = DSR.summarize(d, S.mode);
       var label = S.mode === 'netto' ? 'Netto' : 'Bruto';
-      kpis.replaceChildren(
-        kpi('Monthly Sales Achievement', BULAN[dParts(d.tanggal).m - 1] + ' · ' + label, sm.monthly.ach, fRpShort(sm.monthly.sales) + ' dari ' + fRpShort(sm.monthly.target), butuhPerHari(d, sm)),
-        kpi('Cumulative Sales Achievement', '1–' + dParts(d.tanggal).d + ' ' + BUL3[dParts(d.tanggal).m - 1], sm.kum.ach, fRpShort(sm.kum.sales) + ' dari ' + fRpShort(sm.kum.target)),
-        kpi('Daily Sales Achievement', dShort(d.tanggal), sm.daily.ach, fRpShort(sm.daily.sales) + ' dari ' + fRpShort(sm.daily.target)));
+      kpis.replaceChildren.apply(kpis, achCards(d, sm));
       chartCard.replaceChildren(el('h3', { text: 'Sales harian ' + BULAN[dParts(d.tanggal).m - 1] }),
         el('p', { class: 'sub', text: label + ' · batang = sales, garis putus-putus = target harian' }),
         d.harian.length ? dailyChart(d, S.mode) : el('div', { class: 'empty', text: 'Belum ada data bulan ini' }));
@@ -1015,11 +1032,11 @@
     var hero = el('section', { class: 'hero hero-sm' },
       el('div', null, el('h2', { id: 'mon-h', text: CFG.STORE_NAME }), el('p', { id: 'mon-sub', text: 'Memuat…' })));
     var date = el('input', { type: 'date', id: 'mon-date', 'aria-label': 'Tanggal laporan' });
+    var dateTxt = el('b', { text: '…' });
     var segMode = segmented([['netto', 'Netto'], ['bruto', 'Bruto']], S.mode, function (m) { S.mode = m; store.set('mode', m); draw(); });
-    var segFmt = segmented([['penuh', 'Rp lengkap'], ['ringkas', 'Rp jt']], S.fmt, function (m) { S.fmt = m; store.set('fmt', m); draw(); });
     var body = el('div', null, el('div', { class: 'grid grid-3' }, el('div', { class: 'skel' }), el('div', { class: 'skel' }), el('div', { class: 'skel' })));
     v.append(hero,
-      el('div', { class: 'mini-bar' }, el('label', { class: 'mini-date' }, icon('cal'), date), segMode, segFmt), body);
+      el('div', { class: 'mini-bar' }, el('label', { class: 'mini-date' }, icon('cal'), dateTxt, date), segMode), body);
 
     date.addEventListener('change', function () {
       if (!/^\d{4}-\d{2}-\d{2}$/.test(date.value)) return;
@@ -1030,7 +1047,7 @@
     function draw() {
       var d = S.mon;
       if (!d) return;
-      date.value = d.tanggal;
+      date.value = d.tanggal; dateTxt.textContent = dShort(d.tanggal);
       date.max = d.dataSampai > todayJkt() ? d.dataSampai : todayJkt();
       var sm = DSR.summarize(d, S.mode);
       var p = dParts(d.tanggal);
@@ -1043,9 +1060,7 @@
       body.replaceChildren(
         warn.length ? el('div', { class: 'err-box', style: 'background:#FCF3DC;color:#8A5F00' }, warn.map(function (w) { return el('div', { text: w }); })) : null,
         el('div', { class: 'grid grid-3' },
-          kpi('Monthly Sales Achievement', BULAN[p.m - 1], sm.monthly.ach, fRpShort(sm.monthly.sales) + ' dari ' + fRpShort(sm.monthly.target), butuhPerHari(d, sm)),
-          kpi('Cumulative Sales Achievement', '1–' + p.d + ' ' + BUL3[p.m - 1], sm.kum.ach, fRpShort(sm.kum.sales) + ' dari ' + fRpShort(sm.kum.target)),
-          kpi('Daily Sales Achievement', dShort(d.tanggal), sm.daily.ach, fRpShort(sm.daily.sales) + ' dari ' + fRpShort(sm.daily.target))),
+          achCards(d, sm)),
         el('div', { class: 'card section only-wide', style: 'padding:0;overflow:hidden' }, el('div', { class: 'scroll-x' }, monTable(sm))),
         el('div', { class: 'grid grid-2 section only-narrow' }, monCard('Kumulatif 1–' + p.d + ' ' + BUL3[p.m - 1], sm.kum), monCard('Harian ' + dShort(d.tanggal), sm.daily),
           monCard('Bulan ' + BULAN[p.m - 1], sm.monthly, true)),
@@ -2519,6 +2534,9 @@
     v.append(el('section', { class: 'hero' }, el('div', null, el('h2', { text: S.user ? S.user.nama : 'Akun' }),
       el('p', { text: S.user ? '@' + S.user.username + ' · ' + (S.user.role === 'admin' ? 'Admin' : 'Staf') : '' }))));
     v.append(appCard());
+    v.append(el('div', { class: 'card section', style: 'max-width:520px' }, el('h3', { text: 'Tampilan angka rupiah' }),
+      el('p', { class: 'sub', text: 'Berlaku di semua menu pada perangkat ini.' }),
+      segmented([['penuh', 'Lengkap (Rp 248.871.000)'], ['ringkas', 'Ringkas (Rp 248,9 jt)']], S.fmt, function (m) { S.fmt = m; store.set('fmt', m); toast('Tampilan rupiah disimpan'); })));
     var o = el('input', { type: 'password', id: 'pw-o', autocomplete: 'current-password', required: true });
     var n = el('input', { type: 'password', id: 'pw-n', autocomplete: 'new-password', required: true, minlength: 6 });
     var n2 = el('input', { type: 'password', id: 'pw-n2', autocomplete: 'new-password', required: true });
