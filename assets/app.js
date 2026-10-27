@@ -2223,7 +2223,7 @@
     var head = el('button', { type: 'button', class: 'sh-leg-h', 'aria-expanded': String(buka), onclick: function () {
       buka = !buka; box.classList.toggle('tutup', !buka); head.setAttribute('aria-expanded', String(buka)); store.set('jdLeg', buka ? 'buka' : 'tutup');
     } }, el('b', { text: 'Keterangan shift' }), el('span', { class: 'sh-leg-t' }, 'jam kerja', icon('chev')));
-    var axis = el('div', { class: 'sh-row sh-axis' }, el('span'), el('div', { class: 'sh-lane' }, [8, 12, 16, 20, 22].map(function (h, i, a) {
+    var axis = el('div', { class: 'sh-row sh-axis' }, el('span'), el('div', { class: 'sh-lane' }, [8, 12, 16, 22].map(function (h, i, a) {
       return el('span', { class: 'sh-tick' + (i === 0 ? ' first' : i === a.length - 1 ? ' last' : ''), style: 'left:' + pct(h), text: jamTxt(h) });
     })));
     var rows = codes.map(function (c) {
@@ -2246,12 +2246,12 @@
     function draw(j, mulai) {
       J = j; M = mulai;
       var ada = j && j.staf && j.staf.length;
-      var status = mulai === cur ? 'periode berjalan' : mulai < cur ? 'periode lalu' : 'periode berikutnya';
+      var status = mulai === cur ? 'berjalan' : mulai < cur ? 'sudah lewat' : 'berikutnya';
       var awal = ada ? j.tanggal[0] : mulai, akhir = ada ? j.tanggal[j.tanggal.length - 1] : addDays(geser(mulai, 1), -1);
       var nav = el('div', { class: 'jd-bar' },
         el('button', { class: 'jd-arr', type: 'button', 'aria-label': 'Periode sebelumnya', text: '‹', onclick: function () { pindah(geser(mulai, -1)); } }),
         el('div', { class: 'jd-per' }, el('b', { text: dShort(awal).replace(/ \d{4}$/, '') + ' – ' + dShort(akhir) }),
-          el('small', null, (j && j.tab ? 'Tab ' + j.tab + ' · ' : '') + status, mulai !== cur ? [' · ', el('a', { href: '#', text: 'kembali', onclick: function (e) { e.preventDefault(); pindah(cur); } })] : null)),
+          el('small', null, (j && j.tab ? j.tab + ' · ' : '') + status, mulai !== cur ? [' · ', el('a', { href: '#', text: 'kembali', onclick: function (e) { e.preventDefault(); pindah(cur); } })] : null)),
         el('button', { class: 'jd-arr', type: 'button', 'aria-label': 'Periode berikutnya', text: '›', onclick: function () { pindah(geser(mulai, 1)); } }),
         ada ? el('button', { class: 'jd-dl', type: 'button', title: 'Unduh Excel', 'aria-label': 'Unduh Excel', onclick: function () { jdExcel(j, j.tab || mulai); } }, icon('download')) : null);
       var tabs = segmented([['orang', 'Per orang'], ['hari', 'Per hari']], mode, function (m) { mode = m; store.set('jdMode', m); drawMain(); });
