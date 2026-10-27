@@ -56,6 +56,7 @@
   }
   function fRpShort(v) {
     if (v == null || isNaN(v)) return '—';
+    if (S.fmt !== 'ringkas') return 'Rp ' + nf.format(Math.round(v)); // angka rupiah lengkap (bawaan)
     var a = Math.abs(v);
     if (a >= 1e9) return 'Rp ' + (v / 1e9).toLocaleString('id-ID', { maximumFractionDigits: 2 }) + ' M';
     if (a >= 1e6) return 'Rp ' + (v / 1e6).toLocaleString('id-ID', { maximumFractionDigits: 1 }) + ' jt';
@@ -287,6 +288,7 @@
     if (m.r.admin && !isAdmin()) m = routeOf('beranda');
     if (!S.meChecked) { S.meChecked = true; refreshMe(); }
     viewGen++; S.curView = m.r.id; swrMem = {};
+    catatKunjungan(m.r.id);
     app.replaceChildren(shell(m));
     loadNotif(false); startNotifPolling(); masterAuto();
     VIEWS[m.r.id]($('#view'));
@@ -389,21 +391,53 @@
     return b.groups.indexOf(m.g.id) >= 0;
   }
 
+  function catatKunjungan(id) {
+    if (id === 'beranda') return;
+    try { var k = JSON.parse(store.get('kunjungan') || '{}'); k[id] = (k[id] || 0) + 1; store.set('kunjungan', JSON.stringify(k)); } catch (e) {}
+  }
+  function seringDipakai() {
+    var k = {}; try { k = JSON.parse(store.get('kunjungan') || '{}'); } catch (e) {}
+    var all = []; GROUPS.forEach(function (g) { if (g.id !== 'beranda') visibleItems(g).forEach(function (x) { all.push({ x: x, g: g }); }); });
+    return all.filter(function (a) { return k[a.x.id]; }).sort(function (a, b) { return k[b.x.id] - k[a.x.id]; }).slice(0, 4);
+  }
   function openSheet(m) {
     closeMenu();
     document.body.classList.add('no-scroll');
+    var body = el('div', { class: 'sheet-body' });
+    var cari = el('input', { type: 'search', class: 'sheet-cari', placeholder: 'Cari menu… (mis. kas, jadwal, stok)', 'aria-label': 'Cari menu' });
+    cari.addEventListener('input', function () { isi(cari.value); });
+    var cariBox = el('div', { class: 'sheet-cari-w' }, icon('search'), cari);
     var panel = el('div', { class: 'sheet', role: 'dialog', 'aria-label': 'Semua menu' },
       el('div', { class: 'sheet-grip' }),
       el('div', { class: 'sheet-head' }, el('b', { text: 'Semua menu' }), el('button', { class: 'sheet-x', 'aria-label': 'Tutup', html: IC.x, onclick: closeMenu })),
-      el('div', { class: 'sheet-body' }, GROUPS.filter(function (g) { return g.id !== 'beranda' && visibleItems(g).length; }).map(function (g) {
-        return el('section', { class: 'sheet-g', style: '--c:' + g.color },
-          el('h4', null, el('span', { class: 'dotc' }), g.label),
-          el('div', { class: 'sheet-grid' }, visibleItems(g).map(function (x) {
-            var n = badgeCount(x.id);
-            return el('a', { href: '#/' + x.id, class: 'sheet-tile' + (x.id === m.r.id ? ' on' : '') },
-              el('span', { class: 'tile' }, icon(x.icon), n ? badgeEl(n, 'tile-n') : null), el('span', { class: 'lbl', text: x.label }));
-          })));
-      })));
+      cariBox, body);
+    function tileEl(x, g) {
+      var n = badgeCount(x.id);
+      return el('a', { href: '#/' + x.id, class: 'sheet-tile' + (x.id === m.r.id ? ' on' : ''), style: '--c:' + g.color, 'data-q': (x.label + ' ' + (x.desc || '') + ' ' + g.label).toLowerCase() },
+        el('span', { class: 'tile' }, icon(x.icon), n ? badgeEl(n, 'tile-n') : null), el('span', { class: 'lbl', text: x.label }));
+    }
+    function isi(q) {
+      q = String(q || '').trim().toLowerCase();
+      if (q) {
+        var hasil = [];
+        GROUPS.forEach(function (g) { if (g.id !== 'beranda') visibleItems(g).forEach(function (x) {
+          if ((x.label + ' ' + (x.desc || '') + ' ' + g.label).toLowerCase().indexOf(q) >= 0) hasil.push(el('a', { href: '#/' + x.id, class: 'sheet-hit', style: '--c:' + g.color },
+            el('span', { class: 'tile' }, icon(x.icon)), el('span', null, el('b', { text: x.label }), el('small', { text: g.label + (x.desc ? ' · ' + x.desc : '') }))));
+        }); });
+        body.replaceChildren(hasil.length ? el('div', { class: 'sheet-hits' }, hasil) : el('p', { class: 'muted', style: 'padding:8px 4px', text: 'Menu "' + q + '" tidak ditemukan.' }));
+        return;
+      }
+      var fav = seringDipakai();
+      body.replaceChildren(
+        fav.length ? el('section', { class: 'sheet-g sheet-fav', style: '--c:#F26B3A' }, el('h4', null, el('span', { class: 'dotc' }), 'Sering dipakai'),
+          el('div', { class: 'sheet-grid' }, fav.map(function (a) { return tileEl(a.x, a.g); }))) : null,
+        GROUPS.filter(function (g) { return g.id !== 'beranda' && visibleItems(g).length; }).map(function (g) {
+          return el('section', { class: 'sheet-g', style: '--c:' + g.color },
+            el('h4', null, el('span', { class: 'dotc' }), g.label),
+            el('div', { class: 'sheet-grid' }, visibleItems(g).map(function (x) { return tileEl(x, g); })));
+        }));
+    }
+    isi('');
     menuEl = el('div', { class: 'sheet-wrap', onclick: function (e) { if (e.target === menuEl) closeMenu(); } }, panel);
     document.body.appendChild(menuEl);
   }
@@ -676,11 +710,24 @@
   function errBox(err) { return el('div', { class: 'err-box', text: err.message || String(err) }); }
 
   /* ---------- komponen KPI ---------- */
-  function kpi(label, sub, value, note) {
+  function kpi(label, sub, value, note, extra) {
     var c = achClass(value);
+    var w = value == null || isNaN(value) ? 0 : Math.max(0, Math.min(1, value)) * 100;
     return el('div', { class: 'kpi' },
       el('div', { class: 'k-label' }, label, sub ? el('small', { text: sub }) : null),
-      el('div', { class: 'k-val' }, el('b', { class: 'c-' + c, text: fPct(value) }), note ? el('span', { text: note }) : null));
+      el('div', { class: 'k-val' }, el('b', { class: 'c-' + c, text: fPct(value) }),
+        el('i', { class: 'k-bar' }, el('i', { class: 'bg-' + c, style: 'width:' + w.toFixed(1) + '%' })),
+        note ? el('span', { text: note }) : null,
+        extra ? el('em', { class: 'k-extra c-' + c, text: extra }) : null));
+  }
+  /** "Butuh Rp X/hari · N hari lagi" untuk mengejar target bulan. */
+  function butuhPerHari(d, sm) {
+    var p = dParts(d.tanggal), dim = new Date(Date.UTC(p.y, p.m, 0)).getUTCDate(), sisaHari = dim - p.d;
+    var kurang = (sm.monthly.target || 0) - (sm.monthly.sales || 0);
+    if (!sm.monthly.target) return null;
+    if (kurang <= 0) return 'Target bulan ini sudah tercapai';
+    if (sisaHari <= 0) return 'Kurang ' + fRpShort(kurang) + ' · bulan sudah berakhir';
+    return 'Butuh ' + fRpShort(kurang / sisaHari) + '/hari · ' + sisaHari + ' hari lagi';
   }
 
   /* ---------- grafik batang harian ---------- */
@@ -811,7 +858,7 @@
       var sm = DSR.summarize(d, S.mode);
       var label = S.mode === 'netto' ? 'Netto' : 'Bruto';
       kpis.replaceChildren(
-        kpi('Monthly Sales Achievement', BULAN[dParts(d.tanggal).m - 1] + ' · ' + label, sm.monthly.ach, fRpShort(sm.monthly.sales) + ' dari ' + fRpShort(sm.monthly.target)),
+        kpi('Monthly Sales Achievement', BULAN[dParts(d.tanggal).m - 1] + ' · ' + label, sm.monthly.ach, fRpShort(sm.monthly.sales) + ' dari ' + fRpShort(sm.monthly.target), butuhPerHari(d, sm)),
         kpi('Cumulative Sales Achievement', '1–' + dParts(d.tanggal).d + ' ' + BUL3[dParts(d.tanggal).m - 1], sm.kum.ach, fRpShort(sm.kum.sales) + ' dari ' + fRpShort(sm.kum.target)),
         kpi('Daily Sales Achievement', dShort(d.tanggal), sm.daily.ach, fRpShort(sm.daily.sales) + ' dari ' + fRpShort(sm.daily.target)));
       chartCard.replaceChildren(el('h3', { text: 'Sales harian ' + BULAN[dParts(d.tanggal).m - 1] }),
@@ -962,17 +1009,14 @@
 
   /* ---------- Monitoring Sales ---------- */
   function viewMonitoring(v) {
-    var hero = el('section', { class: 'hero' },
-      el('div', null, el('h2', { text: 'Monitoring Sales · ' + CFG.STORE_NAME }), el('p', { id: 'mon-sub', text: 'Memuat…' })),
-      el('div', { class: 'hero-right' }, el('b', { text: APP }), el('br'), el('span', { text: 'diambil ' + nowJkt() + (S.user ? ' · ' + S.user.nama : '') })));
-    var date = el('input', { type: 'date', id: 'mon-date' });
+    var hero = el('section', { class: 'hero hero-sm' },
+      el('div', null, el('h2', { id: 'mon-h', text: CFG.STORE_NAME }), el('p', { id: 'mon-sub', text: 'Memuat…' })));
+    var date = el('input', { type: 'date', id: 'mon-date', 'aria-label': 'Tanggal laporan' });
     var segMode = segmented([['netto', 'Netto'], ['bruto', 'Bruto']], S.mode, function (m) { S.mode = m; store.set('mode', m); draw(); });
-    var segFmt = segmented([['penuh', 'Penuh'], ['ringkas', 'Ringkas (jt)']], S.fmt, function (m) { S.fmt = m; store.set('fmt', m); draw(); });
+    var segFmt = segmented([['penuh', 'Rp lengkap'], ['ringkas', 'Rp jt']], S.fmt, function (m) { S.fmt = m; store.set('fmt', m); draw(); });
     var body = el('div', null, el('div', { class: 'grid grid-3' }, el('div', { class: 'skel' }), el('div', { class: 'skel' }), el('div', { class: 'skel' })));
     v.append(hero,
-      el('div', { class: 'toolbar' },
-        el('div', { class: 'field' }, el('label', { for: 'mon-date', text: 'Tanggal laporan' }), date),
-        segMode, segFmt), body);
+      el('div', { class: 'mini-bar' }, el('label', { class: 'mini-date' }, icon('cal'), date), segMode, segFmt), body);
 
     date.addEventListener('change', function () {
       if (!/^\d{4}-\d{2}-\d{2}$/.test(date.value)) return;
@@ -987,8 +1031,7 @@
       date.max = d.dataSampai > todayJkt() ? d.dataSampai : todayJkt();
       var sm = DSR.summarize(d, S.mode);
       var p = dParts(d.tanggal);
-      $('#mon-sub').textContent = '1 site · tanggal ' + dShort(d.tanggal) + ' · kumulatif 1–' + p.d + ' ' + BULAN[p.m - 1] + ' ' + p.y +
-        (sm.bobot ? ' · bobot kumulatif ' + fPct(sm.bobot.kumulatif) : '') + ' · ' + (S.mode === 'netto' ? 'Netto' : 'Bruto');
+      $('#mon-sub').textContent = 'Laporan ' + dLong(d.tanggal) + ' · ' + (S.mode === 'netto' ? 'Netto' : 'Bruto') + ' · data sampai ' + dShort(d.dataSampai);
       var warn = [];
       if (d.target == null) warn.push('Target bulan ini belum tersedia di sheet Target Jateng 01, jadi achievement belum bisa dihitung.');
       else if (!sm.bobot) warn.push('Bobot untuk tanggal ini belum ada di sheet Target Jateng 01.');
@@ -997,17 +1040,17 @@
       body.replaceChildren(
         warn.length ? el('div', { class: 'err-box', style: 'background:#FCF3DC;color:#8A5F00' }, warn.map(function (w) { return el('div', { text: w }); })) : null,
         el('div', { class: 'grid grid-3' },
-          kpi('Monthly Sales Achievement', null, sm.monthly.ach, null),
-          kpi('Cumulative Sales Achievement', null, sm.kum.ach, null),
-          kpi('Daily Sales Achievement', null, sm.daily.ach, null)),
+          kpi('Monthly Sales Achievement', BULAN[p.m - 1], sm.monthly.ach, fRpShort(sm.monthly.sales) + ' dari ' + fRpShort(sm.monthly.target), butuhPerHari(d, sm)),
+          kpi('Cumulative Sales Achievement', '1–' + p.d + ' ' + BUL3[p.m - 1], sm.kum.ach, fRpShort(sm.kum.sales) + ' dari ' + fRpShort(sm.kum.target)),
+          kpi('Daily Sales Achievement', dShort(d.tanggal), sm.daily.ach, fRpShort(sm.daily.sales) + ' dari ' + fRpShort(sm.daily.target))),
         el('div', { class: 'card section only-wide', style: 'padding:0;overflow:hidden' }, el('div', { class: 'scroll-x' }, monTable(sm))),
         el('div', { class: 'grid grid-2 section only-narrow' }, monCard('Kumulatif 1–' + p.d + ' ' + BUL3[p.m - 1], sm.kum), monCard('Harian ' + dShort(d.tanggal), sm.daily),
           monCard('Bulan ' + BULAN[p.m - 1], sm.monthly, true)),
         el('div', { class: 'legend' },
-          el('span', null, el('i', { class: 'bg-good' }), '≥100%'), el('span', null, el('i', { class: 'bg-warn' }), '95–100%'), el('span', null, el('i', { class: 'bg-bad' }), '<95%')),
+          el('span', null, el('i', { class: 'bg-good' }), '≥100%'), el('span', null, el('i', { class: 'bg-warn' }), '95–99,9%'), el('span', null, el('i', { class: 'bg-bad' }), 'di bawah 95%')),
         el('div', { class: 'wa-actions', style: 'margin:12px 0 4px' },
           el('a', { class: 'btn btn-wa', href: '#/pica' }, icon('whatsapp'), 'Laporan WA & Analisa PICA')),
-        el('p', { class: 'note', text: 'Sales = ' + (S.mode === 'netto' ? 'Net Amount' : 'Gross Amount') + ' barang dagangan EIGER (paper bag, voucher, jasa & packing tidak dihitung; retur mengurangi), sama dengan Monitoring Sales Integrated Hub Jateng 01. UPT = qty ÷ jumlah transaksi. Basket = sales ÷ jumlah transaksi. Target kumulatif = target bulan × bobot kumulatif s/d tanggal laporan. Target harian = target bulan × bobot hari itu.' }),
+        el('p', { class: 'note', text: (sm.bobot ? 'Bobot kumulatif ' + fPct(sm.bobot.kumulatif) + ' · ' : '') + 'Sales = ' + (S.mode === 'netto' ? 'Net Amount' : 'Gross Amount') + ' barang dagangan EIGER (paper bag, voucher, jasa & packing tidak dihitung; retur mengurangi), sama dengan Monitoring Sales Integrated Hub Jateng 01. UPT = qty ÷ jumlah transaksi. Basket = sales ÷ jumlah transaksi. Target kumulatif = target bulan × bobot kumulatif s/d tanggal laporan. Target harian = target bulan × bobot hari itu.' }),
         el('div', { class: 'card section' }, el('h3', { text: 'Sales harian ' + BULAN[p.m - 1] + ' ' + p.y }),
           el('p', { class: 'sub', text: 'Batang = sales (warna sesuai achievement), garis putus-putus = target harian. Ketuk batang untuk detail.' }),
           d.harian.length ? dailyChart(d, S.mode) : el('div', { class: 'empty', text: 'Belum ada data bulan ini' })),
@@ -1438,7 +1481,8 @@
   /* =================== TAHAP 2: laporan, stok, jadwal =================== */
 
   function pageHead(v, title, desc) {
-    v.append(el('section', { class: 'hero hero-sm' }, el('div', null, el('h2', { text: title }), desc ? el('p', { text: desc }) : null)));
+    // judul halaman sudah tampil di bagian atas (menu › halaman), di sini cukup keterangannya
+    v.append(el('section', { class: 'page-desc' }, el('h2', { class: 'pd-title', text: title }), desc ? el('p', { text: desc }) : null));
   }
   function bulanLabel(ym) { var p = String(ym).split('-'); return BULAN[Number(p[1]) - 1] + ' ' + p[0]; }
   function monthSel(list, val, onChange) {

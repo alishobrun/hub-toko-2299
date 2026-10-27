@@ -1023,3 +1023,36 @@ a.dok-home{display:block;color:inherit;text-decoration:none}
 .adm-issues li{padding:8px 10px;border-radius:10px;background:#F8FAFC;border-left:3px solid #F59E0B}
 .adm-issues li.st-bad{border-left-color:#DC2626}
 @media (max-width:640px){.adm-grid{grid-template-columns:1fr}.tugas-grid{grid-template-columns:1fr}.adm-tile{min-height:0}}
+
+/* ===== Tampilan lebih terbaca (27 Okt) ===== */
+/* KPI: batang progres + kalimat bantu */
+.kpi .k-bar{display:block;width:100%;max-width:220px;height:6px;border-radius:99px;background:#E8ECF4;margin-top:8px;overflow:hidden}
+.kpi .k-bar i{display:block;height:100%;border-radius:99px}
+.kpi .k-val span{font-size:13.5px;color:#475569}
+.kpi .k-extra{font-style:normal;font-size:13px;font-weight:700;margin-top:4px;text-align:center}
+@media (max-width:959px){.kpi .k-bar{max-width:none}.kpi .k-extra{text-align:right}}
+.kpi .k-label small{font-size:13px;opacity:.8}
+/* pengaturan ringkas satu baris */
+.mini-bar{display:flex;gap:8px;align-items:center;margin:0 0 14px;overflow-x:auto;scrollbar-width:none}
+.mini-bar::-webkit-scrollbar{display:none}
+.mini-bar .seg{flex:0 0 auto;padding:3px;border-radius:10px}
+.mini-bar .seg button{padding:6px 12px;font-size:13px;min-height:0}
+.mini-date{display:flex;align-items:center;gap:6px;border:1px solid var(--line-2);border-radius:10px;padding:0 10px;background:#fff;flex:0 0 auto;height:38px}
+.mini-date svg{width:16px;height:16px;color:var(--muted)}
+.mini-date input{border:0;padding:0;height:36px;font-size:13.5px;background:transparent;min-width:0;width:auto}
+/* judul halaman tidak dobel: judul sudah ada di bagian atas */
+.page-desc{margin:0 0 16px;padding:12px 16px;border-radius:14px;background:#F1F5FB;border-left:4px solid var(--navy-800,#14286b)}
+.page-desc p{margin:0;font-size:14px;color:#334155;line-height:1.45}
+.page-desc .pd-title{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+/* teks keterangan lebih gelap */
+.card .sub,.muted{color:#4B5672}
+/* menu: cari & sering dipakai */
+.sheet-cari-w{display:flex;align-items:center;gap:8px;margin:0 14px 8px;padding:0 12px;border:1px solid var(--line-2);border-radius:12px;background:#F8FAFC}
+.sheet-cari-w svg{width:18px;height:18px;color:var(--muted);flex:none}
+.sheet-cari{border:0;background:transparent;height:44px;font-size:15px;width:100%;outline:none}
+.sheet-hits{display:grid;gap:6px}
+.sheet-hit{display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:12px;text-decoration:none;color:var(--fg);background:color-mix(in srgb,var(--c) 7%,#fff)}
+.sheet-hit .tile{width:36px;height:36px;border-radius:10px;display:grid;place-items:center;background:var(--c);color:#fff;flex:none}
+.sheet-hit .tile svg{width:18px;height:18px}
+.sheet-hit b{display:block;font-size:14.5px}.sheet-hit small{display:block;font-size:12.5px;color:var(--muted)}
+.sheet-fav .sheet-tile{background:#FFF4EE;border-color:#FAD3C0}
