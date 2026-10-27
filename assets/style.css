@@ -1326,3 +1326,9 @@ html[data-theme=dark] .adm-issues li{background:var(--sf-in);color:var(--fg)}
 html[data-theme=dark] .adm-issues a{color:var(--fg)}
 html[data-theme=dark] .adm-tile span,html[data-theme=dark] .adm-tile small{color:#AEB8CE}
 html[data-theme=dark] .jd-dl,html[data-theme=dark] .btn-primary{background:#2C4FBF}
+/* Cek Kas: bar ringkasan + tombol Simpan melayang di atas menu bawah */
+@media (max-width:959px){
+  .kas-bar{bottom:calc(96px + env(safe-area-inset-bottom));margin:16px 0 0;padding:10px 12px 10px 16px;border-radius:18px;border:1px solid var(--sf-edge);background:var(--panel);box-shadow:8px 8px 20px var(--sf-lo),-4px -4px 12px var(--sf-hi);align-items:center}
+  .kas-bar div:nth-child(2){text-align:left;flex:1}
+  .kas-bar .kb-save{padding:12px 16px;border-radius:14px}
+}

@@ -1420,7 +1420,7 @@
     catatan.value = draft.catatan || '';
     catatan.addEventListener('input', function () { draft.catatan = catatan.value; save(); });
     var out = el('div');
-    var btnSave = el('button', { class: 'btn btn-orange btn-block aksi-tempel', type: 'button' }, icon('check'), 'Simpan hitungan ' + pos.label);
+    var btnSave = el('button', { class: 'btn btn-orange btn-block', type: 'button' }, icon('check'), 'Simpan hitungan ' + pos.label);
     var cardHasil = el('div', { class: 'card card-result' },
       el('h3', { text: (step++) + '. Hasil pengecekan' }),
       withCompare ? el('ul', { class: 'calc' },
@@ -1436,7 +1436,11 @@
       btnSave, out);
 
     var sticky = el('div', { class: 'kas-bar' }, el('div', null, el('span', { text: 'Fisik' }), el('b', { class: 'num', id: 'kb-f' })),
-      withCompare ? el('div', null, el('span', { text: 'Selisih' }), el('b', { class: 'num', id: 'kb-s' })) : null);
+      withCompare ? el('div', null, el('span', { text: 'Selisih' }), el('b', { class: 'num', id: 'kb-s' })) : null,
+      el('button', { class: 'btn btn-orange kb-save', type: 'button', onclick: function () {
+        btnSave.click();
+        setTimeout(function () { if (out.childNodes.length) out.scrollIntoView({ block: 'center', behavior: 'smooth' }); }, 60);
+      } }, icon('check'), 'Simpan'));
 
     v.append(el('div', { class: 'kas-grid' },
       el('div', { class: 'kas-left' }, cardHitung, cardTunai, cardPer),
