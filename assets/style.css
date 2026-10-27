@@ -1220,3 +1220,5 @@ main.view>.sec-lab:first-child{margin-top:4px}
 .t td{background:transparent}
 .sticky-col{background:var(--panel)}
 .jd-t tr.jd-me td.jd-name{background:#FFF8F4}
+
+.tugas-card,.admin-home{margin-top:6px}

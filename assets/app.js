@@ -838,7 +838,6 @@
       el('div', { class: 'hero-right', id: 'hero-info', text: nowJkt() })));
     var kpis = el('div', { class: 'grid grid-3' }, el('div', { class: 'skel' }), el('div', { class: 'skel' }), el('div', { class: 'skel' }));
     var admin = isAdmin();
-    v.append(el('div', { class: 'sec-lab', text: admin ? 'Ringkasan admin' : 'Tugasku' }));
     if (admin) v.append(adminCard()); else v.append(tugasCard());
     v.append(pengBanner());
     if (!admin) { v.append(sayaCard()); v.append(hoBeranda()); }
