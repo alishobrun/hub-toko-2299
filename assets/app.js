@@ -419,11 +419,14 @@
     function isi(q) {
       q = String(q || '').trim().toLowerCase();
       if (q) {
-        var hasil = [];
+        var hasil = [], awal = function (t) { return (' ' + t.toLowerCase().replace(/[^a-z0-9]+/g, ' ')).indexOf(' ' + q) >= 0; };
         GROUPS.forEach(function (g) { if (g.id !== 'beranda') visibleItems(g).forEach(function (x) {
-          if ((x.label + ' ' + (x.desc || '') + ' ' + g.label).toLowerCase().indexOf(q) >= 0) hasil.push(el('a', { href: '#/' + x.id, class: 'sheet-hit', style: '--c:' + g.color },
-            el('span', { class: 'tile' }, icon(x.icon)), el('span', null, el('b', { text: x.label }), el('small', { text: g.label + (x.desc ? ' · ' + x.desc : '') }))));
+          // cocokkan awal kata; nama menu lebih diutamakan daripada keterangan
+          var skor = awal(x.label) ? 2 : awal((x.desc || '') + ' ' + g.label) ? 1 : 0;
+          if (skor) hasil.push({ s: skor, e: el('a', { href: '#/' + x.id, class: 'sheet-hit', style: '--c:' + g.color },
+            el('span', { class: 'tile' }, icon(x.icon)), el('span', null, el('b', { text: x.label }), el('small', { text: g.label + (x.desc ? ' · ' + x.desc : '') }))) });
         }); });
+        hasil = hasil.sort(function (a, b2) { return b2.s - a.s; }).map(function (h) { return h.e; });
         body.replaceChildren(hasil.length ? el('div', { class: 'sheet-hits' }, hasil) : el('p', { class: 'muted', style: 'padding:8px 4px', text: 'Menu "' + q + '" tidak ditemukan.' }));
         return;
       }
