@@ -1223,3 +1223,8 @@ main.view>.sec-lab:first-child{margin-top:4px}
 .jd-t tr.jd-me td.jd-name{background:#FFF8F4}
 
 .tugas-card,.admin-home{margin-top:6px}
+/* kotak "Besok" di Bertugas hari ini: sudut bulat & jarak dalam, senada kotak lain */
+.duty-next{border:1px solid var(--sf-edge)!important;border-radius:16px;padding:12px 14px;margin-top:12px;background:#fff}
+.duty-next-h{margin-bottom:10px}
+.duty-next-h b{font-size:14px}
+.dn-row{font-size:14px}
