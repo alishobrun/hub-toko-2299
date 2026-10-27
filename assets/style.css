@@ -1141,3 +1141,82 @@ a.dok-home{display:block;color:inherit;text-decoration:none}
 .jd-day.on small{color:#fff;opacity:.85}
 .jd-dayhead{padding:12px 14px 0;font-size:15px;color:var(--navy-900)}
 .jd-main .duty-wrap{padding:12px 14px 16px}
+
+/* =====================================================================
+ * TEMA "TIMBUL LEMBUT" (soft UI) — 27 Okt 2026
+ * Latar abu kebiruan, kotak timbul dengan tepi jelas, jarak lega, menu bawah melayang.
+ * ===================================================================== */
+:root{
+  --bg:#E4E8EF; --panel:#F7F8FB; --sf-hi:#FFFFFF; --sf-lo:#AEB7C8; --sf-edge:rgba(150,162,186,.38); --sf-in:#EEF1F6;
+  --radius:20px; --radius-sm:14px;
+  --shadow:10px 10px 22px var(--sf-lo),-8px -8px 18px var(--sf-hi);
+  --sf-raise:6px 6px 14px var(--sf-lo),-5px -5px 12px var(--sf-hi);
+  --sf-press:inset 4px 4px 8px var(--sf-lo),inset -4px -4px 8px var(--sf-hi);
+}
+html,body{background:var(--bg)}
+main.view{padding:18px 18px calc(110px + env(safe-area-inset-bottom))}
+@media (min-width:960px){main.view{padding:26px 30px 48px}}
+.grid{gap:20px}
+.section{margin-top:20px}
+.sec-lab{font-size:11.5px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:#6B7489;margin:22px 6px 10px}
+main.view>.sec-lab:first-child{margin-top:4px}
+
+/* kotak timbul */
+.card,.ach-card,.kpi,.quick a,.tugas-card,.admin-home,.duty-card,.page-desc,.peng-banner,.ho-home,.ap-home{
+  background:var(--panel)!important;border:1px solid rgba(255,255,255,.9)!important;outline:1px solid var(--sf-edge);
+  box-shadow:var(--shadow),inset 0 1px 0 #fff!important;border-radius:var(--radius)!important}
+.tugas-card,.admin-home{border-left:1px solid rgba(255,255,255,.9)!important;margin-top:0}
+.hero{border-radius:var(--radius);outline:1px solid rgba(10,26,79,.25);box-shadow:10px 10px 22px #A9B2C4,-8px -8px 18px var(--sf-hi);border-bottom-width:4px}
+.page-desc{border-left:4px solid var(--orange)!important}
+/* kotak di dalam kotak: cekung */
+.adm-tile,.tugas-sh,.ach-bar,.k-bar,.ach-extra,.duty-col,.duty-off,.duty-next,.sh-leg-h{
+  box-shadow:var(--sf-press)!important;border:1px solid var(--sf-edge)}
+.adm-tile{border-radius:16px;background:var(--sf-in)}
+.adm-tile.t-good{background:#E7F3EE}.adm-tile.t-warn{background:#F7F0E1}.adm-tile.t-bad{background:#F6E6E4}
+.ach-bar{height:12px;padding:2px;background:var(--sf-in);border-radius:10px}
+.ach-bar i{border-radius:8px}
+.ach-extra{border-radius:12px}
+/* label kartu pencapaian: timbul kecil */
+.ach-lab b{box-shadow:4px 4px 10px #A9B2C4,-3px -3px 8px var(--sf-hi)}
+
+/* tombol bantal */
+.btn{border-radius:16px}
+.btn-primary,.btn-orange{box-shadow:6px 6px 14px #A9B2C4,-5px -5px 12px var(--sf-hi)}
+.btn-ghost{background:var(--panel);border-color:transparent;outline:1px solid var(--sf-edge);box-shadow:var(--sf-raise)}
+.btn:active{box-shadow:var(--sf-press)!important}
+.seg{background:var(--sf-in);border:1px solid var(--sf-edge);box-shadow:var(--sf-press);border-radius:16px}
+.seg button{border-radius:12px}
+.seg button[aria-pressed=true]{box-shadow:4px 4px 10px #A9B2C4,-3px -3px 8px var(--sf-hi)}
+.field input,.field select,.mini-date,input.hb-search,.sheet-cari-w,.sel{background:var(--sf-in)!important;border:1px solid var(--sf-edge)!important;box-shadow:var(--sf-press);border-radius:14px}
+.jd-arr,.jd-dl,.jd-day{box-shadow:var(--sf-raise);outline:1px solid var(--sf-edge);border-color:transparent}
+.jd-arr,.jd-day{background:var(--panel)}
+.jd-day.on{box-shadow:var(--sf-press),0 0 0 0 transparent;outline-color:transparent}
+
+/* bagian atas: logo + nama Basecamp, tombol timbul */
+.topbar{background:rgba(228,232,239,.92);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border-bottom:0}
+.brand-t{display:flex;flex-direction:column;line-height:1.15;min-width:0}
+.brand-t b{font-size:16.5px;color:var(--navy-900);font-weight:800}
+.brand-t small{font-size:11px;color:#6B7489;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:170px}
+.topbar .icon-btn,.topbar .bell-btn{border-radius:14px!important;box-shadow:var(--sf-raise);outline:1px solid var(--sf-edge)}
+.topbar .bell-btn{background:var(--panel)}
+.m-crumb{border-top:0;padding:4px 18px 8px}
+.m-crumb .tile{box-shadow:4px 4px 10px #A9B2C4,-3px -3px 8px var(--sf-hi)}
+@media (max-width:959px){.topbar .btn-out{display:none}}
+
+/* menu bawah melayang */
+@media (max-width:959px){
+  body{padding-bottom:0}
+  .bnav{left:14px!important;right:14px!important;bottom:calc(12px + env(safe-area-inset-bottom))!important;border-radius:24px;border-top:0;
+    background:rgba(247,248,251,.97)!important;outline:1px solid var(--sf-edge);box-shadow:10px 10px 24px #A3ADC0,-6px -6px 16px var(--sf-hi)!important;padding:8px 4px!important}
+  .bnav-a.on .bnav-ic{background:var(--sf-in)!important;box-shadow:var(--sf-press)}
+  #toast{bottom:calc(100px + env(safe-area-inset-bottom))!important}
+  .ver-banner{bottom:calc(100px + env(safe-area-inset-bottom))}
+}
+/* panel menu & lonceng ikut lembut */
+.sheet{background:var(--bg)}
+.sheet-tile{box-shadow:var(--sf-raise);outline:1px solid var(--sf-edge);border-color:transparent!important;background:var(--panel)!important}
+.sheet-hit{box-shadow:var(--sf-raise);outline:1px solid var(--sf-edge);background:var(--panel)!important}
+/* tabel di dalam kotak tetap bersih */
+.t td{background:transparent}
+.sticky-col{background:var(--panel)}
+.jd-t tr.jd-me td.jd-name{background:#FFF8F4}

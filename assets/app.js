@@ -372,7 +372,7 @@
       el('div', { class: 'main-col' },
         el('header', { class: 'topbar' },
           el('div', { class: 'topbar-in' },
-            el('a', { class: 'brand-sm', href: '#/beranda', 'aria-label': 'Beranda' }, el('img', { class: 'bc-mini', src: 'assets/basecamp-mini.svg', alt: 'Basecamp 2299' }), el('img', { src: 'assets/logo.png', alt: 'Eigerindo MPI' })),
+            el('a', { class: 'brand-sm', href: '#/beranda', 'aria-label': 'Beranda' }, el('img', { class: 'bc-mini', src: 'assets/basecamp-mini.svg', alt: '' }), el('span', { class: 'brand-t' }, el('b', { text: 'Basecamp 2299' }), el('small', { text: 'EIGER ' + CFG.STORE_NAME }))),
             el('span', { class: 'page-title' }, crumb),
             el('span', { class: 'user-name', text: S.user ? S.user.nama : '' }),
             el('span', { class: 'chip' }, icon('store'), CFG.STORE),
@@ -838,10 +838,11 @@
       el('div', { class: 'hero-right', id: 'hero-info', text: nowJkt() })));
     var kpis = el('div', { class: 'grid grid-3' }, el('div', { class: 'skel' }), el('div', { class: 'skel' }), el('div', { class: 'skel' }));
     var admin = isAdmin();
+    v.append(el('div', { class: 'sec-lab', text: admin ? 'Ringkasan admin' : 'Tugasku' }));
     if (admin) v.append(adminCard()); else v.append(tugasCard());
     v.append(pengBanner());
     if (!admin) { v.append(sayaCard()); v.append(hoBeranda()); }
-    v.append(kpis);
+    v.append(el('div', { class: 'sec-lab', text: 'Pencapaian sales' }), kpis);
     if (admin) v.append(hoBeranda());
     var row = el('div', { class: 'grid grid-2 section' });
     var duty = el('a', { class: 'card duty-card', href: '#/jadwal', title: 'Buka jadwal lengkap' }, el('h3', { text: 'Bertugas hari ini' }), el('p', { class: 'sub', text: dLong(todayJkt()) }), el('div', { class: 'skel' }));
