@@ -1235,3 +1235,87 @@ main.view>.sec-lab:first-child{margin-top:4px}
 .dev-list li.ini{border-color:#9AD3BF;background:#F1FAF6}
 .dev-list li b{display:block;font-size:13.5px}
 .dev-list li small{display:block;font-size:12px;color:#5E6A85}
+
+/* ===== HP: tabel lebar jadi kartu ===== */
+@media (max-width:759px){
+  table.t.tc,table.t.tc tbody{display:block;width:100%}
+  table.t.tc thead{display:none}
+  table.t.tc tbody tr{display:grid;grid-template-columns:1fr 1fr;gap:8px 14px;padding:12px 14px;margin:0 0 10px;border:1px solid var(--sf-edge,#DDE3EE);border-radius:16px;background:#fff}
+  table.t.tc tbody tr:last-child{margin-bottom:0}
+  table.t.tc td{display:flex;flex-direction:column;align-items:flex-start;gap:2px;padding:0!important;border:0!important;white-space:normal;text-align:left!important;position:static!important;background:transparent!important;font-size:14px}
+  table.t.tc td::before{content:attr(data-l);font-family:var(--font);font-size:11.5px;font-weight:700;color:#6B7489;letter-spacing:.02em}
+  table.t.tc td:first-child{grid-column:1/-1;font-weight:800;font-size:15px;color:var(--navy-900)}
+  table.t.tc td:first-child::before{display:none}
+  .scroll-x:has(> table.tc),.t-wrap:has(> table.tc){overflow:visible}
+  .card:has(table.tc){overflow:visible!important}
+}
+/* ===== Formulir lebih nyaman ===== */
+.field input,.field select,.field textarea,.rp-input input{min-height:48px;font-size:16px}
+.field textarea{padding:12px 14px;border-radius:14px}
+.rp-input{min-height:48px}
+@media (max-width:959px){
+  .aksi-tempel{position:sticky;bottom:calc(96px + env(safe-area-inset-bottom));z-index:6;min-height:52px;font-size:16px;box-shadow:0 10px 24px -6px rgba(242,107,58,.55),0 4px 10px rgba(10,26,79,.18)!important}
+}
+/* ===== Beranda: kartu yang bisa dilipat, kepala Akun ===== */
+.lipat{margin-top:20px}
+.lipat-h{width:100%;display:flex;align-items:center;justify-content:space-between;background:transparent;border:0;padding:0 6px 10px;font:inherit;cursor:pointer;color:#6B7489}
+.lipat-h span{font-size:11.5px;font-weight:800;letter-spacing:.14em;text-transform:uppercase}
+.lipat-h svg{width:18px;height:18px;transform:rotate(180deg);transition:transform .2s}
+.lipat.tutup .lipat-h svg{transform:none}
+.lipat.tutup .lipat-b{display:none}
+.lipat-b>.card,.lipat-b>div>.card,.lipat-b .section{margin-top:0!important}
+.akun-head{display:flex;align-items:center;gap:14px;margin-bottom:6px}
+.akun-head .avatar{width:52px;height:52px;border-radius:16px;display:grid;place-items:center;background:var(--navy-900);color:#fff;font-weight:800;font-size:18px}
+.akun-head b{display:block;font-size:17px}.akun-head small{color:#6B7489}
+
+/* =====================================================================
+ * MODE GELAP
+ * ===================================================================== */
+html[data-theme=dark]{
+  --bg:#0B1220; --panel:#151E33; --sf-hi:rgba(255,255,255,.04); --sf-lo:rgba(0,0,0,.55); --sf-edge:rgba(148,163,196,.18); --sf-in:#111A2C;
+  --fg:#E6EAF3; --muted:#9AA5BD; --line:#24304A; --line-2:#2D3A57; --navy-900:#2C4FBF; --navy-800:#3A5BD0; --navy-700:#7F9BFF; --navy-50:#1A2440;
+  --good-50:#0F2A23; --warn-50:#2E2510; --bad-50:#33171A; --orange-50:#33201A;
+  --shadow:8px 8px 18px rgba(0,0,0,.5),-4px -4px 12px rgba(255,255,255,.025);
+  --sf-raise:5px 5px 12px rgba(0,0,0,.45),-3px -3px 8px rgba(255,255,255,.025);
+  color-scheme:dark;
+}
+html[data-theme=dark],html[data-theme=dark] body{background:var(--bg);color:var(--fg)}
+html[data-theme=dark] .card,html[data-theme=dark] .ach-card,html[data-theme=dark] .kpi,html[data-theme=dark] .quick a,html[data-theme=dark] .tugas-card,
+html[data-theme=dark] .admin-home,html[data-theme=dark] .duty-card,html[data-theme=dark] .page-desc,html[data-theme=dark] .peng-banner,html[data-theme=dark] .ho-home,html[data-theme=dark] .ap-home{
+  background:var(--panel)!important;border-color:transparent!important;outline-color:var(--sf-edge);box-shadow:var(--shadow)!important;color:var(--fg)}
+html[data-theme=dark] .hero{box-shadow:var(--shadow)}
+html[data-theme=dark] .topbar{background:rgba(11,18,32,.9)}
+html[data-theme=dark] .brand-t b,html[data-theme=dark] .m-crumb b,html[data-theme=dark] h1,html[data-theme=dark] h2,html[data-theme=dark] h3,html[data-theme=dark] h4,
+html[data-theme=dark] .ach-nums b,html[data-theme=dark] .jd-per b,html[data-theme=dark] .jd-dayhead,html[data-theme=dark] .mini-date b{color:var(--fg)}
+html[data-theme=dark] .page-desc p,html[data-theme=dark] .card .sub,html[data-theme=dark] .muted,html[data-theme=dark] .ach-nums small,html[data-theme=dark] .ach-lab small,
+html[data-theme=dark] .brand-t small,html[data-theme=dark] .sec-lab,html[data-theme=dark] .lipat-h,html[data-theme=dark] .jd-per small{color:var(--muted)}
+html[data-theme=dark] .icon-btn,html[data-theme=dark] .bell-btn,html[data-theme=dark] .jd-arr,html[data-theme=dark] .jd-day,html[data-theme=dark] .mini-date,html[data-theme=dark] .seg,
+html[data-theme=dark] .btn-ghost,html[data-theme=dark] .sheet-tile,html[data-theme=dark] .sheet-hit,html[data-theme=dark] .sh-leg-h,html[data-theme=dark] .duty-next,
+html[data-theme=dark] .dev-list li,html[data-theme=dark] .adm-tile,html[data-theme=dark] .tugas-sh{background:var(--panel)!important;color:var(--fg);border-color:var(--sf-edge)!important}
+html[data-theme=dark] .seg button{color:var(--muted)}
+html[data-theme=dark] .seg button[aria-pressed=true],html[data-theme=dark] .jd-day.on{background:var(--navy-800)!important;color:#fff}
+html[data-theme=dark] .field input,html[data-theme=dark] .field select,html[data-theme=dark] .field textarea,html[data-theme=dark] input.hb-search,html[data-theme=dark] .sheet-cari-w,
+html[data-theme=dark] .sel,html[data-theme=dark] .rp-input,html[data-theme=dark] textarea,html[data-theme=dark] select{background:var(--sf-in)!important;color:var(--fg)!important;border-color:var(--line-2)!important}
+html[data-theme=dark] .bnav{background:rgba(21,30,51,.97)!important;box-shadow:0 10px 28px rgba(0,0,0,.6)!important}
+html[data-theme=dark] .bnav-a{color:#8C97B0}
+html[data-theme=dark] .sheet{background:var(--bg)}
+html[data-theme=dark] .t th,html[data-theme=dark] .t td{border-color:var(--line)}
+html[data-theme=dark] .t thead th{background:#1C2846}
+html[data-theme=dark] .t td.sticky-col,html[data-theme=dark] .jd-t td.jd-name{background:var(--panel)!important;color:var(--fg)}
+html[data-theme=dark] .t thead th.sticky-col{background:#1C2846!important}
+html[data-theme=dark] .jd-t td.today,html[data-theme=dark] .jd-t tr.jd-cnt td.today,html[data-theme=dark] .jd-t tr.jd-me td{background:rgba(242,107,58,.08)}
+html[data-theme=dark] .jd-t tr.jd-cnt td,html[data-theme=dark] .jd-t td.jd-sum,html[data-theme=dark] .jd-t th.jd-sum{background:var(--sf-in);color:var(--muted)}
+html[data-theme=dark] table.t.tc tbody tr{background:var(--sf-in)}
+html[data-theme=dark] .ach-bar,html[data-theme=dark] .k-bar{background:#26314A}
+html[data-theme=dark] .tag{background:#22304D;color:#C9D3EA}
+html[data-theme=dark] .sh-PD{background:#1D2C55;color:#9DB6FF}html[data-theme=dark] .sh-SB{background:#3A2218;color:#FFB08C}
+html[data-theme=dark] .sh-MD,html[data-theme=dark] .sh-MC{background:#2B2150;color:#C7B5FF}html[data-theme=dark] .sh-OFF{background:#232B3D;color:#9AA5BD}html[data-theme=dark] .sh-CT{background:#33290F;color:#F2CB6B}
+html[data-theme=dark] .duty-col.t-pagi{background:#152447}html[data-theme=dark] .duty-col.t-siang{background:#2D1D17}html[data-theme=dark] .duty-col.t-middle{background:#21193D}
+html[data-theme=dark] .duty-off,html[data-theme=dark] .empty{background:var(--sf-in);color:var(--muted)}
+html[data-theme=dark] .err-box{background:#33171A;color:#FFB4AB}
+html[data-theme=dark] .warn-box{background:#2E2510!important;color:#F2CB6B!important}
+html[data-theme=dark] .skel{background:linear-gradient(90deg,#18223A,#1F2B47,#18223A);background-size:200% 100%}
+html[data-theme=dark] a{color:#9DB6FF}
+html[data-theme=dark] .ach-extra.t-bad{color:#FFB4AB}html[data-theme=dark] .ach-extra.t-warn{color:#F2CB6B}html[data-theme=dark] .ach-extra.t-good{color:#7FDCBC}
+html[data-theme=dark] .adm-tile.t-good{background:#0F2A23!important}html[data-theme=dark] .adm-tile.t-warn{background:#2E2510!important}html[data-theme=dark] .adm-tile.t-bad{background:#33171A!important}
+html[data-theme=dark] .bell-pop{background:var(--panel);color:var(--fg)}

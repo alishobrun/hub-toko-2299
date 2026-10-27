@@ -22,6 +22,14 @@
     set: function (k, v) { try { v == null ? localStorage.removeItem('hub2299.' + k) : localStorage.setItem('hub2299.' + k, v); } catch (e) {} }
   };
   S.token = store.get('token');
+  /* tema: auto (ikuti HP) / terang / gelap */
+  function terapkanTema() {
+    var t = store.get('tema'), gelap = t === 'gelap' || (t !== 'terang' && window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches);
+    document.documentElement.setAttribute('data-theme', gelap ? 'dark' : 'light');
+    var m = document.querySelector('meta[name=theme-color]'); if (m) m.setAttribute('content', gelap ? '#0B1220' : '#E4E8EF');
+  }
+  terapkanTema();
+  try { matchMedia('(prefers-color-scheme: dark)').addEventListener('change', terapkanTema); } catch (e) {}
   try { S.user = JSON.parse(store.get('user') || 'null'); } catch (e) { S.user = null; }
   S.mode = store.get('mode') === 'netto' ? 'netto' : 'bruto';
   S.fmt = store.get('fmt') === 'ringkas' ? 'ringkas' : 'penuh';
@@ -100,6 +108,22 @@
         return res.data;
       });
   }
+  /* ---------- Tabel lebar jadi kartu di HP ---------- */
+  function kartuTabel(t) {
+    if (t.__kartu || t.classList.contains('jd-t') || !t.tHead || t.tHead.rows.length !== 1) return;
+    var hs = [].map.call(t.tHead.rows[0].cells, function (c) { return c.textContent.trim(); });
+    if (hs.length < 4) return;
+    t.__kartu = true; t.classList.add('tc');
+    [].forEach.call(t.tBodies, function (b) { [].forEach.call(b.rows, function (r) { [].forEach.call(r.cells, function (c, i) { if (hs[i]) c.setAttribute('data-l', hs[i]); }); }); });
+  }
+  if (window.MutationObserver) new MutationObserver(function (ms) {
+    ms.forEach(function (m) { [].forEach.call(m.addedNodes, function (n) {
+      if (n.nodeType !== 1) return;
+      if (n.tagName === 'TABLE' && n.classList.contains('t')) kartuTabel(n);
+      else if (n.querySelectorAll) [].forEach.call(n.querySelectorAll('table.t'), kartuTabel);
+    }); });
+  }).observe(document.documentElement, { childList: true, subtree: true });
+
   /* ---------- Tampilkan data terakhir dulu, lalu perbarui (stale-while-revalidate) ---------- */
   var syncN = 0;
   function setSync(k) { syncN = Math.max(0, syncN + k); var b = document.querySelector('.topbar .icon-btn'); if (b) b.classList.toggle('spin', syncN > 0); }
@@ -834,7 +858,7 @@
   function viewBeranda(v) {
     var first = (S.user && S.user.nama || '').split(' ')[0];
     v.append(el('section', { class: 'hero' },
-      el('div', null, el('h2', { text: 'Halo, ' + first + ' 👋' }), el('p', { text: 'EIGER ' + CFG.STORE_NAME })),
+      el('div', null, el('h2', { text: 'Halo, ' + first + ' 👋' }), el('p', { text: dLong(todayJkt()) })),
       el('div', { class: 'hero-right', id: 'hero-info', text: nowJkt() })));
     var kpis = el('div', { class: 'grid grid-3' }, el('div', { class: 'skel' }), el('div', { class: 'skel' }), el('div', { class: 'skel' }));
     var admin = isAdmin();
@@ -855,8 +879,8 @@
       dokCard.replaceChildren(el('div', { class: 'card-head' }, el('h3', null, 'Dokumentasi hari ini', tugas.length ? el('span', { class: 'tag tag-bad', style: 'margin-left:8px', text: 'Tugas kamu' }) : null), el('span', { class: 'duty-link' }, 'Unggah / lihat', icon('arrow'))), dokStatusEl(d));
       if (tugas.length) dokCard.setAttribute('href', tugas[0].link);
     }).catch(function () { dokCard.remove(); });
-    v.append(dokCard);
-    v.append(apBeranda());
+    v.append(lipat('dok', 'Dokumentasi hari ini', dokCard));
+    v.append(lipat('ap', 'Apresiasi tim', apBeranda()));
     v.append(el('div', { class: 'quick section' },
       el('a', { href: '#/briefing' }, icon('sun'), 'Briefing Pagi', el('span', { text: 'Teks WA untuk tim' })),
       el('a', { href: '#/unggah' }, icon('upload'), 'Unggah DSR', el('span', { text: 'Perbarui data sales' })),
@@ -898,6 +922,17 @@
     drawBoot();
     bootRefresh = function () { if (!v.isConnected) { bootRefresh = null; return; } drawBoot(); if (v.__tugas) v.__tugas(); };
     v.__tugas = admin ? null : tugasRedraw;
+  }
+
+  /** Bungkus kartu Beranda agar bisa dilipat; pilihan diingat per HP. */
+  function lipat(id, judul, isi) {
+    var tutup = store.get('lipat.' + id) === '1';
+    var w = el('div', { class: 'lipat' + (tutup ? ' tutup' : '') });
+    var h = el('button', { type: 'button', class: 'lipat-h', 'aria-expanded': String(!tutup), onclick: function () {
+      tutup = !tutup; w.classList.toggle('tutup', tutup); h.setAttribute('aria-expanded', String(!tutup)); store.set('lipat.' + id, tutup ? '1' : null);
+    } }, el('span', { text: judul }), icon('chev'));
+    w.append(h, el('div', { class: 'lipat-b' }, isi));
+    return w;
   }
 
   /* ---------- Beranda: kartu sesuai peran ---------- */
@@ -1158,8 +1193,7 @@
 
   /* ---------- Unggah DSR ---------- */
   function viewUnggah(v) {
-    v.append(el('section', { class: 'hero hero-sm' },
-      el('div', null, el('h2', { text: 'Unggah DSR' }), el('p', { text: 'Perbarui data penjualan dari file Item DSR Report.' }))));
+    pageHead(v, 'Unggah DSR', 'Perbarui data penjualan dari file Item DSR Report.');
 
     var input = el('input', { type: 'file', accept: '.xlsx,.xls,.csv', id: 'dsr-file' });
     var drop = el('label', { class: 'drop', for: 'dsr-file' },
@@ -1320,8 +1354,7 @@
     var modal = null;
     function save() { store.set(key, JSON.stringify(draft)); }
 
-    v.append(el('section', { class: 'hero hero-sm' },
-      el('div', null, el('h2', { text: 'Cek Kas' }), el('p', { text: 'Hitung uang fisik per pos kas, lalu lihat apakah jumlahnya cocok.' }))));
+    pageHead(v, 'Cek Kas', 'Hitung uang fisik per pos kas, lalu lihat apakah jumlahnya cocok.');
     v.append(el('div', { class: 'pos-tabs' }, POS.map(function (p) {
       return el('button', { type: 'button', 'aria-pressed': String(p.id === pos.id), text: p.label, onclick: function () {
         S.kasPos = p.id; store.set('kasPos', p.id); render();
@@ -1387,7 +1420,7 @@
     catatan.value = draft.catatan || '';
     catatan.addEventListener('input', function () { draft.catatan = catatan.value; save(); });
     var out = el('div');
-    var btnSave = el('button', { class: 'btn btn-orange btn-block', type: 'button' }, icon('check'), 'Simpan hitungan ' + pos.label);
+    var btnSave = el('button', { class: 'btn btn-orange btn-block aksi-tempel', type: 'button' }, icon('check'), 'Simpan hitungan ' + pos.label);
     var cardHasil = el('div', { class: 'card card-result' },
       el('h3', { text: (step++) + '. Hasil pengecekan' }),
       withCompare ? el('ul', { class: 'calc' },
@@ -1943,7 +1976,7 @@
       var pakaiBox = el('label', { class: 'check' + (d.simpananSaya ? '' : ' hide'), for: 'rq-s' }, pakai, 'Pakai simpanan OFF (sisa ' + d.simpananSaya + ')');
       jenis.addEventListener('change', function () { pakaiBox.classList.toggle('hide', jenis.value !== 'OFF' || !d.simpananSaya); });
       var out = el('div');
-      var btn = el('button', { class: 'btn btn-orange btn-block', type: 'submit', disabled: !(nx.terbuka || d.bolehKapanSaja) }, 'Kirim request');
+      var btn = el('button', { class: 'btn btn-orange btn-block aksi-tempel', type: 'submit', disabled: !(nx.terbuka || d.bolehKapanSaja) }, 'Kirim request');
       var form = el('form', { class: 'card', onsubmit: function (e) {
         e.preventDefault(); out.replaceChildren();
         if (!tgl.value) { out.replaceChildren(errBox(new Error('Pilih tanggalnya dulu'))); return; }
@@ -2031,7 +2064,7 @@
         tim.users.filter(function (u) { return u.username !== me; }).map(function (u) { return el('option', { value: u.username, text: u.nama }); }));
       var alasan = el('input', { id: 'tk-a', maxlength: 200, placeholder: 'mis. ada keperluan pagi' });
       var out = el('div');
-      var btn = el('button', { class: 'btn btn-orange btn-block', type: 'submit' }, 'Ajukan tukar shift');
+      var btn = el('button', { class: 'btn btn-orange btn-block aksi-tempel', type: 'submit' }, 'Ajukan tukar shift');
       var form = el('form', { class: 'card', onsubmit: function (e) {
         e.preventDefault(); out.replaceChildren();
         if (!tgl.value || !rekan.value) { out.replaceChildren(errBox(new Error('Pilih tanggal dan rekan dulu'))); return; }
@@ -2424,7 +2457,7 @@
     var HEAD = { akun: ['Akun Tim', 'Setujui pendaftaran, nonaktifkan akun, reset password, dan cocokkan nama di jadwal.'],
       target: ['Target', 'Target per RA, target UPT & basket size untuk Briefing Pagi.'],
       atur: ['Pengaturan', 'Angka standar kas, batas video dokumentasi, dan mesin upload.'] }[part];
-    v.append(el('section', { class: 'hero' }, el('div', null, el('h2', { text: HEAD[0] }), el('p', { text: HEAD[1] }))));
+    pageHead(v, HEAD[0], HEAD[1]);
     var box = el('div', null, el('div', { class: 'skel' }));
     var setCard = el('div', { class: 'card section' }, el('h3', { text: part === 'target' ? 'Target briefing' : 'Pengaturan kas' }), el('div', { class: 'skel', style: 'margin-top:12px;min-height:60px' }));
     if (part === 'akun') v.append(box);
@@ -2574,9 +2607,12 @@
 
   /* ---------- Akun ---------- */
   function viewAkun(v) {
-    v.append(el('section', { class: 'hero' }, el('div', null, el('h2', { text: S.user ? S.user.nama : 'Akun' }),
-      el('p', { text: S.user ? '@' + S.user.username + ' · ' + (S.user.role === 'admin' ? 'Admin' : 'Staf') : '' }))));
+    v.append(el('div', { class: 'card akun-head' }, el('span', { class: 'avatar', text: initials(S.user ? S.user.nama : '?') }),
+      el('div', null, el('b', { text: S.user ? S.user.nama : 'Akun' }), el('small', { text: S.user ? '@' + S.user.username + ' · ' + (S.user.role === 'admin' ? 'Admin' : 'Staf') : '' }))));
     v.append(appCard());
+    v.append(el('div', { class: 'card section', style: 'max-width:520px' }, el('h3', { text: 'Tema tampilan' }),
+      el('p', { class: 'sub', text: 'Mode gelap lebih nyaman untuk shift malam dan hemat baterai.' }),
+      segmented([['auto', 'Ikuti HP'], ['terang', 'Terang'], ['gelap', 'Gelap']], store.get('tema') || 'auto', function (m) { store.set('tema', m === 'auto' ? null : m); terapkanTema(); })));
     v.append(el('div', { class: 'card section', style: 'max-width:520px' }, el('h3', { text: 'Tampilan angka rupiah' }),
       el('p', { class: 'sub', text: 'Berlaku di semua menu pada perangkat ini.' }),
       segmented([['penuh', 'Lengkap (Rp 248.871.000)'], ['ringkas', 'Ringkas (Rp 248,9 jt)']], S.fmt, function (m) { S.fmt = m; store.set('fmt', m); toast('Tampilan rupiah disimpan'); })));
@@ -3822,7 +3858,7 @@
         }).catch(function (err) { toast(err.message, true); }).then(next);
       })();
     });
-    var btn = el('button', { class: 'btn btn-orange btn-block', type: 'button', text: 'Simpan handover', onclick: function () {
+    var btn = el('button', { class: 'btn btn-orange btn-block aksi-tempel', type: 'button', text: 'Simpan handover', onclick: function () {
       btn.disabled = true;
       api('hoSave', { tanggal: tgl.value, shift: shift, isi: isi.value, foto: fotos }).then(function () {
         toast('Handover tersimpan & dikirim ke tim'); fotos = []; isi.value = ''; thumbs.replaceChildren(); status.textContent = ''; btn.disabled = false; loadList();
@@ -4381,8 +4417,7 @@
     return { rows: rows, lokasi: lokasi };
   }
   function viewUnggahBin(v) {
-    v.append(el('section', { class: 'hero hero-sm' },
-      el('div', null, el('h2', { text: 'Unggah By Bin' }), el('p', { text: 'Perbarui stok per lokasi bin dari file export stock by bin. Siapa saja boleh, kapan saja.' }))));
+    pageHead(v, 'Unggah By Bin', 'Perbarui stok per lokasi bin dari file export stock by bin. Siapa saja boleh, kapan saja.');
     var input = el('input', { type: 'file', accept: '.xlsx,.xls,.csv', id: 'bin-file' });
     var drop = el('label', { class: 'drop', for: 'bin-file' }, el('span', { class: 'drop-ic' }, icon('upload')),
       el('span', { class: 'drop-txt' }, el('b', { text: 'Pilih file by bin' }), el('span', { text: 'export_by_bin_….xlsx · ketuk untuk memilih' })), input);
