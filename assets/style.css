@@ -1320,3 +1320,9 @@ html[data-theme=dark] .ach-extra.t-bad{color:#FFB4AB}html[data-theme=dark] .ach-
 html[data-theme=dark] .adm-tile.t-good{background:#0F2A23!important}html[data-theme=dark] .adm-tile.t-warn{background:#2E2510!important}html[data-theme=dark] .adm-tile.t-bad{background:#33171A!important}
 html[data-theme=dark] .bell-pop{background:var(--panel);color:var(--fg)}
 @media (max-width:759px){table.t.tc td,html[data-theme=dark] table.t.tc td,table.t.tc td.sticky-col{background:transparent!important}}
+html[data-theme=dark] .hero{background:linear-gradient(135deg,#0A1A4F,#132B73 60%,#1A3796)!important;color:#fff}
+html[data-theme=dark] .ach-lab b{background:#1A2E6E}
+html[data-theme=dark] .adm-issues li{background:var(--sf-in);color:var(--fg)}
+html[data-theme=dark] .adm-issues a{color:var(--fg)}
+html[data-theme=dark] .adm-tile span,html[data-theme=dark] .adm-tile small{color:#AEB8CE}
+html[data-theme=dark] .jd-dl,html[data-theme=dark] .btn-primary{background:#2C4FBF}
