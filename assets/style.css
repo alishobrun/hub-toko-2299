@@ -1168,13 +1168,12 @@ main.view>.sec-lab:first-child{margin-top:4px}
 .tugas-card,.admin-home{border-left:1px solid rgba(255,255,255,.9)!important;margin-top:0}
 .hero{border-radius:var(--radius);outline:1px solid rgba(10,26,79,.25);box-shadow:10px 10px 22px #A9B2C4,-8px -8px 18px var(--sf-hi);border-bottom-width:4px}
 .page-desc{border-left:4px solid var(--orange)!important}
-/* kotak di dalam kotak: cekung */
-.adm-tile,.tugas-sh,.ach-bar,.k-bar,.ach-extra,.duty-col,.duty-off,.duty-next,.sh-leg-h{
-  box-shadow:var(--sf-press)!important;border:1px solid var(--sf-edge)}
+/* kotak di dalam kotak: datar, bertepi tipis (tidak cekung) */
+.adm-tile,.tugas-sh,.ach-extra,.duty-col,.duty-off,.duty-next,.sh-leg-h{box-shadow:none!important;border:1px solid var(--sf-edge)}
 .adm-tile{border-radius:16px;background:var(--sf-in)}
 .adm-tile.t-good{background:#E7F3EE}.adm-tile.t-warn{background:#F7F0E1}.adm-tile.t-bad{background:#F6E6E4}
-.ach-bar{height:12px;padding:2px;background:var(--sf-in);border-radius:10px}
-.ach-bar i{border-radius:8px}
+.ach-bar{height:10px;background:#DDE2EB;border-radius:10px;box-shadow:none}
+.ach-bar i{border-radius:10px}
 .ach-extra{border-radius:12px}
 /* label kartu pencapaian: timbul kecil */
 .ach-lab b{box-shadow:4px 4px 10px #A9B2C4,-3px -3px 8px var(--sf-hi)}
@@ -1183,14 +1182,15 @@ main.view>.sec-lab:first-child{margin-top:4px}
 .btn{border-radius:16px}
 .btn-primary,.btn-orange{box-shadow:6px 6px 14px #A9B2C4,-5px -5px 12px var(--sf-hi)}
 .btn-ghost{background:var(--panel);border-color:transparent;outline:1px solid var(--sf-edge);box-shadow:var(--sf-raise)}
-.btn:active{box-shadow:var(--sf-press)!important}
-.seg{background:var(--sf-in);border:1px solid var(--sf-edge);box-shadow:var(--sf-press);border-radius:16px}
+.btn:active{transform:translateY(1px)}
+.seg{background:var(--panel);border:1px solid var(--sf-edge);box-shadow:var(--sf-raise);border-radius:16px}
 .seg button{border-radius:12px}
 .seg button[aria-pressed=true]{box-shadow:4px 4px 10px #A9B2C4,-3px -3px 8px var(--sf-hi)}
-.field input,.field select,.mini-date,input.hb-search,.sheet-cari-w,.sel{background:var(--sf-in)!important;border:1px solid var(--sf-edge)!important;box-shadow:var(--sf-press);border-radius:14px}
+.field input,.field select,input.hb-search,.sheet-cari-w,.sel{background:#fff!important;border:1px solid var(--line-2)!important;box-shadow:none;border-radius:14px}
+.mini-date{background:var(--panel)!important;border:1px solid var(--sf-edge)!important;box-shadow:var(--sf-raise);border-radius:14px}
 .jd-arr,.jd-dl,.jd-day{box-shadow:var(--sf-raise);outline:1px solid var(--sf-edge);border-color:transparent}
 .jd-arr,.jd-day{background:var(--panel)}
-.jd-day.on{box-shadow:var(--sf-press),0 0 0 0 transparent;outline-color:transparent}
+.jd-day.on{box-shadow:4px 4px 10px #A9B2C4,-3px -3px 8px var(--sf-hi);outline-color:transparent}
 
 /* bagian atas: logo + nama Basecamp, tombol timbul */
 .topbar{background:rgba(228,232,239,.92);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border-bottom:0}
@@ -1208,7 +1208,7 @@ main.view>.sec-lab:first-child{margin-top:4px}
   body{padding-bottom:0}
   .bnav{left:14px!important;right:14px!important;bottom:calc(12px + env(safe-area-inset-bottom))!important;border-radius:24px;border-top:0;
     background:rgba(247,248,251,.97)!important;outline:1px solid var(--sf-edge);box-shadow:10px 10px 24px #A3ADC0,-6px -6px 16px var(--sf-hi)!important;padding:8px 4px!important}
-  .bnav-a.on .bnav-ic{background:var(--sf-in)!important;box-shadow:var(--sf-press)}
+  .bnav-a.on .bnav-ic{background:var(--orange-50)!important;box-shadow:none}
   #toast{bottom:calc(100px + env(safe-area-inset-bottom))!important}
   .ver-banner{bottom:calc(100px + env(safe-area-inset-bottom))}
 }
@@ -1218,7 +1218,8 @@ main.view>.sec-lab:first-child{margin-top:4px}
 .sheet-hit{box-shadow:var(--sf-raise);outline:1px solid var(--sf-edge);background:var(--panel)!important}
 /* tabel di dalam kotak tetap bersih */
 .t td{background:transparent}
-.sticky-col{background:var(--panel)}
+.t td.sticky-col,.jd-t td.jd-name{background:var(--panel)!important}
+.t thead th.sticky-col{background:var(--navy-900)!important}
 .jd-t tr.jd-me td.jd-name{background:#FFF8F4}
 
 .tugas-card,.admin-home{margin-top:6px}
