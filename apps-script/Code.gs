@@ -11,7 +11,7 @@
 /** Versi kode. WAJIB dinaikkan setiap kali Code.gs diubah (format yyyy-MM-dd.n),
  *  lalu simpan ke GitHub (alishobrun/hub-toko-2299) SEBELUM dipasang. Halaman Kesehatan Data
  *  membandingkan angka ini dengan GitHub supaya kode yang dipasang di luar GitHub ketahuan. */
-const KODE_VERSI = '2026-10-27.4';
+const KODE_VERSI = '2026-10-27.5';
 
 const CFG = {
   STORE: '2299',
@@ -3278,8 +3278,10 @@ function kirimPush_(endpoint) {
   const c = r.getResponseCode();
   if (c === 404 || c === 410) return false;
   if (c >= 400) throw new Error('Push ' + c + ': ' + r.getContentText().slice(0, 120));
+  PUSH_OK_[endpoint] = 1;
   return true;
 }
+var PUSH_OK_ = {}; // endpoint yang berhasil dikirimi pada eksekusi ini
 function idsNotif_(u) {
   const n = notifCached_(u);
   return n.items.filter(function (x) { return x.live || (!x.dibaca); }).map(function (x) { return x.id; });
@@ -3295,6 +3297,7 @@ function pushTick_() {
   Object.keys(byUser).forEach(function (un) { pushUser_(users[un], byUser[un], p, mati); });
   buangLangganan_(mati);
   p.setProperty('push_tick', now_());
+  try { rapikanLangganan_(); } catch (e) { Logger.log('rapi push: ' + e); }
 }
 function pushUser_(u, subs, p, mati) {
   if (!u || !subs || !subs.length) return;
@@ -3308,9 +3311,33 @@ function pushUser_(u, subs, p, mati) {
     try { if (!kirimPush_(String(s.endpoint))) mati[s.endpoint] = 1; } catch (e) { Logger.log(e); }
   });
 }
+/** Buang langganan mati, catat waktu terakhir berhasil (kolom "terakhir"), dan rapikan duplikat lama. */
 function buangLangganan_(mati) {
-  if (!Object.keys(mati).length) return;
-  writeAll_('push_sub', read_('push_sub').filter(function (s) { return !mati[s.endpoint]; }));
+  mati = mati || {};
+  const ok = Object.keys(PUSH_OK_);
+  if (!Object.keys(mati).length && !ok.length) return;
+  const now = now_();
+  const all = read_('push_sub').filter(function (s) { return !mati[s.endpoint]; });
+  all.forEach(function (s) { if (PUSH_OK_[s.endpoint]) s.terakhir = now; });
+  writeAll_('push_sub', all);
+  PUSH_OK_ = {};
+}
+/** Sekali sehari: hapus langganan berumur > 14 hari yang tidak pernah/tidak lagi berhasil menerima,
+ *  bila akun yang sama punya perangkat lain yang masih berhasil (jadi perangkat aktif tidak ikut terhapus). */
+function rapikanLangganan_() {
+  const p = PropertiesService.getScriptProperties();
+  if (p.getProperty('push_rapi_tgl') === today_()) return;
+  p.setProperty('push_rapi_tgl', today_());
+  const batas = addDays_(today_(), -14);
+  const all = read_('push_sub');
+  const terbaik = {};
+  all.forEach(function (s) { const t = String(s.terakhir || ''); if (t > (terbaik[s.username] || '')) terbaik[s.username] = t; });
+  const keep = all.filter(function (s) {
+    const t = String(s.terakhir || ''), lama = String(s.dibuat || '').slice(0, 10) < batas;
+    const mati = !t || t.slice(0, 10) < batas || t === String(s.dibuat || '');
+    return !(lama && mati && terbaik[s.username] && terbaik[s.username] > t);
+  });
+  if (keep.length < all.length) { writeAll_('push_sub', keep); log_('sistem', 'rapikan notifikasi', (all.length - keep.length) + ' perangkat lama dihapus'); }
 }
 /** Kirim push sekarang untuk target: 'admin', 'semua', atau username. */
 function pushUntuk_(targets) {
@@ -3338,9 +3365,11 @@ Object.assign(API, {
     const ep = String(sub.endpoint || '');
     if (!/^https:\/\//.test(ep)) throw new Error('Langganan notifikasi tidak valid');
     return withLock_(function () {
-      const all = read_('push_sub').filter(function (s) { return s.endpoint !== ep; });
+      const ua = String(req.ua || '').slice(0, 120);
+      // langganan lama akun ini dengan jenis perangkat sama (mis. setelah aplikasi dihapus & dipasang ulang) diganti
+      const all = read_('push_sub').filter(function (s) { return s.endpoint !== ep && !(s.username === u.username && ua && String(s.ua) === ua); });
       all.push({ username: u.username, endpoint: ep, p256dh: String((sub.keys || {}).p256dh || ''), auth: String((sub.keys || {}).auth || ''),
-        ua: String(req.ua || '').slice(0, 120), dibuat: now_(), terakhir: now_() });
+        ua: ua, dibuat: now_(), terakhir: '' });
       writeAll_('push_sub', all);
       // tandai notifikasi yang sudah ada supaya tidak dikirim ulang
       try { PropertiesService.getScriptProperties().setProperty('push_seen_' + u.username, JSON.stringify(idsNotif_(u).slice(0, 150))); } catch (e) {}
@@ -3349,15 +3378,26 @@ Object.assign(API, {
   },
   pushHapus: function (req) {
     const u = auth_(req);
-    const ep = String(req.endpoint || '');
+    const ep = String(req.endpoint || ''), akhir = String(req.akhiran || ''), kecuali = String(req.kecuali || '');
     return withLock_(function () {
-      writeAll_('push_sub', read_('push_sub').filter(function (s) { return !(s.endpoint === ep && s.username === u.username); }));
-      return true;
+      const all = read_('push_sub');
+      const keep = all.filter(function (s) {
+        if (s.username !== u.username) return true;
+        const e = String(s.endpoint);
+        if (req.semuaKecuali) return kecuali && e.slice(-24) === kecuali;      // hapus semua kecuali perangkat ini
+        if (ep) return e !== ep;
+        if (akhir) return e.slice(-24) !== akhir;
+        return true;
+      });
+      writeAll_('push_sub', keep);
+      return { dihapus: all.length - keep.length };
     });
   },
   pushStatus: function (req) {
     const u = auth_(req);
-    return { perangkat: read_('push_sub').filter(function (s) { return s.username === u.username; }).map(function (s) { return { ua: String(s.ua), dibuat: String(s.dibuat), ep: String(s.endpoint).slice(-12) }; }) };
+    return { perangkat: read_('push_sub').filter(function (s) { return s.username === u.username; }).map(function (s) {
+      return { ua: String(s.ua), dibuat: String(s.dibuat), terakhir: String(s.terakhir || ''), ep: String(s.endpoint).slice(-24) };
+    }) };
   },
   /** Kirim push percobaan ke perangkat sendiri. */
   pushTes: function (req) {
@@ -3366,7 +3406,9 @@ Object.assign(API, {
     if (!subs.length) throw new Error('Belum ada perangkat yang mengaktifkan notifikasi');
     withLock_(function () { notif_(u.username, 'info', 'info', 'Tes notifikasi Basecamp 2299', 'Notifikasi di HP sudah aktif 👍', '#/akun'); });
     let ok = 0; const galat = [];
-    subs.forEach(function (s) { try { if (kirimPush_(String(s.endpoint))) ok++; else galat.push('langganan kedaluwarsa'); } catch (e) { galat.push(String(e.message || e)); } });
+    const mati = {};
+    subs.forEach(function (s) { try { if (kirimPush_(String(s.endpoint))) ok++; else { mati[s.endpoint] = 1; galat.push('langganan kedaluwarsa (dihapus)'); } } catch (e) { galat.push(String(e.message || e)); } });
+    try { withLock_(function () { buangLangganan_(mati); }); } catch (e) {}
     try { PropertiesService.getScriptProperties().setProperty('push_seen_' + u.username, JSON.stringify(idsNotif_(u).slice(0, 150))); } catch (e) {}
     return { terkirim: ok, perangkat: subs.length, galat: galat };
   }

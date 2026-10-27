@@ -2681,8 +2681,31 @@
       } });
       var pasang = installEvt ? el('button', { class: 'btn btn-primary', type: 'button', text: 'Pasang aplikasi', onclick: function () { installEvt.prompt(); installEvt.userChoice.then(function () { installEvt = null; draw(); }); } }) : null;
       var subP = pushSupported() ? Promise.race([navigator.serviceWorker.ready.then(function (r) { return r.pushManager.getSubscription(); }), new Promise(function (ok) { setTimeout(function () { ok(null); }, 3000); })]).catch(function () { return null; }) : Promise.resolve(null);
+      var daftar = el('div', { class: 'dev-list' });
       subP.then(function (sub) {
         var on = !!sub && izin === 'granted';
+        var akhirIni = sub ? String(sub.endpoint).slice(-24) : '';
+        api('pushStatus').then(function (d) {
+          var list = d.perangkat || [];
+          if (!list.length) { daftar.replaceChildren(); return; }
+          var lain = list.filter(function (x) { return x.ep !== akhirIni; });
+          daftar.replaceChildren(el('h4', { text: 'Perangkat terdaftar (' + list.length + ')' }),
+            el('ul', null, list.map(function (x) {
+              var ini = x.ep === akhirIni;
+              return el('li', { class: ini ? 'ini' : null },
+                el('div', null, el('b', { text: (x.ua || 'Perangkat') + (ini ? ' · perangkat ini' : '') }),
+                  el('small', { text: 'Didaftarkan ' + fTime(x.dibuat) + ' · ' + (x.terakhir ? 'terakhir menerima ' + fTime(x.terakhir) : 'belum pernah menerima') })),
+                ini ? null : el('button', { class: 'btn btn-ghost btn-sm', type: 'button', text: 'Hapus', onclick: function (e) {
+                  e.target.disabled = true;
+                  api('pushHapus', { akhiran: x.ep }).then(function () { toast('Perangkat dihapus'); draw(); }).catch(function (err) { e.target.disabled = false; toast(err.message, true); });
+                } }));
+            })),
+            akhirIni && lain.length ? el('button', { class: 'btn btn-ghost btn-sm', type: 'button', style: 'margin-top:8px', text: 'Hapus semua kecuali perangkat ini', onclick: function (e) {
+              if (!confirm('Hapus ' + lain.length + ' perangkat lain dari notifikasi akun ini?')) return;
+              e.target.disabled = true;
+              api('pushHapus', { semuaKecuali: true, kecuali: akhirIni }).then(function (r) { toast(r.dihapus + ' perangkat dihapus'); draw(); }).catch(function (err) { e.target.disabled = false; toast(err.message, true); });
+            } }) : null);
+        }).catch(function () { daftar.replaceChildren(); });
         st.replaceChildren.apply(st, [el('span', { class: 'tag ' + (on ? 'tag-good' : 'tag-warn'), text: on ? '✓ Notifikasi aktif di perangkat ini' : 'Notifikasi belum aktif di perangkat ini' }),
           isStandalone() ? el('span', { class: 'tag', text: 'Dibuka sebagai aplikasi' }) : null].filter(Boolean));
         btns.replaceChildren.apply(btns, [pasang, on ? tes : aktif, on ? mati : null].filter(Boolean));
@@ -2696,7 +2719,7 @@
           el('ol', null, el('li', { text: 'Tekan tombol "Pasang aplikasi" di atas, atau menu ⋮ → "Instal aplikasi" / "Tambahkan ke layar utama".' }), el('li', { text: 'Tekan "Aktifkan notifikasi" lalu Izinkan.' }))));
       box.replaceChildren(el('h3', { text: 'Aplikasi & notifikasi HP' }),
         el('p', { class: 'sub', text: 'Notifikasi lonceng (request jadwal, pengingat video, pengumuman, handover, DSR, dll.) ikut muncul di HP walau Basecamp sedang ditutup. Dicek tiap 15 menit.' }),
-        st, btns,
+        st, btns, daftar,
         isIOS() && !isStandalone() ? el('div', { class: 'err-box warn-box', style: 'margin-top:12px', text: 'Di iPhone, notifikasi hanya bisa diaktifkan dari Basecamp yang sudah dipasang di layar utama.' }) : null,
         panduan);
     }
