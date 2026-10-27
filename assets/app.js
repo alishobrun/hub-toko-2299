@@ -2694,7 +2694,7 @@
               var ini = x.ep === akhirIni;
               return el('li', { class: ini ? 'ini' : null },
                 el('div', null, el('b', { text: (x.ua || 'Perangkat') + (ini ? ' · perangkat ini' : '') }),
-                  el('small', { text: 'Didaftarkan ' + fTime(x.dibuat) + ' · ' + (x.terakhir ? 'terakhir menerima ' + fTime(x.terakhir) : 'belum pernah menerima') })),
+                  el('small', { text: 'Didaftarkan ' + fTime(x.dibuat) + ' · ' + (x.terakhir && x.terakhir !== x.dibuat ? 'terakhir menerima ' + fTime(x.terakhir) : 'belum tercatat menerima') })),
                 ini ? null : el('button', { class: 'btn btn-ghost btn-sm', type: 'button', text: 'Hapus', onclick: function (e) {
                   e.target.disabled = true;
                   api('pushHapus', { akhiran: x.ep }).then(function () { toast('Perangkat dihapus'); draw(); }).catch(function (err) { e.target.disabled = false; toast(err.message, true); });
