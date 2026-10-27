@@ -980,7 +980,7 @@ a.dok-home{display:block;color:inherit;text-decoration:none}
 /* Jadwal: periode, unduh & draf */
 .jd-nav{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:10px}
 .jd-nav b{font-size:13px;padding:0 4px}
-.jd-t th.jd-we{background:#F26B3A!important;color:#fff}
+.jd-t th.jd-we{color:#FFC9B3}
 .jd-t tr.jd-cnt td{background:#F8FAFC;color:#475569;font-size:12px}
 .jd-t tr.jd-cnt td.sticky-col{font-weight:600}
 .jd-t td.jd-kurang{background:#FEE2E2!important;color:#B91C1C;font-weight:700}
@@ -1080,3 +1080,64 @@ a.dok-home{display:block;color:inherit;text-decoration:none}
 .mini-date b{font-weight:700;color:var(--fg)}
 .mini-date input{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer}
 .mini-bar .seg button{flex:1;padding:8px 10px;font-size:14px}
+
+
+/* ===== Halaman Jadwal (27 Okt) ===== */
+.jd-card{padding:12px}
+.jd-bar{display:flex;align-items:center;gap:8px}
+.jd-arr{width:42px;height:42px;flex:none;border-radius:12px;border:1px solid var(--line-2);background:#fff;color:var(--navy-900);font-size:24px;font-weight:800;line-height:1;cursor:pointer}
+.jd-per{flex:1;min-width:0;text-align:center}
+.jd-per b{display:block;font-size:15.5px;color:var(--navy-900)}
+.jd-per small{display:block;font-size:12.5px;color:#5E6A85}
+.jd-per a{color:var(--orange,#F26B3A);font-weight:700}
+.jd-dl{width:42px;height:42px;flex:none;border-radius:12px;border:0;background:var(--navy-900);color:#fff;display:grid;place-items:center;cursor:pointer}
+.jd-dl svg{width:19px;height:19px}
+.jd-tabs{margin-top:10px}.jd-tabs .seg button{flex:1;font-size:14px}
+/* keterangan shift */
+.sh-leg{margin-top:10px;border:1px solid var(--line);border-radius:14px;overflow:hidden}
+.sh-leg-h{width:100%;display:flex;justify-content:space-between;align-items:center;padding:10px 12px;background:#F8FAFC;border:0;font:inherit;cursor:pointer;color:var(--fg)}
+.sh-leg-h b{font-size:14px}
+.sh-leg-t{display:flex;align-items:center;gap:4px;font-size:12.5px;color:#5E6A85;font-weight:600}
+.sh-leg-t svg{width:16px;height:16px;transform:rotate(180deg);transition:transform .2s}
+.sh-leg.tutup .sh-leg-t svg{transform:none}
+.sh-leg.tutup .sh-leg-b{display:none}
+.sh-leg-b{padding:4px 12px 12px}
+.sh-row{display:grid;grid-template-columns:50px 1fr;align-items:center;gap:8px;min-height:30px}
+.sh-row>.sh{justify-self:start;min-width:40px;text-align:center}
+.sh-lane{position:relative;height:24px}
+.sh-lane.grid{background:repeating-linear-gradient(90deg,#EEF1F6 0 1px,transparent 1px calc(100%/7));background-size:calc(100% + 1px) 100%}
+.sh-axis{min-height:20px}.sh-axis .sh-lane{height:18px}
+.sh-tick{position:absolute;top:0;transform:translateX(-50%);font-size:11px;color:#8A94AB;font-weight:600;white-space:nowrap}
+.sh-tick.first{transform:none}.sh-tick.last{transform:translateX(-100%)}
+.sh-bar{position:absolute;top:2px;bottom:2px;border-radius:7px;color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;white-space:nowrap;overflow:hidden;padding:0 4px}
+.b-PD,.b-NS{background:#2F6FDB}.b-MC{background:#6D4BD8}.b-MD{background:#8B5CF6}.b-SB,.b-SC{background:#E0703A}
+.sh-other{display:flex;gap:14px;margin-top:8px;padding-top:8px;border-top:1px dashed var(--line)}
+.sh-other>span{display:flex;align-items:center;gap:6px;font-size:13px;font-weight:600;color:#475569}
+/* tabel */
+.jd-main{padding:0;overflow:hidden}
+.jd-t th,.jd-t td{padding:7px 6px;text-align:center}
+.jd-t th.jd-d small{display:block;font-size:11px;font-weight:600;opacity:.85}
+.jd-t th.jd-d b{font-size:13.5px}
+.jd-t th.today{background:var(--orange,#F26B3A)!important;color:#fff;box-shadow:none}
+.jd-t td.today{background:#FFF4EE;box-shadow:none}
+.jd-t .sticky-col.jd-name{text-align:left;padding-left:14px;min-width:92px;box-shadow:6px 0 8px -6px rgba(10,26,79,.25)}
+.jd-t tr.jd-me td.jd-name{color:var(--orange,#F26B3A);font-weight:800}
+.jd-t tr.jd-me td{background:#FFFBF8}
+.jd-t tr.jd-me td.today{background:#FFEDE3}
+.jd-t th.jd-sum,.jd-t td.jd-sum{font-size:12.5px;color:#5E6A85;background:#F8FAFC}
+.jd-t thead th.jd-sum{background:var(--navy-800,#14286b);color:#fff}
+.jd-t tr.jd-cnt td{font-size:12.5px;color:#475569;background:#F8FAFC;font-family:inherit}
+.jd-t tr.jd-cnt td.today{background:#FFEDE3}
+.jd-foot{margin:0;padding:10px 14px;font-size:12.5px;color:#5E6A85}
+/* per hari */
+.jd-days{display:flex;gap:8px;overflow-x:auto;padding:12px;scrollbar-width:none;border-bottom:1px solid var(--line)}
+.jd-days::-webkit-scrollbar{display:none}
+.jd-day{flex:0 0 auto;width:58px;padding:7px 0;border-radius:12px;border:1px solid var(--line-2);background:#fff;display:flex;flex-direction:column;align-items:center;gap:2px;cursor:pointer;font:inherit;color:var(--fg)}
+.jd-day small{font-size:11px;color:#5E6A85;font-weight:600;white-space:nowrap}
+.jd-day b{font-size:17px}
+.jd-day.we small{color:#C2410C}
+.jd-day.now{border-color:var(--orange,#F26B3A)}
+.jd-day.on{background:var(--navy-900);border-color:var(--navy-900);color:#fff}
+.jd-day.on small{color:#fff;opacity:.85}
+.jd-dayhead{padding:12px 14px 0;font-size:15px;color:var(--navy-900)}
+.jd-main .duty-wrap{padding:12px 14px 16px}

@@ -2181,71 +2181,114 @@
   }
   function jdTable(j, day, opt) {
     opt = opt || {};
-    var head = el('tr', null, el('th', { class: 'sticky-col', text: 'Nama' }), j.tanggal.map(function (t, i) {
+    var head = el('tr', null, el('th', { class: 'sticky-col jd-name', text: 'Nama' }), j.tanggal.map(function (t, i) {
       var p = dParts(t), we = /^(Sab|Min)/.test(dDayName(t));
-      return el('th', { class: 'n' + (t === day ? ' today' : '') + (we ? ' jd-we' : ''), style: 'text-align:center', id: t === day ? 'jd-today' : null },
-        el('div', { style: 'font-size:11px;opacity:.8', text: dDayName(t) }), p.d + (p.d === 1 || i === 0 ? ' ' + BUL3[p.m - 1] : ''));
-    }), ['PD', 'SB', 'MID', 'OFF'].map(function (c) { return el('th', { class: 'n', text: c === 'MID' ? 'MD/MC' : c }); }));
+      return el('th', { class: 'jd-d' + (t === day ? ' today' : '') + (we ? ' jd-we' : ''), id: t === day ? 'jd-today' : null },
+        el('small', { text: dDayName(t) }), el('b', { text: p.d + (p.d === 1 || i === 0 ? ' ' + BUL3[p.m - 1] : '') }));
+    }), ['PD', 'SB', 'MID', 'OFF'].map(function (c) { return el('th', { class: 'jd-sum', text: c === 'MID' ? 'MD/MC' : c }); }));
     var body = j.staf.map(function (s) {
-      return el('tr', null, el('td', { class: 'sticky-col', style: 'font-weight:600', text: firstName(s.nama) }),
+      var me = !opt.noMe && isMe(s.nama);
+      return el('tr', { class: me ? 'jd-me' : null }, el('td', { class: 'sticky-col jd-name', text: firstName(s.nama) + (me ? ' ★' : '') }),
         s.shift.map(function (c, i) {
-          var td = el('td', { class: (j.tanggal[i] === day ? 'today ' : '') + (opt.cls ? opt.cls(s, i) : ''), style: 'text-align:center' }, c ? el('span', { class: 'sh sh-' + c, text: c }) : '');
+          var td = el('td', { class: 'jd-cell' + (j.tanggal[i] === day ? ' today' : '') + (opt.cls ? ' ' + opt.cls(s, i) : '') }, c ? el('span', { class: 'sh sh-' + c, text: c }) : '');
           if (opt.onCell) { td.style.cursor = 'pointer'; td.addEventListener('click', function () { opt.onCell(s, i, td); }); }
           return td;
         }),
-        ['PD', 'SB', 'MID', 'OFF'].map(function (c) { return el('td', { class: 'n', text: jdCount(s.shift, c) }); }));
+        ['PD', 'SB', 'MID', 'OFF'].map(function (c) { return el('td', { class: 'jd-sum', text: jdCount(s.shift, c) }); }));
     });
-    var cnt = function (lbl, codes) {
-      return el('tr', { class: 'jd-cnt' }, el('td', { class: 'sticky-col', text: lbl }), j.tanggal.map(function (_, i) {
-        var n = j.staf.filter(function (s) { return codes.indexOf(s.shift[i]) >= 0; }).length;
-        return el('td', { class: 'n' + (opt.min && n < opt.min[lbl] ? ' jd-kurang' : ''), style: 'text-align:center', text: n });
-      }), el('td', { colspan: 4 }));
-    };
-    var foot = [cnt('Pagi', ['PD', 'NS']), cnt('Siang', ['SB', 'SC']), cnt('Middle', ['MD', 'MC']), cnt('Masuk', ['PD', 'NS', 'SB', 'SC', 'MD', 'MC'])];
+    var hit = function (i, codes) { return j.staf.filter(function (s) { return codes.indexOf(s.shift[i]) >= 0; }).length; };
+    var foot = [
+      el('tr', { class: 'jd-cnt' }, el('td', { class: 'sticky-col jd-name', text: 'Pagi / Siang' }), j.tanggal.map(function (t, i) {
+        var a = hit(i, ['PD', 'NS']), b = hit(i, ['SB', 'SC']);
+        return el('td', { class: (a < 2 || b < 2 ? 'jd-kurang' : '') + (t === day ? ' today' : ''), text: a + '/' + b });
+      }), el('td', { colspan: 4 })),
+      el('tr', { class: 'jd-cnt' }, el('td', { class: 'sticky-col jd-name', text: 'Masuk' }), j.tanggal.map(function (t, i) {
+        return el('td', { class: t === day ? 'today' : '', text: hit(i, ['PD', 'NS', 'SB', 'SC', 'MD', 'MC']) });
+      }), el('td', { colspan: 4 }))];
     return el('div', { class: 'scroll-x', id: 'jd-scroll' }, el('table', { class: 't jd-t' }, el('thead', null, head), el('tbody', null, body, foot)));
+  }
+  function jdScrollToday() {
+    var th = $('#jd-today'), sc = $('#jd-scroll'), nm = sc && sc.querySelector('th.jd-name');
+    if (th && sc) sc.scrollLeft = Math.max(0, th.offsetLeft - (nm ? nm.offsetWidth : 0));
+  }
+
+  /* Keterangan shift: garis waktu jam kerja */
+  var SHIFT_JAM = { PD: [8, 16, 'Pagi'], NS: [8, 17, 'Pagi (NS)'], MC: [11, 19, 'Middle'], MD: [12, 20, 'Middle'], SC: [13, 22, 'Siang (SC)'], SB: [14, 22, 'Siang'] };
+  function jamTxt(h) { return pad2(h) + '.00'; }
+  function shiftLegend(codesDipakai) {
+    var codes = ['PD', 'NS', 'MC', 'MD', 'SC', 'SB'].filter(function (c) { return c === 'PD' || c === 'SB' || c === 'MD' || c === 'MC' || codesDipakai.indexOf(c) >= 0; });
+    var lo = 8, hi = 22, pct = function (h) { return ((h - lo) / (hi - lo) * 100).toFixed(2) + '%'; };
+    var buka = store.get('jdLeg') !== 'tutup';
+    var box = el('div', { class: 'sh-leg' + (buka ? '' : ' tutup') });
+    var head = el('button', { type: 'button', class: 'sh-leg-h', 'aria-expanded': String(buka), onclick: function () {
+      buka = !buka; box.classList.toggle('tutup', !buka); head.setAttribute('aria-expanded', String(buka)); store.set('jdLeg', buka ? 'buka' : 'tutup');
+    } }, el('b', { text: 'Keterangan shift' }), el('span', { class: 'sh-leg-t' }, 'jam kerja', icon('chev')));
+    var axis = el('div', { class: 'sh-row sh-axis' }, el('span'), el('div', { class: 'sh-lane' }, [8, 12, 16, 20, 22].map(function (h, i, a) {
+      return el('span', { class: 'sh-tick' + (i === 0 ? ' first' : i === a.length - 1 ? ' last' : ''), style: 'left:' + pct(h), text: jamTxt(h) });
+    })));
+    var rows = codes.map(function (c) {
+      var J = SHIFT_JAM[c];
+      return el('div', { class: 'sh-row' }, el('span', { class: 'sh sh-' + c, text: c }),
+        el('div', { class: 'sh-lane grid' }, el('div', { class: 'sh-bar b-' + c, style: 'left:' + pct(J[0]) + ';width:calc(' + pct(J[1]) + ' - ' + pct(J[0]) + ')', text: J[2] + ' · ' + jamTxt(J[0]) + '–' + jamTxt(J[1]) })));
+    });
+    box.append(head, el('div', { class: 'sh-leg-b' }, axis, rows,
+      el('div', { class: 'sh-other' }, el('span', null, el('span', { class: 'sh sh-OFF', text: 'OFF' }), 'Libur'), el('span', null, el('span', { class: 'sh sh-CT', text: 'CT' }), 'Cuti'))));
+    return box;
   }
 
   function viewJadwal(v) {
-    var tools = el('div', { class: 'jd-tools' });
-    v.append(el('section', { class: 'hero' }, el('div', null, el('h2', { text: 'Jadwal Shift' }), el('p', { id: 'jd-sub', text: 'Dari sheet JADWAL KARTASURA JAYA' }))));
-    var today = el('div', { class: 'card' }, el('h3', { text: 'Hari ini' }), el('div', { class: 'skel', style: 'margin-top:12px' }));
-    var table = el('div', { class: 'card section', style: 'padding:0;overflow:hidden' }, el('div', { class: 'skel', style: 'margin:18px' }));
-    v.append(today, table);
-    var hi = todayJkt(), cur = null, shown = null;
+    var top = el('div', { class: 'card jd-card' }, el('div', { class: 'skel', style: 'margin:4px 0' }));
+    var main = el('div', { class: 'card section jd-main' }, el('div', { class: 'skel', style: 'margin:18px' }));
+    v.append(top, main);
+    var hi = todayJkt(), cur = null, mode = store.get('jdMode') === 'hari' ? 'hari' : 'orang', pilihHari = null, J = null, M = null;
     function per(iso) { var p = dParts(iso), y = p.y, m = p.m; if (p.d < 24) { m--; if (m < 1) { m = 12; y--; } } return y + '-' + pad2(m) + '-24'; }
     function geser(iso, k) { var p = dParts(iso), y = p.y, m = p.m + k; while (m < 1) { m += 12; y--; } while (m > 12) { m -= 12; y++; } return y + '-' + pad2(m) + '-24'; }
     function draw(j, mulai) {
-      shown = mulai;
-      var label = j && j.tab ? j.tab : mulai;
-      var nav = el('div', { class: 'jd-nav' },
-        el('button', { class: 'btn btn-ghost btn-sm', type: 'button', text: '‹ Sebelumnya', onclick: function () { pindah(geser(mulai, -1)); } }),
-        el('b', { text: j && j.tanggal.length ? dShort(j.tanggal[0]) + ' – ' + dShort(j.tanggal[j.tanggal.length - 1]) : 'Periode ' + dShort(mulai) }),
-        el('button', { class: 'btn btn-ghost btn-sm', type: 'button', text: 'Berikutnya ›', onclick: function () { pindah(geser(mulai, 1)); } }),
-        mulai !== cur ? el('button', { class: 'btn btn-ghost btn-sm', type: 'button', text: 'Periode berjalan', onclick: function () { pindah(cur); } }) : null,
-        j && j.staf.length ? el('button', { class: 'btn btn-primary btn-sm', type: 'button', onclick: function () { jdExcel(j, label); } }, icon('download'), ' Unduh Excel') : null);
-      if (!j || !j.staf.length) {
-        table.replaceChildren(el('div', { style: 'padding:18px' }, nav, el('div', { class: 'empty', text: 'Jadwal periode ini belum terbit di sheet' + (S.user && S.user.role === 'admin' ? '. Susun drafnya di menu Susun Jadwal.' : '.') })));
+      J = j; M = mulai;
+      var ada = j && j.staf && j.staf.length;
+      var status = mulai === cur ? 'periode berjalan' : mulai < cur ? 'periode lalu' : 'periode berikutnya';
+      var awal = ada ? j.tanggal[0] : mulai, akhir = ada ? j.tanggal[j.tanggal.length - 1] : addDays(geser(mulai, 1), -1);
+      var nav = el('div', { class: 'jd-bar' },
+        el('button', { class: 'jd-arr', type: 'button', 'aria-label': 'Periode sebelumnya', text: '‹', onclick: function () { pindah(geser(mulai, -1)); } }),
+        el('div', { class: 'jd-per' }, el('b', { text: dShort(awal).replace(/ \d{4}$/, '') + ' – ' + dShort(akhir) }),
+          el('small', null, (j && j.tab ? 'Tab ' + j.tab + ' · ' : '') + status, mulai !== cur ? [' · ', el('a', { href: '#', text: 'kembali', onclick: function (e) { e.preventDefault(); pindah(cur); } })] : null)),
+        el('button', { class: 'jd-arr', type: 'button', 'aria-label': 'Periode berikutnya', text: '›', onclick: function () { pindah(geser(mulai, 1)); } }),
+        ada ? el('button', { class: 'jd-dl', type: 'button', title: 'Unduh Excel', 'aria-label': 'Unduh Excel', onclick: function () { jdExcel(j, j.tab || mulai); } }, icon('download')) : null);
+      var tabs = segmented([['orang', 'Per orang'], ['hari', 'Per hari']], mode, function (m) { mode = m; store.set('jdMode', m); drawMain(); });
+      var dipakai = []; if (ada) j.staf.forEach(function (s) { s.shift.forEach(function (c) { if (dipakai.indexOf(c) < 0) dipakai.push(c); }); });
+      top.replaceChildren(nav, ada ? el('div', { class: 'jd-tabs' }, tabs) : null, ada ? shiftLegend(dipakai) : null);
+      drawMain();
+    }
+    function drawMain() {
+      var j = J;
+      if (!j || !j.staf || !j.staf.length) {
+        main.replaceChildren(el('div', { class: 'empty', style: 'padding:18px', text: 'Jadwal periode ini belum terbit di sheet' + (isAdmin() ? '. Susun drafnya di menu Susun Jadwal.' : '.') }));
         return;
       }
-      table.replaceChildren(el('div', { style: 'padding:18px 18px 8px' }, el('h3', { text: 'Jadwal per orang · tab ' + j.tab }), nav,
-        el('p', { class: 'sub', style: 'margin:8px 0 0', text: 'PD 08.00–16.00 · NS 08.00–17.00 · MC 11.00–19.00 · MD 12.00–20.00 · SC 13.00–22.00 · SB 14.00–22.00 · OFF libur · CT cuti' })),
-        jdTable(j, hi));
-      var th = $('#jd-today'), sc = $('#jd-scroll');
-      if (th && sc) sc.scrollLeft = Math.max(0, th.offsetLeft - 160);
+      if (mode === 'orang') {
+        main.replaceChildren(jdTable(j, hi), el('p', { class: 'jd-foot', text: 'Geser tabel ke kanan untuk tanggal berikutnya · ★ = kamu' }));
+        jdScrollToday();
+        return;
+      }
+      if (!pilihHari || j.tanggal.indexOf(pilihHari) < 0) pilihHari = j.tanggal.indexOf(hi) >= 0 ? hi : j.tanggal[0];
+      var strip = el('div', { class: 'jd-days', id: 'jd-days' }, j.tanggal.map(function (t) {
+        var we = /^(Sab|Min)/.test(dDayName(t));
+        return el('button', { type: 'button', class: 'jd-day' + (t === pilihHari ? ' on' : '') + (t === hi ? ' now' : '') + (we ? ' we' : ''), onclick: function () { pilihHari = t; drawMain(); } },
+          el('small', { text: t === hi ? 'Hari ini' : dDayName(t) }), el('b', { text: dParts(t).d }));
+      }));
+      main.replaceChildren(strip, el('div', { class: 'jd-dayhead' }, el('b', { text: dLong(pilihHari) })), dutyBlock(j, pilihHari));
+      var on = strip.querySelector('.on'); if (on) strip.scrollLeft = Math.max(0, on.offsetLeft - strip.clientWidth / 2 + on.offsetWidth / 2);
     }
     function pindah(mulai) {
-      table.replaceChildren(el('div', { class: 'skel', style: 'margin:18px' }));
+      main.replaceChildren(el('div', { class: 'skel', style: 'margin:18px' }));
       if (mulai === cur && S.jadwal) { draw(S.jadwal, mulai); return; }
-      api('jadwalPeriode', { mulai: mulai }).then(function (d) { if (shown === null || true) draw(d.jadwal, mulai); }).catch(function (err) { table.replaceChildren(errBox(err)); });
+      api('jadwalPeriode', { mulai: mulai }).then(function (d) { draw(d.jadwal, mulai); }).catch(function (err) { main.replaceChildren(errBox(err)); });
     }
     loadJadwal().then(function (j) {
-      var day = j.hariIni || todayJkt();
-      hi = day;
-      cur = j.tanggal.length ? per(j.tanggal[0]) : per(day);
-      $('#jd-sub').textContent = j.tab ? 'Tab ' + j.tab + ' · ' + dShort(j.tanggal[0]) + ' – ' + dShort(j.tanggal[j.tanggal.length - 1]) : 'Tab jadwal tidak ditemukan';
-      today.replaceChildren(el('h3', { text: 'Hari ini' }), el('p', { class: 'sub', text: dLong(day) }), dutyBlock(j, day));
+      hi = j.hariIni || todayJkt();
+      cur = j.tanggal.length ? per(j.tanggal[0]) : per(hi);
       draw(j, cur);
-    }).catch(function (err) { today.replaceChildren(errBox(err)); table.replaceChildren(); });
+    }).catch(function (err) { top.replaceChildren(errBox(err)); main.replaceChildren(); });
   }
 
   /* ---------- Susun Jadwal (admin): draf otomatis → terbitkan ---------- */
