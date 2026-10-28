@@ -1369,7 +1369,9 @@
       el('li', null, el('span', null, 'Modal kembalian', el('small', { text: 'Floating + Float to Till = ' + rpx(b.floating + b.floatTill) + (b.modalTotal ? ' · standar ' + rpx(b.modalTotal) : '') })), selTag(b.selisihModal)),
       el('li', null, el('span', null, 'Cash at Till vs nota', el('small', { text: b.tunaiNota == null ? 'tidak ada angka nota (BAP lama)' : 'nota ' + rpx(b.tunaiNota) })), b.tunaiNota == null ? el('span', { class: 'tag', text: '—' }) : selTag(b.selisihNota)),
       el('li', null, el('span', null, 'Cash at Till vs laporan POS', el('small', { text: b.tunaiPos == null ? 'laporan POS belum masuk' : 'POS ' + rpx(b.tunaiPos) })), b.tunaiPos == null ? el('span', { class: 'tag', text: 'Menunggu' }) : selTag(b.selisihPos, '✓ Cocok')),
-      b.safeSeharusnya == null ? null : el('li', null, el('span', null, 'Store Safe', el('small', { text: 'seharusnya ' + rpx(b.safeSeharusnya) + ' (belum disetor)' })), selTag(b.selisihSafe)),
+      el('li', null, el('span', null, 'Cash at Till vs brankas CARE', el('small', { text: b.cashCare == null ? 'laporan Store Safe belum mencakup hari ini' : 'masuk brankas saat closing ' + rpx(b.cashCare) })),
+        b.cashCare == null ? el('span', { class: 'tag', text: 'Menunggu' }) : Math.abs(b.selisihCare) <= 1000 ? el('span', { class: 'tag tag-good', text: '✓ Cocok' }) : selTag(b.selisihCare)),
+      b.safeSeharusnya == null ? null : el('li', null, el('span', null, 'Store Safe', el('small', { text: 'seharusnya ' + rpx(b.safeSeharusnya) + ' (uang belum disetor menurut CARE)' })), selTag(b.selisihSafe)),
       b.petty ? el('li', null, el('span', null, 'Petty Cash vs saldo CARE', el('small', { text: b.pettyCare == null ? 'laporan CARE belum mencakup waktu ini' : 'saldo CARE ' + rpx(b.pettyCare) })),
         b.selisihPetty == null ? el('span', { class: 'tag', text: '—' }) : Math.abs(b.selisihPetty) < 1000 ? el('span', { class: 'tag tag-good', text: '✓ Cocok' }) : selTag(b.selisihPetty)) : null,
       b.sisaSetor == null ? null : el('li', null, el('span', null, 'Setoran uang hari ini', el('small', { text: 'sudah disetor ' + rpx(b.disetor) })), el('span', { class: 'tag ' + (b.sisaSetor ? 'tag-warn' : 'tag-good'), text: b.sisaSetor ? 'Sisa ' + rpx(b.sisaSetor) : '✓ Disetor' })));
@@ -1387,6 +1389,7 @@
       b.tambahTill ? el('p', { class: 'note', text: 'Modal till ' + (b.tambahTill > 0 ? 'ditambah ' : 'dikurangi ') + rpx(Math.abs(b.tambahTill)) + ' dari standar (diambil/dikembalikan ke Floating).' }) : null,
       b.catatan ? el('div', { class: 'hist-note', text: '“' + b.catatan + '”' }) : null,
       b.cek ? el('p', { class: 'note warn', text: '⚠ ' + b.cek }) : null,
+      b.cekCare ? el('p', { class: 'note warn', text: '⚠ ' + b.cekCare }) : null,
       (b.koreksi || []).length ? el('details', { class: 'kas-det' }, el('summary', { text: 'Dikoreksi ' + b.koreksi.length + '×' }),
         el('ul', { class: 'calc' }, b.koreksi.map(function (k) {
           return el('li', null, el('span', null, k.waktu.slice(0, 16) + ' · ' + k.oleh, el('small', { text: k.alasan })),
@@ -1574,7 +1577,9 @@
         x.tambah && x.float_till ? el('li', { class: 'li-note' }, el('span', { text: 'Float to Till ' + (x.tambah > 0 ? 'ditambah ' : 'dikurangi ') + rpx(Math.abs(x.tambah)) + ' dari ' + rpx(set.modal_till) + '. Tulis keterangannya di catatan.' })) : null,
         el('li', null, el('span', null, 'Cash at Till vs nota', el('small', { text: 'dihitung ' + rpx(x.cash_till) + ' · nota ' + (draft.tunai == null ? 'belum diisi' : rpx(draft.tunai)) })), x.sNota == null ? el('span', { class: 'tag', text: 'Isi nota' }) : selTag(x.sNota)),
         el('li', null, el('span', null, 'Laporan POS', el('small', { text: F.pos ? 'tunai di laporan ' + rpx(F.pos.tunai) : 'belum masuk — dicocokkan otomatis setelah diekspor dari CARE' })), F.pos ? selTag(x.sPos, '✓ Cocok') : el('span', { class: 'tag', text: 'Menunggu' })),
-        el('li', null, el('span', null, 'Store Safe', el('small', { text: F.safeSeharusnya == null ? 'dicatat (pembanding mulai setelah BAP pertama di Basecamp)' : 'seharusnya ' + rpx(F.safeSeharusnya) + ' = uang belum disetor' })), !draft.lihat.safe ? el('span', { class: 'tag', text: 'Belum dihitung' }) : F.safeSeharusnya == null ? el('span', { class: 'tag', text: rpx(x.safe) }) : selTag(x.sSafe)),
+        el('li', null, el('span', null, 'Brankas CARE', el('small', { text: F.cashCare != null ? 'masuk brankas saat closing ' + rpx(F.cashCare) : 'muncul setelah closing di POS — unggah laporan Store Safe di menu Setoran Bank' })),
+          F.cashCare == null ? el('span', { class: 'tag', text: 'Menunggu' }) : Math.abs(x.cash_till - F.cashCare) <= 1000 ? el('span', { class: 'tag tag-good', text: '✓ Cocok' }) : selTag(x.cash_till - F.cashCare)),
+        el('li', null, el('span', null, 'Store Safe', el('small', { text: F.safeSeharusnya == null ? (F.safeAda ? 'laporan Store Safe CARE belum mencakup jam ini' : 'dicatat (pembanding mulai setelah BAP pertama di Basecamp)') : 'seharusnya ' + rpx(F.safeSeharusnya) + ' = uang belum disetor' + (F.safeAda ? ' (CARE)' : '') })), !draft.lihat.safe ? el('span', { class: 'tag', text: 'Belum dihitung' }) : F.safeSeharusnya == null ? el('span', { class: 'tag', text: rpx(x.safe) }) : selTag(x.sSafe)),
         el('li', null, el('span', null, 'Petty Cash vs saldo CARE', el('small', null, F.care && F.care.saldo != null ? 'saldo CARE ' + rpx(F.care.saldo) + ' (data sampai ' + fTime(F.care.sampai) + ')' : 'laporan petty cash CARE belum diunggah hari ini — ', F.care && F.care.saldo != null ? null : el('a', { href: '#/kas-petty', text: 'unggah' }))),
           !x.petty ? el('span', { class: 'tag', text: 'Belum dihitung' }) : x.sPetty == null ? el('span', { class: 'tag', text: 'Menunggu' }) : Math.abs(x.sPetty) < 1000 ? el('span', { class: 'tag tag-good', text: x.sPetty ? '✓ Cocok (receh ' + nf.format(x.sPetty) + ')' : '✓ Cocok' }) : selTag(x.sPetty)));
       var st = function (b, s) { b.textContent = s == null ? '—' : s === 0 ? 'Pas' : (s > 0 ? '+' : '−') + nf.format(Math.abs(s)); b.className = 'num c-' + (s == null ? 'none' : s === 0 ? 'good' : s < 0 ? 'bad' : 'warn'); };
@@ -1648,32 +1653,39 @@
         el('span', { class: 'tag ' + (b.telat ? 'tag-bad' : 'tag-warn'), text: (b.telat ? 'Terlambat · ' : '') + rpx(b.sisa) }));
     }));
   }
+  function prosesSafe(file, onDone) {
+    toast('Membaca ' + file.name + '…');
+    bacaXlsx(file).then(function (aoa) { return api('safeUpload', { aoa: aoa, fileName: file.name }); })
+      .then(function (r) { toast('Store Safe CARE: ' + r.baru + ' transaksi baru' + (r.ubah ? ', ' + r.ubah + ' berubah' : '') + ' · saldo brankas ' + rpx(r.saldo)); swrClear(); if (onDone) onDone(); })
+      .catch(function (e) { toast(e.message, true); });
+  }
+  var CARA_SETOR = { atm: 'ATM', teller: 'Teller', brankas: 'Brankas', internal: 'Internal' };
   function viewKasSetor(v) {
-    pageHead(v, 'Setoran Bank', 'Uang Cash at Till masuk brankas lalu disetor besoknya. Sabtu–Minggu lewat ATM, sisanya Senin.');
+    pageHead(v, 'Setoran Bank', 'Uang Cash at Till masuk brankas lalu disetor besoknya (Sabtu–Minggu lewat ATM, sisanya Senin). Data diambil dari laporan Store Safe CARE.');
     var body = el('div', null, skel(2));
     v.append(body);
     function load() {
       api('setoranList').then(function (d) {
+        var dz = dropZone({ judul: 'Unggah laporan Store Safe CARE', ket: '…_StoreSafe.xlsx · ketuk atau seret & lepas ke sini', onFiles: function (fs) { prosesSafe(fs[0], load); } });
         var top = el('div', { class: 'card' },
-          el('div', { class: 'card-head' }, el('div', null, el('h3', { text: 'Belum disetor' }), el('p', { class: 'sub', text: d.mulai ? 'Dihitung dari BAP sejak ' + dShort(d.mulai) : 'Mulai terhitung setelah BAP pertama diisi di Basecamp' })),
+          el('div', { class: 'card-head' }, el('div', null, el('h3', { text: 'Belum disetor' }),
+            el('p', { class: 'sub', text: d.care ? 'Saldo brankas CARE · transaksi terakhir ' + fTime(d.sampai) + ' · diunggah ' + fTime(d.unggah) : d.mulai ? 'Dihitung dari BAP sejak ' + dShort(d.mulai) : 'Unggah laporan Store Safe CARE untuk mulai' })),
             el('b', { class: 'big-num num ' + (d.total ? 'c-warn' : 'c-good'), text: d.total ? rpx(d.total) : '✓ Beres' })),
-          d.belum.length ? belumList(d.belum) : el('p', { class: 'muted', text: 'Semua uang yang tercatat sudah disetor.' }),
-          el('button', { class: 'btn btn-orange btn-block', type: 'button', style: 'margin-top:12px', onclick: function () { setorModal(d.belum, function () { swrClear(); load(); }); } }, icon('check'), 'Sudah disetor'));
-        var hist = el('div', { class: 'card section' }, el('div', { class: 'card-head' }, el('h3', { text: 'Riwayat setoran' }),
+          d.belum.length ? belumList(d.belum) : el('p', { class: 'muted', text: d.care ? 'Brankas kosong: semua uang penjualan sudah disetor menurut CARE.' : 'Semua uang yang tercatat sudah disetor.' }),
+          !d.care && d.belum.length ? el('button', { class: 'btn btn-orange btn-block', type: 'button', style: 'margin-top:12px', onclick: function () { setorModal(d.belum, function () { swrClear(); load(); }); } }, icon('check'), 'Sudah disetor') : null);
+        var hist = el('div', { class: 'card section' }, el('div', { class: 'card-head' }, el('h3', { text: 'Riwayat setoran' + (d.care ? ' (CARE)' : '') }),
           d.tautan.rekap ? el('a', { class: 'btn btn-ghost btn-sm', href: d.tautan.rekap, target: '_blank', rel: 'noopener' }, icon('file'), 'Sheet rekap') : null),
-          d.list.length ? el('ul', { class: 'hist' }, d.list.map(function (s) {
-            var al = Object.keys(s.alokasi).map(function (k) { return (k === 'luar' ? 'di luar catatan' : 'uang ' + dShort(k)) + ' ' + nf.format(s.alokasi[k]); }).join(' · ');
-            return el('li', null, el('span', { class: 'avatar', text: initials(s.nama) }),
-              el('div', { class: 'hist-main' },
-                el('div', { class: 'hist-top' }, el('b', { text: rpx(s.nominal) + ' · ' + (s.cara === 'atm' ? 'ATM' : 'Teller') }), el('span', { class: 'muted', text: dShort(s.tanggal) })),
-                el('div', { class: 'muted', style: 'font-size:13px', text: s.nama + ' · ' + al }),
-                s.catatan ? el('div', { class: 'hist-note', text: '“' + s.catatan + '”' }) : null,
-                isAdmin() ? el('button', { class: 'btn btn-ghost btn-sm', type: 'button', style: 'margin-top:6px', text: 'Batalkan (salah catat)', onclick: function (e) {
-                  if (!confirm('Batalkan setoran ' + rpx(s.nominal) + ' tanggal ' + dShort(s.tanggal) + '?')) return;
-                  e.target.disabled = true; api('setoranBatal', { id: s.id }).then(function () { toast('Setoran dibatalkan'); load(); }).catch(function (er) { e.target.disabled = false; toast(er.message, true); });
-                } }) : null));
-          })) : el('div', { class: 'empty', text: 'Belum ada setoran yang dicatat' }));
-        body.replaceChildren(top, hist);
+          d.list.length ? el('ul', { class: 'calc trx-list' }, d.list.map(function (s) {
+            var sub = s.care ? ('penjualan ' + (s.tglJual ? dShort(s.tglJual) : '?') + ' · ' + (s.mesin || '') + (s.catatan ? ' · ' + s.catatan : ''))
+              : (s.nama + ' · ' + Object.keys(s.alokasi).map(function (k) { return (k === 'luar' ? 'di luar catatan' : 'uang ' + dShort(k)) + ' ' + nf.format(s.alokasi[k]); }).join(' · ') + (s.catatan ? ' · ' + s.catatan : ''));
+            return el('li', null, el('span', null, dShort(s.tanggal) + ' ' + s.waktu.slice(11, 16) + ' · ' + (CARA_SETOR[s.cara] || s.cara), el('small', { text: sub })),
+              el('b', { class: 'num', text: nf.format(s.nominal) }),
+              !s.care && isAdmin() ? el('button', { class: 'btn btn-ghost btn-sm', type: 'button', text: 'Batalkan', onclick: function (e) {
+                if (!confirm('Batalkan setoran ' + rpx(s.nominal) + ' tanggal ' + dShort(s.tanggal) + '?')) return;
+                e.target.disabled = true; api('setoranBatal', { id: s.id }).then(function () { toast('Setoran dibatalkan'); load(); }).catch(function (er) { e.target.disabled = false; toast(er.message, true); });
+              } }) : null);
+          })) : el('div', { class: 'empty', text: 'Belum ada setoran' }));
+        body.replaceChildren(el('div', { class: 'section-sm' }, dz), top, hist);
       }).catch(function (e) { body.replaceChildren(errBox(e)); });
     }
     load();
@@ -1793,14 +1805,14 @@
           d.tautan.arsip ? el('a', { class: 'btn btn-ghost btn-sm', href: d.tautan.arsip, target: '_blank', rel: 'noopener' }, icon('file'), 'BAP lama') : null,
 
           d.list.length ? dlBtn(function () {
-            xlsxDownload('BAP Kas ' + bulanLabel(d.bulan), [{ name: 'BAP', rows: [['Tanggal', 'Penghitung', 'Floating', 'Float to Till', 'Selisih modal', 'Cash at Till', 'Tunai nota', 'Selisih nota', 'Tunai POS', 'Selisih POS', 'Store Safe', 'Petty Cash', 'Saldo CARE', 'Selisih petty', 'Catatan']].concat(d.list.slice().reverse().map(function (b) {
-              return [b.tanggal, b.nama, b.floating, b.floatTill, b.selisihModal, b.cashTill, b.tunaiNota, b.selisihNota, b.tunaiPos, b.selisihPos, b.safe, b.petty, b.pettyCare, b.selisihPetty, b.catatan];
+            xlsxDownload('BAP Kas ' + bulanLabel(d.bulan), [{ name: 'BAP', rows: [['Tanggal', 'Penghitung', 'Floating', 'Float to Till', 'Selisih modal', 'Cash at Till', 'Tunai nota', 'Selisih nota', 'Tunai POS', 'Selisih POS', 'Brankas CARE', 'Selisih CARE', 'Store Safe', 'Petty Cash', 'Saldo CARE', 'Selisih petty', 'Catatan']].concat(d.list.slice().reverse().map(function (b) {
+              return [b.tanggal, b.nama, b.floating, b.floatTill, b.selisihModal, b.cashTill, b.tunaiNota, b.selisihNota, b.tunaiPos, b.selisihPos, b.cashCare, b.selisihCare, b.safe, b.petty, b.pettyCare, b.selisihPetty, b.catatan];
             })) }]);
           }) : null);
         var dzPos = dropZone({ kecil: true, judul: 'Unggah laporan POS Receivable', ket: 'Biasanya otomatis dari email · bisa juga ketuk atau seret & lepas file ke sini', onFiles: function (fs) { prosesPos(fs[0], function () { load(d.bulan); }); } });
         if (!d.list.length && !d.pos.length) { body.replaceChildren(emptyCard('Belum ada BAP di bulan ini'), el('div', { class: 'section' }, dzPos)); return; }
         var cash = 0, sn = 0, hs = 0;
-        d.list.forEach(function (b) { cash += b.cashTill; sn += b.selisihNota || 0; if (b.selisihNota || b.selisihModal || b.selisihPos || b.selisihSafe || Math.abs(b.selisihPetty || 0) >= 1000) hs++; });
+        d.list.forEach(function (b) { cash += b.cashTill; sn += b.selisihNota || 0; if (b.selisihNota || b.selisihModal || b.selisihPos || b.selisihSafe || Math.abs(b.selisihPetty || 0) >= 1000 || Math.abs(b.selisihCare || 0) > 1000) hs++; });
         var stats = el('div', { class: 'stats' },
           el('div', { class: 'stat' }, el('span', { text: 'Hari ada BAP' }), el('b', { text: String(d.list.length) })),
           el('div', { class: 'stat' }, el('span', { text: 'Total Cash at Till' }), el('b', { class: 'num', text: nf.format(cash) })),
@@ -1816,7 +1828,8 @@
             b.tunaiPos == null ? (lamaTag ? null : el('span', { class: 'tag', text: 'POS menunggu' })) : b.selisihPos ? el('span', { class: 'tag tag-bad', text: '⚠ POS ' + (b.selisihPos > 0 ? '+' : '−') + nf.format(Math.abs(b.selisihPos)) }) : el('span', { class: 'tag tag-good', text: '✅ POS cocok' }),
             b.selisihPetty == null ? null : Math.abs(b.selisihPetty) < 1000 ? el('span', { class: 'tag tag-good', text: 'Petty ✓' }) : el('span', { class: 'tag ' + (b.selisihPetty < 0 ? 'tag-bad' : 'tag-warn'), text: 'Petty ' + (b.selisihPetty > 0 ? '+' : '−') + nf.format(Math.abs(b.selisihPetty)) }),
             b.sisaSetor ? el('span', { class: 'tag tag-warn', text: 'Belum disetor ' + nf.format(b.sisaSetor) }) : null,
-            b.cek ? el('span', { class: 'tag tag-warn', text: 'Perlu dicek' }) : null,
+            b.cashCare == null ? null : Math.abs(b.selisihCare) <= 1000 ? el('span', { class: 'tag tag-good', text: 'Brankas ✓' }) : el('span', { class: 'tag tag-bad', text: '⚠ Brankas ' + (b.selisihCare > 0 ? '+' : '−') + nf.format(Math.abs(b.selisihCare)) }),
+            b.cek || b.cekCare ? el('span', { class: 'tag tag-warn', text: 'Perlu dicek' }) : null,
             b.koreksi.length ? el('span', { class: 'tag', text: 'Dikoreksi' }) : null);
           return el('details', { class: 'card bap-row' },
             el('summary', null,
@@ -1853,8 +1866,8 @@
         var telat = r.belum.some(function (b) { return b.telat; });
         rows.push(el('li', null, el('span', { class: 'kh-ic ' + (r.totalBelum ? (telat ? 'bad' : 'wait') : 'ok') }, icon('upload')),
           el('div', null, el('b', { text: r.totalBelum ? 'Belum disetor ' + rpx(r.totalBelum) : 'Semua uang sudah disetor' }),
-            el('small', { text: r.totalBelum ? 'Uang ' + r.belum.map(function (b) { return dShort(b.tanggal); }).join(', ') + (telat ? ' · ada yang terlambat' : '') : 'Tercatat di Setoran Bank' })),
-          r.totalBelum ? el('button', { class: 'btn btn-orange btn-sm', type: 'button', text: 'Sudah disetor', onclick: function () { setorModal(r.belum, function (nr) { swrClear(); draw(nr); }); } }) : null));
+            el('small', { text: r.totalBelum ? 'Uang ' + r.belum.map(function (b) { return dShort(b.tanggal); }).join(', ') + (telat ? ' · ada yang terlambat' : '') + (r.care ? ' · menurut CARE' : '') : r.care ? 'Menurut laporan Store Safe CARE' : 'Tercatat di Setoran Bank' })),
+          r.totalBelum ? (r.care ? el('a', { class: 'btn btn-ghost btn-sm', href: '#/kas-setor' }, 'Lihat') : el('button', { class: 'btn btn-orange btn-sm', type: 'button', text: 'Sudah disetor', onclick: function () { setorModal(r.belum, function (nr) { swrClear(); draw(nr); }); } })) : null));
       }
       var p = r.petty;
       if (p && (p.saldo != null || p.fisik != null)) {

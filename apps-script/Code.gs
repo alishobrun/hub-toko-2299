@@ -11,7 +11,7 @@
 /** Versi kode. WAJIB dinaikkan setiap kali Code.gs diubah (format yyyy-MM-dd.n),
  *  lalu simpan ke GitHub (alishobrun/hub-toko-2299) SEBELUM dipasang. Halaman Kesehatan Data
  *  membandingkan angka ini dengan GitHub supaya kode yang dipasang di luar GitHub ketahuan. */
-const KODE_VERSI = '2026-10-28.3';
+const KODE_VERSI = '2026-10-28.4';
 
 const CFG = {
   STORE: '2299',
@@ -87,7 +87,9 @@ const TABS = {
   setoran: ['id', 'tanggal', 'waktu', 'username', 'nama', 'nominal', 'cara', 'alokasi', 'catatan', 'batal'],
   petty_log: ['id', 'tanggal', 'waktu', 'username', 'nama', 'jenis', 'nominal', 'catatan', 'status'],
   // buku petty cash dari CARE (laporan PettyCash.xlsx diunggah manual)
-  petty_care: ['id', 'kode', 'waktu', 'debit', 'kredit', 'saldo', 'akun', 'status', 'ket', 'oleh', 'diubah']
+  petty_care: ['id', 'kode', 'waktu', 'debit', 'kredit', 'saldo', 'akun', 'status', 'ket', 'oleh', 'diubah'],
+  // buku Store Safe (brankas) dari CARE: uang masuk saat closing (POS Desktop) & setoran ke bank
+  safe_care: ['kode', 'waktu', 'debit', 'kredit', 'saldo', 'dari', 'akun', 'status', 'jenis', 'mesin', 'alamat', 'ket', 'tgl_jual', 'oleh', 'diubah']
 };
 
 const PECAHAN = [100000, 50000, 20000, 10000, 5000, 2000, 1000, 500, 200, 100];
@@ -113,7 +115,8 @@ const NUM_COLS = {
   pos_recv: ['tunai', 'non_tunai', 'total', 'bank_charge'],
   setoran: ['nominal'],
   petty_log: ['nominal'],
-  petty_care: ['debit', 'kredit', 'saldo']
+  petty_care: ['debit', 'kredit', 'saldo'],
+  safe_care: ['debit', 'kredit', 'saldo']
 };
 const DSR_FIELDS = TABS.dsr.filter(function (f) { return f !== 'upload_id'; }); // urutan kolom yang dikirim web
 
@@ -837,10 +840,10 @@ function invalidateReadCache_(n) {
   if (NF_TABS_[n]) bumpNf_();
   if (KAS_TABS_[n]) { const p = PropertiesService.getScriptProperties(); p.setProperty('ver_kas', String(Number(p.getProperty('ver_kas') || 0) + 1)); }
 }
-const KAS_TABS_ = { bap: 1, setoran: 1, pos_recv: 1, petty_log: 1, petty_care: 1, settings: 1 };
+const KAS_TABS_ = { bap: 1, setoran: 1, pos_recv: 1, petty_log: 1, petty_care: 1, safe_care: 1, settings: 1 };
 /* Tab yang memengaruhi isi lonceng notifikasi: ditulis → hitung ulang lonceng semua orang. */
 const NF_TABS_ = { notifikasi: 1, request_jadwal: 1, tukar_shift: 1, users: 1, bin_upload: 1, handover: 1, handover_baca: 1,
-  pengumuman: 1, pengumuman_baca: 1, feedback: 1, dsr: 1, settings: 1, bap: 1, setoran: 1, pos_recv: 1, petty_log: 1, petty_care: 1 };
+  pengumuman: 1, pengumuman_baca: 1, feedback: 1, dsr: 1, settings: 1, bap: 1, setoran: 1, pos_recv: 1, petty_log: 1, petty_care: 1, safe_care: 1 };
 function bumpNf_() {
   const p = PropertiesService.getScriptProperties();
   p.setProperty('ver_nf', String(Number(p.getProperty('ver_nf') || 0) + 1));
@@ -2491,7 +2494,7 @@ Object.assign(API, {
       const kas = KB.bap.filter(function (x) { return x.tanggal >= dari && x.tanggal <= sampai; }).map(function (x) { return bapOut_(x, KB, SB); });
       const kasSum = { hitung: kas.length, selisih: 0, kurang: 0, lebih: 0, list: [] };
       kas.forEach(function (x) {
-        [['Modal kembalian', x.selisihModal], ['Cash at Till vs nota', x.selisihNota], ['Cash at Till vs laporan POS', x.selisihPos], ['Store Safe', x.selisihSafe], ['Petty Cash vs CARE', Math.abs(x.selisihPetty || 0) >= 1000 ? x.selisihPetty : 0]].forEach(function (c) {
+        [['Modal kembalian', x.selisihModal], ['Cash at Till vs nota', x.selisihNota], ['Cash at Till vs laporan POS', x.selisihPos], ['Store Safe', x.selisihSafe], ['Cash at Till vs brankas CARE', Math.abs(x.selisihCare || 0) > 1000 ? x.selisihCare : 0], ['Petty Cash vs CARE', Math.abs(x.selisihPetty || 0) >= 1000 ? x.selisihPetty : 0]].forEach(function (c) {
           if (!c[1]) return;
           kasSum.selisih++;
           if (c[1] < 0) kasSum.kurang += -c[1]; else kasSum.lebih += c[1];
@@ -4231,7 +4234,14 @@ function kasBaca_() {
     return { id: Number(x.id), kode: String(x.kode || ''), waktu: String(x.waktu || ''), debit: Number(x.debit) || 0, kredit: Number(x.kredit) || 0,
       saldo: Number(x.saldo) || 0, akun: String(x.akun || ''), status: String(x.status || ''), ket: String(x.ket || ''), oleh: String(x.oleh || '') };
   }).sort(function (a, b) { return a.id - b.id; });
-  kasBaca_.c = { bap: bap, pos: pos, setoran: setoran, petty: petty, care: care };
+  const safe = read_('safe_care').map(function (x) {
+    return { kode: String(x.kode), waktu: String(x.waktu || ''), debit: Number(x.debit) || 0, kredit: Number(x.kredit) || 0, saldo: Number(x.saldo) || 0,
+      dari: String(x.dari || ''), akun: String(x.akun || ''), status: String(x.status || ''), jenis: String(x.jenis || ''), mesin: String(x.mesin || ''),
+      alamat: String(x.alamat || ''), ket: String(x.ket || ''), tglJual: String(x.tgl_jual || ''), oleh: String(x.oleh || '') };
+  }).filter(function (x) { return x.waktu; }).sort(function (a, b) { return a.waktu < b.waktu ? -1 : a.waktu > b.waktu ? 1 : (a.kode < b.kode ? -1 : 1); });
+  const K0 = { bap: bap, pos: pos, setoran: setoran, petty: petty, care: care, safe: safe };
+  if (safe.length) K0.setoran = safeSetoran_(K0);
+  kasBaca_.c = K0;
   return kasBaca_.c;
 }
 function kasBacaUlang_() { kasBaca_.c = null; return kasBaca_(); }
@@ -4248,9 +4258,60 @@ function batasSetor_(t) {
   if (w === 6) d = addDays_(d, 2); else if (w === 0) d = addDays_(d, 1);
   return d;
 }
-/** Uang Cash at Till per tanggal yang belum disetor (hanya BAP dari Basecamp). */
+/** Baca script property sekali per eksekusi (dipakai berulang saat menghitung banyak BAP). */
+function propMemo_(k) { const m = propMemo_.m || (propMemo_.m = {}); if (!(k in m)) m[k] = PropertiesService.getScriptProperties().getProperty(k) || ''; return m[k]; }
+/** Tanggal closing untuk waktu transaksi (lewat tengah malam s.d. jam 05 dihitung hari sebelumnya). */
+function tglClosing_(w) { const t = w.slice(0, 10); return Number(w.slice(11, 13)) < 5 ? addDays_(t, -1) : t; }
+/** Data Store Safe CARE sampai waktu tertentu: uang masuk per tanggal closing & saldo brankas. null bila laporan belum mencakup waktu itu. */
+function safeSampai_(K, cutoff) {
+  const s = K.safe;
+  if (!s.length || cutoff < s[0].waktu) return null;
+  const unggah = propMemo_('SAFE_UNGGAH');
+  if (cutoff > unggah && cutoff > s[s.length - 1].waktu) return null;
+  const masuk = {}; let saldo = 0;
+  s.forEach(function (x) {
+    if (x.waktu > cutoff) return;
+    if (x.status !== 'Reversed' && x.debit > 0) { const d = tglClosing_(x.waktu); masuk[d] = (masuk[d] || 0) + x.debit; }
+    saldo = x.saldo;
+  });
+  return { masuk: masuk, saldo: saldo };
+}
+/** Setoran dari CARE (uang keluar brankas ke bank), uang dibagi ke tanggal penjualan paling lama dulu. */
+function safeSetoran_(K) {
+  const sisa = {}, urut = [], out = [];
+  K.safe.forEach(function (x) {
+    if (x.status === 'Reversed') return;
+    if (x.debit > 0) { const d = tglClosing_(x.waktu); if (sisa[d] == null) { sisa[d] = 0; urut.push(d); } sisa[d] += x.debit; }
+    if (x.kredit > 0) {
+      let k = x.kredit; const al = {};
+      urut.forEach(function (d) { if (k <= 0 || sisa[d] <= 0) return; const a = Math.min(k, sisa[d]); sisa[d] -= a; k -= a; al[d] = a; });
+      if (k > 0) al.luar = k;
+      const bank = /bank/i.test(x.dari);
+      out.push({ id: x.kode, tanggal: x.waktu.slice(0, 10), waktu: x.waktu, username: x.oleh, nama: x.oleh ? 'NIK ' + x.oleh : '', nominal: x.kredit,
+        cara: !bank ? 'internal' : x.jenis === 'atm' ? 'atm' : x.jenis === 'brankas' ? 'brankas' : 'teller', alokasi: al, catatan: x.ket,
+        tglJual: x.tglJual, mesin: [x.akun, x.mesin, x.alamat].filter(String).join(' · '), care: true });
+    }
+  });
+  return out;
+}
+/** Uang Cash at Till per tanggal yang belum disetor.
+ *  Dengan laporan Store Safe CARE: saldo brankas CARE dibagi ke tanggal closing terbaru (yang paling baru belum disetor).
+ *  Tanpa laporan CARE: dari BAP Basecamp dikurangi setoran yang dicatat manual. */
 function setoranHitung_(K) {
-  const mulai = bapMulai_(K), today = today_();
+  const today = today_();
+  if (K.safe.length) {
+    const masuk = {}; K.safe.forEach(function (x) { if (x.status !== 'Reversed' && x.debit > 0) { const d = tglClosing_(x.waktu); masuk[d] = (masuk[d] || 0) + x.debit; } });
+    const hari = Object.keys(masuk).sort();
+    let saldo = Math.max(0, K.safe[K.safe.length - 1].saldo);
+    const sisa = {}, disetor = {};
+    hari.slice().reverse().forEach(function (d) { const a = Math.min(saldo, masuk[d]); sisa[d] = a; disetor[d] = masuk[d] - a; saldo -= a; });
+    const belum = hari.filter(function (d) { return sisa[d] > 0; }).map(function (d) {
+      const batas = batasSetor_(d);
+      return { tanggal: d, cash: masuk[d], disetor: disetor[d], sisa: sisa[d], batas: batas, telat: today > batas };
+    });
+    return { mulai: hari[0] || '', care: true, sisa: sisa, disetor: disetor, belum: belum, total: belum.reduce(function (s, x) { return s + x.sisa; }, 0) };
+  }
+  const mulai = bapMulai_(K);
   const hari = K.bap.filter(function (b) { return b.sumber === 'web' && mulai && b.tanggal >= mulai && b.cash_till > 0; });
   const sisa = {}, disetor = {};
   hari.forEach(function (b) { sisa[b.tanggal] = b.cash_till; disetor[b.tanggal] = 0; });
@@ -4266,8 +4327,14 @@ function setoranHitung_(K) {
   });
   return { mulai: mulai, sisa: sisa, disetor: disetor, belum: belum, total: belum.reduce(function (s, x) { return s + x.sisa; }, 0) };
 }
-/** Isi Store Safe yang seharusnya saat closing tanggal t = uang hari-hari sebelumnya yang belum disetor. */
-function safeSeharusnya_(K, t) {
+/** Isi Store Safe yang seharusnya saat closing tanggal t (di luar Cash at Till hari itu).
+ *  Pakai saldo brankas CARE sampai waktu BAP; tanpa CARE pakai hitungan Basecamp. */
+function safeSeharusnya_(K, t, waktu) {
+  if (K.safe.length) {
+    const ss = safeSampai_(K, waktu || t + ' 23:59:59');
+    if (!ss) return null;
+    return Math.max(0, ss.saldo - (ss.masuk[t] || 0));
+  }
   const S = setoranHitung_(K);
   if (!S.mulai || S.mulai >= t) return null;
   return Object.keys(S.sisa).filter(function (d) { return d < t; }).reduce(function (s, d) { return s + Math.max(0, S.sisa[d]); }, 0);
@@ -4276,7 +4343,7 @@ function safeSeharusnya_(K, t) {
 function saldoCare_(K, waktu) {
   const c = K.care;
   if (!c.length || !waktu || waktu < c[0].waktu) return null;
-  const unggah = PropertiesService.getScriptProperties().getProperty('CARE_UNGGAH') || '';
+  const unggah = propMemo_('CARE_UNGGAH');
   if (waktu > unggah && waktu > c[c.length - 1].waktu) return null; // laporan diunggah sebelum waktu itu: transaksi sesudahnya belum terlihat
   let lo = 0, hi = c.length - 1;
   while (lo < hi) { const m = (lo + hi + 1) >> 1; if (c[m].waktu <= waktu) lo = m; else hi = m - 1; }
@@ -4340,6 +4407,37 @@ function pettyParse_(aoa) {
   return out;
 }
 
+/** Baca laporan StoreSafe.xlsx dari CARE. Catatan: di file CARE urutan kolom Created At/Updated By tertukar,
+ *  jadi waktu dicari dari isi sel (format tanggal-jam), bukan dari judul kolom. */
+function safeParse_(aoa) {
+  const norm = function (x) { return String(x == null ? '' : x).trim().toLowerCase().replace(/\s+/g, ' '); };
+  const num = function (x) { if (x == null || x === '') return 0; if (typeof x === 'number') return x; const v = Number(String(x).replace(/,/g, '').trim()); return isNaN(v) ? 0 : v; };
+  let hi = -1;
+  for (let i = 0; i < Math.min(aoa.length, 20); i++) { const r = (aoa[i] || []).map(norm); if (r.indexOf('id code') >= 0 && r.indexOf('balance') >= 0 && r.indexOf('deposit type') >= 0) { hi = i; break; } }
+  if (hi < 0) throw new Error('Ini bukan laporan Store Safe CARE (kolom "ID Code", "Balance" dan "Deposit Type" tidak ditemukan)');
+  const h = aoa[hi].map(norm), ix = function (n) { return h.indexOf(n); };
+  const I = { kode: ix('id code'), lok: ix('location code'), debit: ix('debit'), kredit: ix('credit'), saldo: ix('balance'), dari: ix('from to'),
+    akun: ix('cost item/gl account'), status: ix('status'), jenis: ix('deposit type'), mesin: ix('atm machine'), alamat: ix('atm address'),
+    ket: ix('remarks'), tgl: ix('sales date'), oleh: ix('created by') };
+  const out = [];
+  for (let k = hi + 1; k < aoa.length; k++) {
+    const r = aoa[k] || [];
+    const kode = String(r[I.kode] == null ? '' : r[I.kode]).trim(); if (!kode) continue;
+    const lok = I.lok >= 0 ? String(r[I.lok] == null ? '' : r[I.lok]).trim() : CFG.STORE;
+    if (lok && lok !== CFG.STORE) throw new Error('Laporan berisi toko ' + lok + ', bukan ' + CFG.STORE);
+    const waktu = [];
+    for (let j = Math.max(0, I.oleh); j < r.length; j++) { const v = String(r[j] == null ? '' : r[j]).trim().replace('T', ' '); if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}/.test(v)) waktu.push(v.length === 16 ? v + ':00' : v.slice(0, 19)); }
+    if (!waktu.length) continue;
+    const t = function (i) { return i >= 0 && r[i] != null ? String(r[i]).trim() : ''; };
+    const tg = t(I.tgl).match(/^(\d{4}-\d{2}-\d{2})/);
+    out.push({ kode: kode, waktu: waktu[0], debit: num(r[I.debit]), kredit: num(r[I.kredit]), saldo: num(r[I.saldo]), dari: t(I.dari), akun: t(I.akun),
+      status: t(I.status), jenis: t(I.jenis).toLowerCase(), mesin: t(I.mesin), alamat: t(I.alamat).slice(0, 120), ket: t(I.ket).slice(0, 200),
+      tgl_jual: tg ? tg[1] : '', oleh: t(I.oleh), diubah: waktu[1] || '' });
+  }
+  if (!out.length) throw new Error('Laporan tidak berisi transaksi');
+  return out;
+}
+
 /** BAP untuk web: angka + selisih lengkap. */
 function bapOut_(b, K, S) {
   const p = K.pos[b.tanggal] || null;
@@ -4355,6 +4453,20 @@ function bapOut_(b, K, S) {
     selisihSafe: b.safe_seharusnya == null ? null : b.safe - b.safe_seharusnya,
     tambahTill: b.float_std == null ? 0 : b.float_till - b.float_std
   };
+  if (K.safe.length && b.tanggal >= tglClosing_(K.safe[0].waktu)) {
+    const cut = b.waktu || b.tanggal + ' 23:59:59';
+    const ssEnd = safeSampai_(K, b.tanggal + ' 23:59:59') || safeSampai_(K, cut);
+    if (ssEnd) {
+      out.cashCare = ssEnd.masuk[b.tanggal] || 0;
+      out.selisihCare = b.cash_till - out.cashCare;
+      if (Math.abs(out.selisihCare) > 1000) {
+        const all = safeSampai_(K, K.safe[K.safe.length - 1].waktu);
+        [-1, 1].forEach(function (k) { const d = addDays_(b.tanggal, k), m = all && all.masuk[d]; if (!out.cekCare && m && Math.abs(m - b.cash_till) <= 1000) out.cekCare = 'Cash at Till BAP ini cocok dengan closing CARE ' + tglPendek_(d) + ' — kemungkinan tanggal BAP salah'; });
+      }
+    }
+    const sh = safeSeharusnya_(K, b.tanggal, cut);
+    if (sh != null) { out.safeSeharusnya = sh; out.selisihSafe = b.safe - sh; }
+  }
   const sc = saldoCare_(K, b.waktu || b.tanggal + ' 23:59:59');
   out.pettyCare = sc ? sc.saldo : null;
   out.selisihPetty = sc && b.petty ? b.petty - sc.saldo : null;
@@ -4404,7 +4516,9 @@ Object.assign(API, {
       sudah: ini ? bapOut_(ini, K, S) : null,
       lalu: lalu ? { tanggal: lalu.tanggal, pecahan: jsonOr_(lalu.pecahan, {}), floating: lalu.floating, float_till: lalu.float_till, safe: lalu.safe, petty: lalu.petty } : null,
       rataCash: cash.length ? Math.round(cash.reduce(function (s, x) { return s + x; }, 0) / cash.length) : 0,
-      safeSeharusnya: safeSeharusnya_(K, t),
+      safeSeharusnya: safeSeharusnya_(K, t, t === today_() ? now_() : t + ' 23:59:59'),
+      cashCare: (function () { const ss = K.safe.length ? safeSampai_(K, t === today_() ? now_() : t + ' 23:59:59') : null; return ss && ss.masuk[t] != null ? ss.masuk[t] : null; })(),
+      safeAda: K.safe.length > 0, safeSampai: K.safe.length ? K.safe[K.safe.length - 1].waktu : null,
       belumSetor: S.belum, pos: K.pos[t] || null, mulai: S.mulai,
       care: (function () { const w = t === today_() ? now_() : t + ' 23:59:59', sc = saldoCare_(K, w), c = K.care[K.care.length - 1]; return { saldo: sc ? sc.saldo : null, sampai: c ? c.waktu : null, unggah: PropertiesService.getScriptProperties().getProperty('CARE_UNGGAH') || '' }; })()
     };
@@ -4420,7 +4534,7 @@ Object.assign(API, {
       const K = kasBacaUlang_();
       const ada = K.bap.filter(function (b) { return b.tanggal === t; })[0];
       if (ada) throw new Error('BAP ' + tglPendek_(t) + ' sudah disimpan oleh ' + (ada.nama || 'BAP lama') + '. Kalau ada yang salah, minta admin mengoreksi.');
-      const sh = safeSeharusnya_(K, t);
+      const sh = safeSeharusnya_(K, t, now_());
       const sModal = h.tot.floating + h.tot.float_till - Number(set.modal_total);
       const sNota = h.tot.cash_till - h.nota;
       const tambah = h.tot.float_till !== Number(set.modal_till);
@@ -4532,7 +4646,9 @@ Object.assign(API, {
   setoranList: function (req) {
     auth_(req);
     const K = kasBaca_(), S = setoranHitung_(K);
-    return { belum: S.belum, total: S.total, mulai: S.mulai, list: K.setoran.slice(-60).reverse(), tautan: bapTautan_() };
+    const last = K.safe[K.safe.length - 1];
+    return { belum: S.belum, total: S.total, mulai: S.mulai, care: !!S.care, saldo: last ? last.saldo : null, sampai: last ? last.waktu : null,
+      unggah: PropertiesService.getScriptProperties().getProperty('SAFE_UNGGAH') || '', list: K.setoran.slice(-60).reverse(), tautan: bapTautan_() };
   },
 
   /** Admin: batalkan setoran yang salah catat (baris tetap ada, ditandai batal). */
@@ -4558,6 +4674,44 @@ Object.assign(API, {
     return careStatus_(kasBaca_(), req.bulan);
   },
 
+  /** Unggah laporan StoreSafe.xlsx dari CARE: uang masuk brankas saat closing & setoran ke bank. */
+  safeUpload: function (req) {
+    const u = auth_(req);
+    if (!Array.isArray(req.aoa) || !req.aoa.length) throw new Error('File kosong');
+    const rows = safeParse_(req.aoa);
+    let baru = 0, ubah = 0, awal = '';
+    withLock_(function () {
+      const all = read_('safe_care'), idx = {};
+      all.forEach(function (r, i) { idx[String(r.kode)] = i; });
+      rows.forEach(function (r) {
+        const i = idx[r.kode];
+        if (i == null) { all.push(r); baru++; if (!awal || r.waktu < awal) awal = r.waktu; return; }
+        const o = all[i];
+        if (String(o.status) !== r.status || Number(o.saldo) !== r.saldo || Number(o.debit) !== r.debit || Number(o.kredit) !== r.kredit || String(o.waktu) !== r.waktu) {
+          all[i] = r; ubah++; if (!awal || r.waktu < awal) awal = r.waktu;
+        }
+      });
+      all.sort(function (a, b) { return String(a.waktu) < String(b.waktu) ? -1 : String(a.waktu) > String(b.waktu) ? 1 : (String(a.kode) < String(b.kode) ? -1 : 1); });
+      writeAll_('safe_care', all);
+      PropertiesService.getScriptProperties().setProperty('SAFE_UNGGAH', now_()); propMemo_.m = null;
+      log_(u.username, 'laporan Store Safe CARE', baru + ' baru, ' + ubah + ' berubah' + (req.fileName ? ' · ' + req.fileName : ''));
+      // BAP Basecamp yang Cash at Till-nya beda dengan uang masuk brankas versi CARE
+      const K = kasBacaUlang_(), S = setoranHitung_(K);
+      K.bap.forEach(function (b) {
+        if (b.sumber !== 'web' || (awal && b.tanggal < awal.slice(0, 10))) return;
+        const o = bapOut_(b, K, S);
+        if (o.selisihCare != null && Math.abs(o.selisihCare) >= 1000) notif_('admin', 'cek', 'kas', 'Cash at Till ' + tglPendek_(b.tanggal) + ' beda dengan brankas CARE',
+          'Dihitung Rp' + rupiah_(b.cash_till) + ' · CARE Rp' + rupiah_(o.cashCare) + ' · ' + b.nama, '#/kas-rekap?bulan=' + b.tanggal.slice(0, 7));
+      });
+    }, 60000);
+    const bln = {}, mulai = (awal || now_()).slice(0, 7);
+    kasBaca_().bap.forEach(function (b) { const m = b.tanggal.slice(0, 7); if (m >= mulai) bln[m] = 1; });
+    bln[today_().slice(0, 7)] = 1;
+    rekapAman_(Object.keys(bln), true);
+    const K = kasBaca_(), S = setoranHitung_(K), last = K.safe[K.safe.length - 1];
+    return { baru: baru, ubah: ubah, total: K.safe.length, saldo: last ? last.saldo : null, sampai: last ? last.waktu : null, belum: S.total };
+  },
+
   /** Unggah laporan PettyCash.xlsx dari CARE (isi file dibaca di browser jadi array baris). */
   pettyUpload: function (req) {
     const u = auth_(req);
@@ -4577,7 +4731,7 @@ Object.assign(API, {
       });
       all.sort(function (a, b) { return Number(a.id) - Number(b.id); });
       writeAll_('petty_care', all);
-      PropertiesService.getScriptProperties().setProperty('CARE_UNGGAH', now_());
+      PropertiesService.getScriptProperties().setProperty('CARE_UNGGAH', now_()); propMemo_.m = null;
       log_(u.username, 'laporan petty cash CARE', baru + ' baru, ' + ubah + ' berubah' + (req.fileName ? ' · ' + req.fileName : ''));
     }, 60000);
     // bulan BAP yang perbandingan petty-nya berubah: sejak transaksi baru paling awal (minimal bulan ini)
@@ -4620,7 +4774,7 @@ function kasRingkas_(u, segar) {
     const kemarin = addDays_(t, -1);
     r = { tanggal: t, bap: ini ? { nama: ini.nama, waktu: ini.waktu } : null,
       bapKemarin: !!K.bap.filter(function (b) { return b.tanggal === kemarin; })[0],
-      belum: S.belum, totalBelum: S.total, mulai: S.mulai,
+      belum: S.belum, totalBelum: S.total, mulai: S.mulai, care: !!S.care,
       petty: (function () { const c = K.care[K.care.length - 1], lb = K.bap.filter(function (b) { return b.petty > 0; }).pop(); const sc = lb ? saldoCare_(K, lb.waktu || lb.tanggal + ' 23:59:59') : null;
         return { saldo: c ? c.saldo : null, sampai: c ? c.waktu : null, fisik: lb ? lb.petty : null, tanggal: lb ? lb.tanggal : null, selisih: sc && lb ? lb.petty - sc.saldo : null }; })(),
       posKemarin: !!K.pos[kemarin], posAda: Object.keys(K.pos).length > 0, ingat: Number(set.bap_ingat) || 1320 };
@@ -4765,27 +4919,27 @@ function tulisTab_(ss, nama, rows, opt) {
   (opt.uang || []).forEach(function (c) { if (rows.length > 1) sh.getRange(2, c, rows.length - 1, 1).setNumberFormat('#,##0;[Red]-#,##0'); });
   if (opt.total && rows.length > 1) sh.getRange(rows.length, 1, 1, w).setFontWeight('bold').setBackground('#EEF2F8');
   if (opt.lebar) {
-    const pp = PropertiesService.getScriptProperties(), k = 'BAP_LEBAR2_' + ss.getId().slice(-6), sudah = jsonOr_(pp.getProperty(k), {});
+    const pp = PropertiesService.getScriptProperties(), k = 'BAP_LEBAR3_' + ss.getId().slice(-6), sudah = jsonOr_(pp.getProperty(k), {});
     if (baru || !sudah[nama]) { opt.lebar.forEach(function (x, i) { if (x) sh.setColumnWidth(i + 1, x); }); sudah[nama] = 1; pp.setProperty(k, JSON.stringify(sudah)); }
   }
   return sh;
 }
 function tabBulan_(ss, b, K, S) {
   const head = ['Tanggal', 'Hari', 'Penghitung', 'Floating Cash', 'Float to Till', 'Selisih modal (vs total modal)', 'Cash at Till', 'Tunai dari nota', 'Selisih nota',
-    'Tunai laporan POS', 'Selisih POS', 'Store Safe', 'Safe seharusnya', 'Selisih safe', 'Petty Cash', 'Saldo petty CARE', 'Selisih petty', 'Sudah disetor', 'Belum disetor', 'Catatan', 'Sumber'];
+    'Tunai laporan POS', 'Selisih POS', 'Masuk brankas CARE', 'Selisih CARE', 'Store Safe', 'Safe seharusnya', 'Selisih safe', 'Petty Cash', 'Saldo petty CARE', 'Selisih petty', 'Sudah disetor', 'Belum disetor', 'Catatan', 'Sumber'];
   const rows = [head];
   const tot = { cash: 0, nota: 0, pos: 0, setor: 0 };
   K.bap.filter(function (x) { return x.tanggal.slice(0, 7) === b; }).forEach(function (x) {
     const o = bapOut_(x, K, S);
     tot.cash += o.cashTill; tot.nota += o.tunaiNota || 0; tot.pos += o.tunaiPos || 0; tot.setor += o.disetor || 0;
     rows.push([o.tanggal, HARI_ID_[jdDow_(o.tanggal)], o.nama, o.floating, o.floatTill, o.selisihModal, o.cashTill, o.tunaiNota, o.selisihNota,
-      o.tunaiPos, o.selisihPos, o.safe, o.safeSeharusnya, o.selisihSafe, o.petty, o.pettyCare, o.selisihPetty, o.disetor == null ? '' : o.disetor, o.sisaSetor == null ? '' : o.sisaSetor,
-      [o.catatan, o.tambahTill ? 'Modal till ' + (o.tambahTill > 0 ? '+' : '') + rupiah_(o.tambahTill) : '', o.cek, o.koreksi.length ? 'Dikoreksi ' + o.koreksi.length + '×' : ''].filter(String).join(' · '),
+      o.tunaiPos, o.selisihPos, o.cashCare, o.selisihCare, o.safe, o.safeSeharusnya, o.selisihSafe, o.petty, o.pettyCare, o.selisihPetty, o.disetor == null ? '' : o.disetor, o.sisaSetor == null ? '' : o.sisaSetor,
+      [o.catatan, o.cekCare || '', o.tambahTill ? 'Modal till ' + (o.tambahTill > 0 ? '+' : '') + rupiah_(o.tambahTill) : '', o.cek, o.koreksi.length ? 'Dikoreksi ' + o.koreksi.length + '×' : ''].filter(String).join(' · '),
       o.sumber === 'impor' ? 'BAP lama (' + o.ref + ')' : 'Basecamp']);
   });
-  rows.push(['TOTAL', '', '', '', '', '', tot.cash, tot.nota, '', tot.pos, '', '', '', '', '', '', '', tot.setor, '', '', '']);
-  tulisTab_(ss, namaTabBulan_(b), rows, { uang: [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19], total: true,
-    lebar: [92, 62, 150, 105, 95, 110, 105, 105, 95, 110, 95, 95, 105, 95, 100, 110, 95, 100, 100, 320, 150], index: posisiBulan_(ss, b) });
+  rows.push(['TOTAL', '', '', '', '', '', tot.cash, tot.nota, '', tot.pos, '', '', '', '', '', '', '', '', '', tot.setor, '', '', '']);
+  tulisTab_(ss, namaTabBulan_(b), rows, { uang: [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21], total: true,
+    lebar: [92, 62, 150, 105, 95, 110, 105, 105, 95, 110, 95, 120, 95, 95, 105, 95, 100, 110, 95, 100, 100, 320, 150], index: posisiBulan_(ss, b) });
 }
 /** Satu kotak tabel per BAP: jumlah lembar per pecahan per pos (untuk audit). Dipakai juga oleh unduhan per hari. */
 function blokPecahan_(o) {
@@ -4807,10 +4961,10 @@ function blokPecahan_(o) {
   rows.push(['Pembanding',
     o.modalTotal ? 'Modal ' + rupiah_(o.floating + o.floatTill) + ' / ' + rupiah_(o.modalTotal) + sel(o.selisihModal) : '',
     o.tambahTill ? 'Standar ' + rupiah_(o.floatStd) : '',
-    [o.tunaiNota != null ? 'Nota ' + rupiah_(o.tunaiNota) + sel(o.selisihNota) : '', o.tunaiPos != null ? 'POS ' + rupiah_(o.tunaiPos) + sel(o.selisihPos) : ''].filter(String).join(' · '),
+    [o.tunaiNota != null ? 'Nota ' + rupiah_(o.tunaiNota) + sel(o.selisihNota) : '', o.tunaiPos != null ? 'POS ' + rupiah_(o.tunaiPos) + sel(o.selisihPos) : '', o.cashCare != null ? 'Brankas CARE ' + rupiah_(o.cashCare) + (Math.abs(o.selisihCare) <= 1000 ? ' ✓' : sel(o.selisihCare)) : ''].filter(String).join(' · '),
     o.safeSeharusnya != null ? 'Seharusnya ' + rupiah_(o.safeSeharusnya) + sel(o.selisihSafe) : '',
     o.pettyCare != null ? 'CARE ' + rupiah_(o.pettyCare) + (o.selisihPetty != null && Math.abs(o.selisihPetty) < 1000 ? (o.selisihPetty ? ' (receh ' + rupiah_(o.selisihPetty) + ')' : ' ✓') : sel(o.selisihPetty)) : '',
-    '', o.catatan ? 'Catatan: ' + o.catatan : '']);
+    '', [o.catatan ? 'Catatan: ' + o.catatan : '', o.cekCare || ''].filter(String).join(' · ')]);
   return rows;
 }
 /** Tab "Pecahan <bulan>": kotak per hari, terbaru di atas. */
@@ -4868,7 +5022,7 @@ function tabRingkasan_(ss, K, S) {
     const b = x.tanggal.slice(0, 7), o = bapOut_(x, K, S);
     const r = by[b] || (by[b] = { hari: 0, cash: 0, pos: 0, sNota: 0, hariSelisih: 0, setor: 0, cair: 0 });
     r.hari++; r.cash += o.cashTill; r.pos += o.tunaiPos || 0; r.sNota += o.selisihNota || 0;
-    if (o.selisihNota || o.selisihModal || o.selisihPos || o.selisihSafe || Math.abs(o.selisihPetty || 0) >= 1000) r.hariSelisih++;
+    if (o.selisihNota || o.selisihModal || o.selisihPos || o.selisihSafe || Math.abs(o.selisihPetty || 0) >= 1000 || Math.abs(o.selisihCare || 0) > 1000) r.hariSelisih++;
   });
   K.setoran.forEach(function (s) { const b = s.tanggal.slice(0, 7); (by[b] = by[b] || { hari: 0, cash: 0, pos: 0, sNota: 0, hariSelisih: 0, setor: 0, cair: 0 }).setor += s.nominal; });
   K.care.forEach(function (x) { if (!/KAS REGIONAL/i.test(x.akun) || !x.debit || x.status === 'Reversed') return; const b = x.waktu.slice(0, 7); (by[b] = by[b] || { hari: 0, cash: 0, pos: 0, sNota: 0, hariSelisih: 0, setor: 0, cair: 0 }).cair += x.debit; });
@@ -4878,11 +5032,12 @@ function tabRingkasan_(ss, K, S) {
   sh.getRange(rows.length + 2, 1).setValue('Diperbarui otomatis oleh Basecamp 2299 · ' + now_() + ' · Belum disetor saat ini: Rp ' + rupiah_(S.total)).setFontColor('#5E6A85');
 }
 function tabSetoran_(ss, K) {
-  const rows = [['Tanggal setor', 'Dicatat', 'Oleh', 'Nominal', 'Cara', 'Untuk uang tanggal', 'Catatan']];
+  const CARA = { atm: 'ATM', teller: 'Teller', brankas: 'Brankas', internal: 'Internal' };
+  const rows = [['Tanggal setor', 'Dicatat', 'Oleh', 'Nominal', 'Cara', 'Tanggal penjualan (CARE)', 'Untuk uang closing', 'Bank / mesin', 'Keterangan']];
   K.setoran.slice().reverse().forEach(function (s) {
-    rows.push([s.tanggal, s.waktu, s.nama, s.nominal, s.cara === 'atm' ? 'ATM' : 'Teller', Object.keys(s.alokasi).map(function (k) { return (k === 'luar' ? 'di luar catatan' : k) + ': ' + rupiah_(s.alokasi[k]); }).join(' · '), s.catatan]);
+    rows.push([s.tanggal, s.waktu, s.nama, s.nominal, CARA[s.cara] || s.cara, s.tglJual || '', Object.keys(s.alokasi).map(function (k) { return (k === 'luar' ? 'lainnya' : k) + ': ' + rupiah_(s.alokasi[k]); }).join(' · '), s.mesin || '', s.catatan]);
   });
-  tulisTab_(ss, 'Setoran', rows, { uang: [4], lebar: [100, 140, 150, 110, 70, 300, 260], index: 1 });
+  tulisTab_(ss, 'Setoran', rows, { uang: [4], lebar: [100, 140, 110, 110, 80, 130, 260, 220, 300], index: 1 });
 }
 function tabPetty_(ss, K) {
   const rows = [['Waktu', 'Kode', 'Akun / kategori', 'Masuk (debit)', 'Keluar (kredit)', 'Saldo CARE', 'Status', 'Keterangan']];
