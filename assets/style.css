@@ -1404,3 +1404,8 @@ html[data-theme=dark] .bap-tabs button{background:var(--panel)}
 .trx-list li.rev{opacity:.55}
 .trx-list li.rev b{text-decoration:line-through}
 .card .inp + div{margin-top:4px}
+.drop-sm{padding:12px 14px}
+.drop-sm .drop-ic{width:40px;height:40px;border-radius:12px}
+.drop-sm .drop-txt b{font-size:15px}
+.section-sm{margin-bottom:14px}
+html[data-theme=dark] .drop{background:var(--panel)}

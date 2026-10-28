@@ -1203,7 +1203,7 @@
     var input = el('input', { type: 'file', accept: '.xlsx,.xls,.csv', id: 'dsr-file' });
     var drop = el('label', { class: 'drop', for: 'dsr-file' },
       el('span', { class: 'drop-ic' }, icon('upload')),
-      el('span', { class: 'drop-txt' }, el('b', { text: 'Pilih file DSR' }), el('span', { text: 'Format .xlsx · ketuk untuk memilih' })),
+      el('span', { class: 'drop-txt' }, el('b', { text: 'Pilih file DSR' }), el('span', { text: 'Format .xlsx · ketuk atau seret & lepas ke sini' })),
       input);
     var area = el('div');
     var steps = el('ol', { class: 'steps' },
@@ -1395,6 +1395,29 @@
       opt.noPec ? null : pec);
   }
 
+  /** Unduh satu BAP (format audit: lembar per pecahan per pos + tanda tangan). */
+  function unduhBap(b) {
+    var pos = ['floating', 'float_till', 'cash_till', 'safe', 'petty'], pec = b.pecahan || {};
+    var sel = function (x) { return x == null ? '' : x === 0 ? ' ✓' : ' (' + (x > 0 ? '+' : '−') + nf.format(Math.abs(x)) + ')'; };
+    var rows = [['BERITA ACARA PEMERIKSAAN KAS — EIGER Store A. Yani Kertasuro (2299)'], [tglBapLabel(b.tanggal) + (b.nama ? ' · dihitung ' + b.nama + (b.waktu ? ' pukul ' + b.waktu.slice(11, 16) : '') : ' · BAP lama (tab ' + b.ref + ')')], [],
+      ['Pecahan', 'Floating Cash', 'Float to Till', 'Cash at Till', 'Store Safe', 'Petty Cash', 'Total lembar', 'Total Rp']];
+    PECAHAN.forEach(function (d) {
+      var n = 0, r = [d];
+      pos.forEach(function (k) { var x = Number((pec[k] || {})[d] || 0); n += x; r.push(x || ''); });
+      r.push(n || ''); r.push(n ? n * d : ''); rows.push(r);
+    });
+    var tot = [b.floating, b.floatTill, b.cashTill, b.safe, b.petty];
+    rows.push(['Total Rp'].concat(tot).concat(['', tot.reduce(function (s2, x) { return s2 + x; }, 0)]));
+    rows.push([]);
+    rows.push(['Modal kembalian', 'Floating + Float to Till ' + nf.format(b.floating + b.floatTill) + (b.modalTotal ? ' / standar ' + nf.format(b.modalTotal) + sel(b.selisihModal) : '')]);
+    rows.push(['Cash at Till', [b.tunaiNota != null ? 'nota ' + nf.format(b.tunaiNota) + sel(b.selisihNota) : '', b.tunaiPos != null ? 'laporan POS ' + nf.format(b.tunaiPos) + sel(b.selisihPos) : ''].filter(String).join(' · ')]);
+    if (b.safeSeharusnya != null) rows.push(['Store Safe', 'seharusnya ' + nf.format(b.safeSeharusnya) + sel(b.selisihSafe)]);
+    if (b.pettyCare != null) rows.push(['Petty Cash', 'saldo CARE ' + nf.format(b.pettyCare) + sel(b.selisihPetty)]);
+    if (b.catatan) rows.push(['Catatan', b.catatan]);
+    rows.push([], ['Dihitung oleh', '', '', 'Diperiksa oleh'], [], [], ['(' + (b.nama || '..................') + ')', '', '', '(..................)']);
+    xlsxDownload('BAP Kas ' + b.tanggal, [{ name: 'BAP ' + b.tanggal, rows: rows }]);
+  }
+
   function viewKas(v) {
     var koreksi = isAdmin() && qparam('koreksi') === '1';
     pageHead(v, koreksi ? 'Koreksi BAP Kas' : 'BAP Kas', koreksi ? 'Ubah BAP yang sudah tersimpan. Angka lama tetap tercatat di jejak koreksi.' : 'Hitung semua pos kas saat closing. Hasilnya dicocokkan otomatis dan masuk ke rekap.');
@@ -1421,7 +1444,8 @@
       el('div', { class: 'card bap-head' }, el('div', null, el('small', { class: 'muted', text: 'BAP tanggal' }), el('h3', { text: tglBapLabel(b.tanggal) })), tglPilih(F)),
       el('div', { class: 'card section' },
         el('div', { class: 'card-head' }, el('div', null, el('h3', { text: '✓ BAP sudah disimpan' }), el('p', { class: 'sub', text: (b.nama || 'BAP lama') + (b.waktu ? ' · ' + b.waktu.slice(11, 16) : '') + ' · terkunci' })),
-          isAdmin() ? el('a', { class: 'btn btn-ghost btn-sm', href: '#/kas?tgl=' + b.tanggal + '&koreksi=1' }, 'Koreksi') : null),
+          el('div', { class: 'row-btns' }, el('button', { class: 'btn btn-ghost btn-sm', type: 'button', onclick: function () { unduhBap(b); } }, icon('download'), 'Unduh BAP'),
+            isAdmin() ? el('a', { class: 'btn btn-ghost btn-sm', href: '#/kas?tgl=' + b.tanggal + '&koreksi=1' }, 'Koreksi') : null)),
         bapDetail(b)),
       el('div', { class: 'quick section' },
         el('a', { href: '#/kas-setor' }, icon('upload'), 'Setoran Bank', el('span', { text: F.belumSetor.length ? 'Belum disetor ' + rpx(F.belumSetor.reduce(function (s, x) { return s + x.sisa; }, 0)) : 'Uang yang belum disetor' })),
@@ -1663,18 +1687,33 @@
       return XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, raw: false, defval: '' }).slice(0, 20000);
     });
   }
-  function pilihFile(onFile) {
-    var f = el('input', { type: 'file', accept: '.xlsx,.xls', style: 'display:none' });
-    f.addEventListener('change', function () { if (f.files[0]) onFile(f.files[0]); });
-    document.body.appendChild(f); f.click(); setTimeout(function () { f.remove(); }, 60000);
+  /** Kotak unggah: bisa ketuk untuk memilih file, atau seret & lepas file ke kotak ini. */
+  function dropZone(o) {
+    var input = el('input', { type: 'file', accept: o.accept || '.xlsx,.xls', multiple: o.multiple ? true : null });
+    var drop = el('label', { class: 'drop' + (o.kecil ? ' drop-sm' : '') }, el('span', { class: 'drop-ic' }, icon(o.icon || 'upload')),
+      el('span', { class: 'drop-txt' }, el('b', { text: o.judul }), el('span', { text: o.ket || 'Ketuk untuk memilih, atau seret & lepas file ke sini' })), input);
+    input.addEventListener('change', function () { var fs = Array.prototype.slice.call(input.files || []); input.value = ''; if (fs.length) o.onFiles(fs); });
+    aktifkanDrop(drop, function (fs) { o.onFiles(fs); });
+    return drop;
   }
-  function unggahPetty(onDone) {
-    pilihFile(function (file) {
-      toast('Membaca ' + file.name + '…');
-      bacaXlsx(file).then(function (aoa) { return api('pettyUpload', { aoa: aoa, fileName: file.name }); })
-        .then(function (r) { toast('Petty cash CARE: ' + r.baru + ' transaksi baru' + (r.ubah ? ', ' + r.ubah + ' berubah' : '') + ' · saldo ' + rpx(r.saldo)); swrClear(); if (onDone) onDone(); })
-        .catch(function (e) { toast(e.message, true); });
+  /** Seret & lepas ke kotak .drop; onFiles(fileList) atau isi input lalu picu 'change'. */
+  function aktifkanDrop(drop, target) {
+    ['dragenter', 'dragover'].forEach(function (t) { drop.addEventListener(t, function (e) { e.preventDefault(); drop.classList.add('over'); }); });
+    ['dragleave', 'drop'].forEach(function (t) { drop.addEventListener(t, function (e) { e.preventDefault(); drop.classList.remove('over'); }); });
+    drop.addEventListener('drop', function (e) {
+      var fs = e.dataTransfer && e.dataTransfer.files ? Array.prototype.slice.call(e.dataTransfer.files) : [];
+      if (!fs.length) return;
+      if (typeof target === 'function') { target(fs); return; }
+      try { target.files = e.dataTransfer.files; target.dispatchEvent(new Event('change')); } catch (er) { toast('Browser ini belum mendukung seret & lepas, ketuk untuk memilih file', true); }
     });
+  }
+  // file yang dilepas di luar kotak unggah jangan sampai membuka file itu di browser
+  ['dragover', 'drop'].forEach(function (t) { window.addEventListener(t, function (e) { if (!e.target.closest || !e.target.closest('.drop')) e.preventDefault(); }); });
+  function prosesPetty(file, onDone) {
+    toast('Membaca ' + file.name + '…');
+    bacaXlsx(file).then(function (aoa) { return api('pettyUpload', { aoa: aoa, fileName: file.name }); })
+      .then(function (r) { toast('Petty cash CARE: ' + r.baru + ' transaksi baru' + (r.ubah ? ', ' + r.ubah + ' berubah' : '') + ' · saldo ' + rpx(r.saldo)); swrClear(); if (onDone) onDone(); })
+      .catch(function (e) { toast(e.message, true); });
   }
   function viewKasPetty(v) {
     pageHead(v, 'Petty Cash', 'Saldo dan pengeluaran dari laporan Petty Cash CARE. Uang fisik di BAP dicocokkan dengan saldo CARE saat closing.');
@@ -1683,12 +1722,11 @@
     var cari = '';
     function load(bulan) {
       api('pettyList', { bulan: bulan || '' }).then(function (p) {
-        tools.replaceChildren(
-          p.bulanTersedia.length ? monthSel(p.bulanTersedia, p.bulan, load) : null,
-          el('button', { class: 'btn btn-primary btn-sm', type: 'button', onclick: function () { unggahPetty(function () { load(p.bulan); }); } }, icon('upload'), 'Unggah laporan CARE'));
+        tools.replaceChildren(p.bulanTersedia.length ? monthSel(p.bulanTersedia, p.bulan, load) : null);
+        var dz = dropZone({ judul: 'Unggah laporan Petty Cash CARE', ket: '…_PettyCash.xlsx · ketuk atau seret & lepas ke sini', onFiles: function (fs) { prosesPetty(fs[0], function () { load(p.bulan); }); } });
         if (!p.waktu) {
           body.replaceChildren(el('div', { class: 'card' }, el('h3', { text: 'Belum ada data petty cash' }),
-            el('p', { class: 'sub', text: 'Unduh laporan Petty Cash dari CARE (file …_PettyCash.xlsx), lalu tekan "Unggah laporan CARE". Unggah ulang kapan saja; transaksi yang sama tidak dobel.' })));
+            el('p', { class: 'sub', text: 'Unduh laporan Petty Cash dari CARE (file …_PettyCash.xlsx), lalu unggah di sini. Unggah ulang kapan saja; transaksi yang sama tidak dobel.' }), dz));
           return;
         }
         var cek = p.bap, beda = cek && cek.selisih != null && Math.abs(cek.selisih) >= 1000;
@@ -1724,30 +1762,25 @@
         inp.addEventListener('input', function () { cari = inp.value; drawTrx(); });
         var trx = el('div', { class: 'card section' }, el('h3', { text: 'Transaksi ' + bulanLabel(p.bulan) + ' (' + p.trx.length + ')' }), inp, listBox);
         drawTrx();
-        body.replaceChildren(top, katCard, ganti, trx);
+        body.replaceChildren(el('div', { class: 'section-sm' }, dz), top, katCard, ganti, trx);
       }).catch(function (e) { body.replaceChildren(errBox(e)); });
     }
     load();
   }
 
   /* ---------- Rekap BAP ---------- */
-  function unggahPos(onDone) {
-    var f = el('input', { type: 'file', accept: '.xlsx,.xls', style: 'display:none' });
-    f.addEventListener('change', function () {
-      var file = f.files[0]; if (!file) return;
-      if (!window.XLSX) { toast('Pembaca Excel belum termuat, coba lagi', true); return; }
-      toast('Membaca ' + file.name + '…');
-      file.arrayBuffer().then(function (buf) {
-        var wb = XLSX.read(buf, { type: 'array' });
-        var aoa = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, raw: true, defval: '' }).slice(0, 3000);
-        aoa = aoa.map(function (r) { return r.map(function (c) { return c instanceof Date ? c.toISOString().slice(0, 10) : c; }); });
-        return api('posUpload', { aoa: aoa, fileName: file.name });
-      }).then(function (r) {
-        toast('Laporan POS ' + r.hari.map(function (h) { return dShort(h.tanggal) + ' tunai ' + rpx(h.tunai); }).join(' · ') + ' tersimpan');
-        if (onDone) onDone();
-      }).catch(function (e) { toast(e.message, true); });
-    });
-    document.body.appendChild(f); f.click(); setTimeout(function () { f.remove(); }, 60000);
+  function prosesPos(file, onDone) {
+    if (!window.XLSX) { toast('Pembaca Excel belum termuat, coba lagi', true); return; }
+    toast('Membaca ' + file.name + '…');
+    file.arrayBuffer().then(function (buf) {
+      var wb = XLSX.read(buf, { type: 'array' });
+      var aoa = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, raw: true, defval: '' }).slice(0, 3000);
+      aoa = aoa.map(function (r) { return r.map(function (c) { return c instanceof Date ? c.toISOString().slice(0, 10) : c; }); });
+      return api('posUpload', { aoa: aoa, fileName: file.name });
+    }).then(function (r) {
+      toast('Laporan POS ' + r.hari.map(function (h) { return dShort(h.tanggal) + ' tunai ' + rpx(h.tunai); }).join(' · ') + ' tersimpan');
+      swrClear(); if (onDone) onDone();
+    }).catch(function (e) { toast(e.message, true); });
   }
   function viewKasRekap(v) {
     pageHead(v, 'Rekap BAP Kas', 'Semua BAP per bulan, dicocokkan dengan nota dan laporan POS. Versi Google Sheet terbarui otomatis.');
@@ -1758,13 +1791,14 @@
         tools.replaceChildren(monthSel(d.bulanTersedia, d.bulan, function (b) { history.replaceState(null, '', '#/kas-rekap?bulan=' + b); load(b); }),
           d.tautan.rekap ? el('a', { class: 'btn btn-ghost btn-sm', href: d.tautan.rekap, target: '_blank', rel: 'noopener' }, icon('file'), 'Google Sheet rekap') : null,
           d.tautan.arsip ? el('a', { class: 'btn btn-ghost btn-sm', href: d.tautan.arsip, target: '_blank', rel: 'noopener' }, icon('file'), 'BAP lama') : null,
-          el('button', { class: 'btn btn-ghost btn-sm', type: 'button', onclick: function () { unggahPos(function () { load(d.bulan); }); } }, icon('upload'), 'Unggah laporan POS'),
+
           d.list.length ? dlBtn(function () {
             xlsxDownload('BAP Kas ' + bulanLabel(d.bulan), [{ name: 'BAP', rows: [['Tanggal', 'Penghitung', 'Floating', 'Float to Till', 'Selisih modal', 'Cash at Till', 'Tunai nota', 'Selisih nota', 'Tunai POS', 'Selisih POS', 'Store Safe', 'Petty Cash', 'Saldo CARE', 'Selisih petty', 'Catatan']].concat(d.list.slice().reverse().map(function (b) {
               return [b.tanggal, b.nama, b.floating, b.floatTill, b.selisihModal, b.cashTill, b.tunaiNota, b.selisihNota, b.tunaiPos, b.selisihPos, b.safe, b.petty, b.pettyCare, b.selisihPetty, b.catatan];
             })) }]);
           }) : null);
-        if (!d.list.length && !d.pos.length) { body.replaceChildren(emptyCard('Belum ada BAP di bulan ini')); return; }
+        var dzPos = dropZone({ kecil: true, judul: 'Unggah laporan POS Receivable', ket: 'Biasanya otomatis dari email · bisa juga ketuk atau seret & lepas file ke sini', onFiles: function (fs) { prosesPos(fs[0], function () { load(d.bulan); }); } });
+        if (!d.list.length && !d.pos.length) { body.replaceChildren(emptyCard('Belum ada BAP di bulan ini'), el('div', { class: 'section' }, dzPos)); return; }
         var cash = 0, sn = 0, hs = 0;
         d.list.forEach(function (b) { cash += b.cashTill; sn += b.selisihNota || 0; if (b.selisihNota || b.selisihModal || b.selisihPos || b.selisihSafe || Math.abs(b.selisihPetty || 0) >= 1000) hs++; });
         var stats = el('div', { class: 'stats' },
@@ -1789,7 +1823,8 @@
               el('div', { class: 'bap-date' }, el('b', { text: String(Number(b.tanggal.slice(8))) }), el('span', { text: dDayName(b.tanggal).slice(0, 3) })),
               el('div', { class: 'bap-main' }, el('div', { class: 'hist-top' }, el('b', { text: 'Cash ' + rpx(b.cashTill) }), el('span', { class: 'muted', text: b.nama || (b.ref ? 'tab ' + b.ref : '') })), tags)),
             bapDetail(b),
-            el('div', { class: 'row', style: 'margin-top:10px' },
+            el('div', { class: 'row', style: 'margin-top:10px;flex-wrap:wrap;gap:8px' },
+              el('button', { class: 'btn btn-ghost btn-sm', type: 'button', onclick: function () { unduhBap(b); } }, icon('download'), 'Unduh BAP'),
               gid != null && d.tautan.arsip ? el('a', { class: 'btn btn-ghost btn-sm', href: d.tautan.arsip.replace(/\/edit$/, '/edit#gid=' + gid), target: '_blank', rel: 'noopener' }, icon('file'), 'Buka tab "' + b.ref + '"') : null,
               isAdmin() ? el('a', { class: 'btn btn-ghost btn-sm', href: '#/kas?tgl=' + b.tanggal + '&koreksi=1' }, 'Koreksi') : null));
         }));
@@ -1800,7 +1835,7 @@
               return el('tr', null, el('td', { text: dShort(p.tanggal) }), el('td', { class: 'num', text: nf.format(p.tunai) }), el('td', { class: 'num', text: nf.format(p.nonTunai) }),
                 el('td', { class: 'num', text: nf.format(p.total) }), el('td', { class: 'num', text: nf.format(Math.round(p.bankCharge)) }), el('td', { text: p.sumber === 'email' ? 'email' : 'unggah' }));
             }))))) : null;
-        body.replaceChildren(stats, list, posCard);
+        body.replaceChildren(stats, list, posCard, el('div', { class: 'section' }, dzPos));
       }).catch(function (e) { body.replaceChildren(errBox(e)); });
     }
     load();
@@ -4155,7 +4190,8 @@
     var thumbs = el('div', { class: 'ho-thumbs' });
     var status = el('p', { class: 'muted', style: 'margin:6px 0 0;font-size:13px' });
     var input = el('input', { type: 'file', accept: 'image/*', id: 'ho-f', multiple: true });
-    var drop = el('label', { class: 'drop', for: 'ho-f' }, el('span', { class: 'drop-ic' }, icon('file')), el('span', { class: 'drop-txt' }, el('b', { text: 'Foto halaman buku handover' }), el('span', { text: 'Bisa lebih dari satu foto · pastikan terang & lurus' })), input);
+    var drop = el('label', { class: 'drop', for: 'ho-f' }, el('span', { class: 'drop-ic' }, icon('file')), el('span', { class: 'drop-txt' }, el('b', { text: 'Foto halaman buku handover' }), el('span', { text: 'Bisa lebih dari satu foto · ketuk atau seret & lepas ke sini' })), input);
+    aktifkanDrop(drop, input);
     input.addEventListener('change', function () {
       var files = Array.prototype.slice.call(input.files || []); input.value = '';
       (function next() {
@@ -4735,7 +4771,7 @@
     pageHead(v, 'Unggah By Bin', 'Perbarui stok per lokasi bin dari file export stock by bin. Siapa saja boleh, kapan saja.');
     var input = el('input', { type: 'file', accept: '.xlsx,.xls,.csv', id: 'bin-file' });
     var drop = el('label', { class: 'drop', for: 'bin-file' }, el('span', { class: 'drop-ic' }, icon('upload')),
-      el('span', { class: 'drop-txt' }, el('b', { text: 'Pilih file by bin' }), el('span', { text: 'export_by_bin_….xlsx · ketuk untuk memilih' })), input);
+      el('span', { class: 'drop-txt' }, el('b', { text: 'Pilih file by bin' }), el('span', { text: 'export_by_bin_….xlsx · ketuk atau seret & lepas ke sini' })), input);
     var area = el('div'), hist = el('div', { class: 'card section' }, el('h3', { text: 'Riwayat unggahan' }), el('div', { class: 'skel', style: 'margin-top:12px;min-height:60px' }));
     var mcard = el('div', { class: 'card section' }, el('h3', { text: 'Master artikel' }), el('div', { class: 'skel', style: 'margin-top:12px;min-height:60px' }));
     v.append(el('div', { class: 'grid grid-up' },
@@ -5228,7 +5264,8 @@
       if (!d.siap) { upBox.replaceChildren(el('h3', { text: 'Unggah video' }), el('p', { class: 'muted', text: 'Mesin upload belum disambungkan. Admin: buka halaman Admin → Mesin upload.' })); return; }
       var input = el('input', { type: 'file', accept: 'video/*', id: 'vid-file' });
       var drop = el('label', { class: 'drop', for: 'vid-file' }, el('span', { class: 'drop-ic' }, icon('video')),
-        el('span', { class: 'drop-txt' }, el('b', { text: 'Pilih atau rekam video' }), el('span', { text: 'Maksimal ' + d.maxMb + ' MB · disarankan 720p, 1–2 menit' })), input);
+        el('span', { class: 'drop-txt' }, el('b', { text: 'Pilih, rekam, atau seret & lepas video' }), el('span', { text: 'Maksimal ' + d.maxMb + ' MB · disarankan 720p, 1–2 menit' })), input);
+      aktifkanDrop(drop, input);
       var area = el('div');
       var minD = addDays(d.today, -(isAdmin() ? 366 : (d.mundur || 7)));
       var dateInp = el('input', { type: 'date', id: 'vid-date', value: tanggal || d.today, max: d.today, min: minD });

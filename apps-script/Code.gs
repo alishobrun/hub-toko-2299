@@ -11,7 +11,7 @@
 /** Versi kode. WAJIB dinaikkan setiap kali Code.gs diubah (format yyyy-MM-dd.n),
  *  lalu simpan ke GitHub (alishobrun/hub-toko-2299) SEBELUM dipasang. Halaman Kesehatan Data
  *  membandingkan angka ini dengan GitHub supaya kode yang dipasang di luar GitHub ketahuan. */
-const KODE_VERSI = '2026-10-28.2';
+const KODE_VERSI = '2026-10-28.3';
 
 const CFG = {
   STORE: '2299',
@@ -4787,6 +4787,69 @@ function tabBulan_(ss, b, K, S) {
   tulisTab_(ss, namaTabBulan_(b), rows, { uang: [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19], total: true,
     lebar: [92, 62, 150, 105, 95, 110, 105, 105, 95, 110, 95, 95, 105, 95, 100, 110, 95, 100, 100, 320, 150], index: posisiBulan_(ss, b) });
 }
+/** Satu kotak tabel per BAP: jumlah lembar per pecahan per pos (untuk audit). Dipakai juga oleh unduhan per hari. */
+function blokPecahan_(o) {
+  const pos = ['floating', 'float_till', 'cash_till', 'safe', 'petty'];
+  const pec = o.pecahan || {};
+  const rows = [];
+  rows.push([HARI_ID_[jdDow_(o.tanggal)] + ', ' + tglPendek_(o.tanggal) + ' ' + o.tanggal.slice(0, 4) + ' · ' + (o.nama ? 'dihitung ' + o.nama + (o.waktu ? ' · ' + o.waktu.slice(11, 16) : '') : 'BAP lama (tab ' + o.ref + ')'), '', '', '', '', '', '', '']);
+  rows.push(['Pecahan', 'Floating Cash', 'Float to Till', 'Cash at Till', 'Store Safe', 'Petty Cash', 'Total lembar', 'Total Rp']);
+  PECAHAN.forEach(function (p) {
+    let n = 0;
+    const r = [p];
+    pos.forEach(function (k) { const v = Number((pec[k] || {})[p] || 0); n += v; r.push(v || '–'); });
+    r.push(n || '–'); r.push(n ? n * p : '–');
+    rows.push(r);
+  });
+  const tot = [o.floating, o.floatTill, o.cashTill, o.safe, o.petty];
+  rows.push(['Total Rp'].concat(tot).concat(['', tot.reduce(function (s, x) { return s + x; }, 0)]));
+  const sel = function (x) { return x == null ? '' : x === 0 ? ' ✓' : ' (' + (x > 0 ? '+' : '−') + rupiah_(Math.abs(x)) + ')'; };
+  rows.push(['Pembanding',
+    o.modalTotal ? 'Modal ' + rupiah_(o.floating + o.floatTill) + ' / ' + rupiah_(o.modalTotal) + sel(o.selisihModal) : '',
+    o.tambahTill ? 'Standar ' + rupiah_(o.floatStd) : '',
+    [o.tunaiNota != null ? 'Nota ' + rupiah_(o.tunaiNota) + sel(o.selisihNota) : '', o.tunaiPos != null ? 'POS ' + rupiah_(o.tunaiPos) + sel(o.selisihPos) : ''].filter(String).join(' · '),
+    o.safeSeharusnya != null ? 'Seharusnya ' + rupiah_(o.safeSeharusnya) + sel(o.selisihSafe) : '',
+    o.pettyCare != null ? 'CARE ' + rupiah_(o.pettyCare) + (o.selisihPetty != null && Math.abs(o.selisihPetty) < 1000 ? (o.selisihPetty ? ' (receh ' + rupiah_(o.selisihPetty) + ')' : ' ✓') : sel(o.selisihPetty)) : '',
+    '', o.catatan ? 'Catatan: ' + o.catatan : '']);
+  return rows;
+}
+/** Tab "Pecahan <bulan>": kotak per hari, terbaru di atas. */
+function tabPecahan_(ss, b, K, S) {
+  const list = K.bap.filter(function (x) { return x.tanggal.slice(0, 7) === b; }).map(function (x) { return bapOut_(x, K, S); }).reverse();
+  const nama = 'Pecahan ' + namaTabBulan_(b);
+  let sh = ss.getSheetByName(nama), baru = false;
+  if (!sh) {
+    const bt = ss.getSheetByName(namaTabBulan_(b));
+    sh = ss.insertSheet(nama, bt ? bt.getIndex() : ss.getSheets().length);
+    baru = true;
+  }
+  sh.clear();
+  const rows = [], judul = [], kepala = [], total = [], banding = [];
+  list.forEach(function (o) {
+    const blk = blokPecahan_(o), r0 = rows.length + 1;
+    judul.push('A' + r0 + ':H' + r0); kepala.push('A' + (r0 + 1) + ':H' + (r0 + 1));
+    total.push('A' + (r0 + 12) + ':H' + (r0 + 12)); banding.push('A' + (r0 + 13) + ':H' + (r0 + 13));
+    blk.forEach(function (r) { rows.push(r); });
+    rows.push(['', '', '', '', '', '', '', '']);
+  });
+  if (!rows.length) { sh.getRange(1, 1).setValue('Belum ada BAP di bulan ini'); return; }
+  if (sh.getMaxRows() < rows.length + 2) sh.insertRowsAfter(sh.getMaxRows(), rows.length + 2 - sh.getMaxRows());
+  if (sh.getMaxColumns() < 8) sh.insertColumnsAfter(sh.getMaxColumns(), 8 - sh.getMaxColumns());
+  sh.getRange(1, 1, rows.length, 8).setValues(rows).setVerticalAlignment('middle').setFontSize(10);
+  sh.getRange(1, 1, rows.length, 8).setNumberFormat('#,##0');
+  sh.getRange(1, 2, rows.length, 6).setHorizontalAlignment('center');
+  sh.getRange(1, 8, rows.length, 1).setHorizontalAlignment('right');
+  sh.getRangeList(judul).setFontWeight('bold').setFontSize(12).setFontColor('#0B1F5C').setHorizontalAlignment('left');
+  sh.getRangeList(kepala).setFontWeight('bold').setBackground('#0B1F5C').setFontColor('#FFFFFF').setWrap(true);
+  sh.getRangeList(total).setFontWeight('bold').setBackground('#EEF2F8');
+  sh.getRangeList(banding).setFontSize(9).setFontColor('#5E6A85').setWrap(true).setHorizontalAlignment('left').setVerticalAlignment('top');
+  // garis tabel per kotak
+  sh.getRangeList(list.map(function (o, i) { const r0 = i * 15 + 2; return 'A' + r0 + ':H' + (r0 + 12); })).setBorder(true, true, true, true, true, true, '#C9D2E3', SpreadsheetApp.BorderStyle.SOLID);
+  sh.getRange(1, 1, rows.length, 1).setFontWeight('bold');
+  sh.setFrozenRows(0);
+  if (baru) { [90, 100, 100, 110, 100, 100, 90, 120].forEach(function (w, i) { sh.setColumnWidth(i + 1, w); }); }
+}
+
 /** Tab bulan diurutkan terbaru dulu, setelah Ringkasan/Setoran/Petty Cash. */
 function posisiBulan_(ss, b) {
   const tabs = ss.getSheets().map(function (s) { return s.getName(); });
@@ -4795,7 +4858,7 @@ function posisiBulan_(ss, b) {
     const m = tabs[k].match(/^(\w{3}) (\d{4})$/);
     if (!m) continue;
     const kb = m[2] + '-' + pad_(BLN_.indexOf(m[1]) + 1);
-    if (kb > b) i = k + 1;
+    if (kb > b) i = /^Pecahan /.test(tabs[k + 1] || '') ? k + 2 : k + 1;
   }
   return i;
 }
@@ -4831,7 +4894,7 @@ function tabPetty_(ss, K) {
 function rekapAman_(bulan, semuaTab) {
   try {
     const ss = rekapFile_(), K = kasBacaUlang_(), S = setoranHitung_(K);
-    (bulan || []).forEach(function (b) { if (/^\d{4}-\d{2}$/.test(b)) tabBulan_(ss, b, K, S); });
+    (bulan || []).forEach(function (b) { if (/^\d{4}-\d{2}$/.test(b)) { tabBulan_(ss, b, K, S); tabPecahan_(ss, b, K, S); } });
     tabRingkasan_(ss, K, S);
     if (semuaTab) { tabSetoran_(ss, K); tabPetty_(ss, K); }
   } catch (e) { Logger.log('rekap BAP: ' + e); }
@@ -4843,7 +4906,7 @@ function rekapBangun_() {
   // hapus tab bulan lama yang tidak ada datanya
   ss.getSheets().forEach(function (s) { const m = s.getName().match(/^(\w{3}) (\d{4})$/); if (m && !bulan[m[2] + '-' + pad_(BLN_.indexOf(m[1]) + 1)] && ss.getSheets().length > 1) ss.deleteSheet(s); });
   tabRingkasan_(ss, K, S); tabSetoran_(ss, K); tabPetty_(ss, K);
-  Object.keys(bulan).sort().forEach(function (b) { tabBulan_(ss, b, K, S); });
+  Object.keys(bulan).sort().forEach(function (b) { tabBulan_(ss, b, K, S); tabPecahan_(ss, b, K, S); });
   return { bulan: Object.keys(bulan).length, url: bapTautan_().rekap };
 }
 /** Salin file BAP KAS.xlsx lama menjadi Google Sheet (lihat dengan link) + peta tab → gid. */
