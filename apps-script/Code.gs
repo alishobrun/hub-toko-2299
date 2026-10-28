@@ -11,7 +11,7 @@
 /** Versi kode. WAJIB dinaikkan setiap kali Code.gs diubah (format yyyy-MM-dd.n),
  *  lalu simpan ke GitHub (alishobrun/hub-toko-2299) SEBELUM dipasang. Halaman Kesehatan Data
  *  membandingkan angka ini dengan GitHub supaya kode yang dipasang di luar GitHub ketahuan. */
-const KODE_VERSI = '2026-10-28.4';
+const KODE_VERSI = '2026-10-28.5';
 
 const CFG = {
   STORE: '2299',
@@ -3164,6 +3164,7 @@ function labelOf_(name) { return GmailApp.getUserLabelByName(name) || GmailApp.c
 function cekEmailDsr() {
   try { hangatkanDsr_(); } catch (e) { Logger.log('hangat dsr: ' + e); }
   try { siapkanBriefing_(); } catch (e) { Logger.log('briefing: ' + e); }
+  try { const pp = PropertiesService.getScriptProperties(); if (pp.getProperty('REKAP_ANTRE') && Date.now() - Number(pp.getProperty('REKAP_PEMICU') || 0) > 5 * 60 * 1000) prosesRekap(); } catch (e) { Logger.log('rekap antre: ' + e); }
   const lab = labelOf_(DSR_EMAIL.LABEL), labGagal = labelOf_(DSR_EMAIL.LABEL_GAGAL);
   const threads = GmailApp.search('from:' + DSR_EMAIL.FROM + ' -label:' + DSR_EMAIL.LABEL + ' -label:' + DSR_EMAIL.LABEL_GAGAL + ' newer_than:3d', 0, 30);
   const msgs = [], prr = [];
@@ -4215,6 +4216,35 @@ function bapNorm_(r) {
 /** Semua data kas (dibaca sekali per permintaan). */
 function kasBaca_() {
   if (kasBaca_.c) return kasBaca_.c;
+  const kunci = 'kasdata_v' + (PropertiesService.getScriptProperties().getProperty('ver_kas') || '0');
+  const hit = cacheAmbilBesar_(kunci);
+  if (hit) { kasBaca_.c = hit; return hit; }
+  const K = kasBacaSheet_();
+  cacheSimpanBesar_(kunci, K, 21600);
+  return K;
+}
+/** Simpan objek besar di CacheService: gzip + base64, dipotong per 90 rb karakter. */
+function cacheSimpanBesar_(k, obj, detik) {
+  try {
+    const z = Utilities.base64Encode(Utilities.gzip(Utilities.newBlob(JSON.stringify(obj), 'application/json')).getBytes());
+    const n = Math.ceil(z.length / 90000), m = {};
+    if (n > 9) return;
+    for (let i = 0; i < n; i++) m[k + '_' + i] = z.slice(i * 90000, (i + 1) * 90000);
+    m[k + '_n'] = String(n);
+    CacheService.getScriptCache().putAll(m, detik);
+  } catch (e) { Logger.log('cache besar: ' + e); }
+}
+function cacheAmbilBesar_(k) {
+  try {
+    const c = CacheService.getScriptCache(), n = Number(c.get(k + '_n') || 0);
+    if (!n) return null;
+    const keys = []; for (let i = 0; i < n; i++) keys.push(k + '_' + i);
+    const got = c.getAll(keys); let z = '';
+    for (let i = 0; i < n; i++) { if (got[keys[i]] == null) return null; z += got[keys[i]]; }
+    return JSON.parse(Utilities.ungzip(Utilities.newBlob(Utilities.base64Decode(z), 'application/x-gzip')).getDataAsString());
+  } catch (e) { return null; }
+}
+function kasBacaSheet_() {
   const bap = read_('bap').filter(function (r) { return /^\d{4}-\d{2}-\d{2}$/.test(String(r.tanggal)); }).map(bapNorm_)
     .sort(function (a, b) { return a.tanggal < b.tanggal ? -1 : 1; });
   const pos = {};
@@ -4242,9 +4272,9 @@ function kasBaca_() {
   const K0 = { bap: bap, pos: pos, setoran: setoran, petty: petty, care: care, safe: safe };
   if (safe.length) K0.setoran = safeSetoran_(K0);
   kasBaca_.c = K0;
-  return kasBaca_.c;
+  return K0;
 }
-function kasBacaUlang_() { kasBaca_.c = null; return kasBaca_(); }
+function kasBacaUlang_() { kasBaca_.c = null; return kasBacaSheet_(); }
 
 /** Tanggal pertama BAP yang diisi lewat Basecamp (mulai pelacakan setoran). */
 function bapMulai_(K) {
@@ -5045,8 +5075,35 @@ function tabPetty_(ss, K) {
   if (rows.length === 1) rows.push(['Laporan petty cash CARE belum diunggah', '', '', '', '', '', '', '']);
   tulisTab_(ss, 'Petty Cash', rows, { uang: [4, 5, 6], lebar: [140, 130, 230, 110, 110, 110, 80, 300], index: 2 });
 }
-/** Perbarui sheet rekap: bulan tertentu + Ringkasan (+ Setoran & Petty). Tidak menggagalkan penyimpanan. */
+/** Catat bulan yang perlu diperbarui di sheet rekap, lalu kerjakan di belakang layar (±1 menit lagi)
+ *  supaya simpan BAP / unggah laporan tidak menunggu Google Sheet ditulis ulang. */
 function rekapAman_(bulan, semuaTab) {
+  try {
+    withLock_(function () {
+      const p = PropertiesService.getScriptProperties();
+      const d = jsonOr_(p.getProperty('REKAP_ANTRE'), { bulan: {}, semua: false });
+      (bulan || []).forEach(function (b) { if (/^\d{4}-\d{2}$/.test(b)) d.bulan[b] = 1; });
+      if (semuaTab) d.semua = true;
+      p.setProperty('REKAP_ANTRE', JSON.stringify(d));
+      const t = Number(p.getProperty('REKAP_PEMICU') || 0);
+      if (Date.now() - t > 10 * 60 * 1000) {
+        ScriptApp.newTrigger('prosesRekap').timeBased().after(60 * 1000).create();
+        p.setProperty('REKAP_PEMICU', String(Date.now()));
+      }
+    }, 10000);
+  } catch (e) { Logger.log('antre rekap: ' + e); }
+}
+/** Dijalankan pemicu sekali-jalan (atau pemicu 15 menit sebagai cadangan): perbarui sheet rekap yang antre. */
+function prosesRekap() {
+  const p = PropertiesService.getScriptProperties();
+  ScriptApp.getProjectTriggers().forEach(function (t) { if (t.getHandlerFunction() === 'prosesRekap') { try { ScriptApp.deleteTrigger(t); } catch (e) {} } });
+  let d = null;
+  withLock_(function () { d = jsonOr_(p.getProperty('REKAP_ANTRE'), null); p.deleteProperty('REKAP_ANTRE'); p.deleteProperty('REKAP_PEMICU'); });
+  if (!d) return 'kosong';
+  rekapSekarang_(Object.keys(d.bulan || {}), !!d.semua);
+  return Object.keys(d.bulan || {}).join(',');
+}
+function rekapSekarang_(bulan, semuaTab) {
   try {
     const ss = rekapFile_(), K = kasBacaUlang_(), S = setoranHitung_(K);
     (bulan || []).forEach(function (b) { if (/^\d{4}-\d{2}$/.test(b)) { tabBulan_(ss, b, K, S); tabPecahan_(ss, b, K, S); } });

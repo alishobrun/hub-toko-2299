@@ -272,6 +272,7 @@
       { icon: 'wallet', id: 'kas-petty', label: 'Petty Cash', desc: 'Saldo CARE, pengeluaran & penggantian' },
       { icon: 'scale', id: 'kas-rekap', label: 'Rekap BAP', desc: 'Per bulan, laporan POS & Google Sheet' }] },
     { id: 'data', label: 'Data', icon: 'upload', color: '#A78BFA', items: [
+      { icon: 'upload', id: 'unggahdata', label: 'Unggah Data', desc: 'Semua file sekaligus: DSR, By Bin, POS, Petty Cash, Store Safe' },
       { icon: 'upload', id: 'unggah', label: 'Unggah DSR', desc: 'Perbarui data penjualan' },
       { icon: 'box', id: 'unggahbin', label: 'Unggah By Bin', desc: 'Perbarui stok per bin' },
       { icon: 'video', id: 'dokumentasi', label: 'Dokumentasi', desc: 'Video opening & closing' },
@@ -888,7 +889,7 @@
     v.append(lipat('ap', 'Apresiasi tim', apBeranda()));
     v.append(el('div', { class: 'quick section' },
       el('a', { href: '#/briefing' }, icon('sun'), 'Briefing Pagi', el('span', { text: 'Teks WA untuk tim' })),
-      el('a', { href: '#/unggah' }, icon('upload'), 'Unggah DSR', el('span', { text: 'Perbarui data sales' })),
+      el('a', { href: '#/unggahdata' }, icon('upload'), 'Unggah Data', el('span', { text: 'DSR, By Bin, POS, CARE sekaligus' })),
       el('a', { href: '#/monitoring' }, icon('chart'), 'Monitoring', el('span', { text: 'Achievement & UPT' })),
       el('a', { href: '#/kas' }, icon('cash'), 'BAP Kas', el('span', { text: 'Isi saat closing' })),
       el('a', { href: '#/request' }, icon('cal'), 'Request Jadwal', el('span', { text: 'OFF, cuti, tukar shift' }))));
@@ -1197,6 +1198,73 @@
   }
 
   /* ---------- Unggah DSR ---------- */
+  function statEl(label, val, wide) { return el('div', { class: 'stat' + (wide ? ' wide' : '') }, el('span', { text: label }), el('b', { text: val })); }
+  function dsrProses(file, area, onDone) {
+    area.replaceChildren(el('div', { class: 'file-row' }, el('span', { class: 'file-ic' }, icon('file')),
+      el('div', null, el('b', { text: file.name }), el('span', { text: 'Membaca file…' }))));
+    if (!window.XLSX) { area.replaceChildren(errBox(new Error('Pembaca Excel belum termuat. Periksa koneksi lalu muat ulang halaman.'))); return; }
+    var reader = new FileReader();
+    reader.onload = function () {
+      try {
+        var wb = XLSX.read(new Uint8Array(reader.result), { type: 'array', cellDates: false });
+        var ws = wb.Sheets[wb.SheetNames[0]];
+        var aoa = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: null });
+        var parsed = DSR.parse(aoa, { SSF: XLSX.SSF });
+        if (!parsed.rows.length) throw new Error('Tidak ada baris transaksi di file ini.');
+        dsrPreview(file, parsed, area, onDone);
+      } catch (err) { area.replaceChildren(errBox(err)); }
+    };
+    reader.onerror = function () { area.replaceChildren(errBox(new Error('File tidak bisa dibaca'))); };
+    reader.readAsArrayBuffer(file);
+  }
+
+  function dsrPreview(file, parsed, area, onDone) {
+    var rows = parsed.rows;
+    var inv = {}; rows.forEach(function (r) { inv[r.invoice] = 1; });
+    var dates = rows.map(function (r) { return r.tanggal; }).sort();
+    var agg = DSR.aggregateDaily(rows);
+    var bruto = agg.reduce(function (s, x) { return s + x.bruto; }, 0), netto = agg.reduce(function (s, x) { return s + x.netto; }, 0);
+    var okStore = !parsed.lokasi || parsed.lokasi.indexOf(CFG.STORE) >= 0;
+    var btn = el('button', { class: 'btn btn-orange btn-block', disabled: !okStore }, icon('upload'), 'Unggah sekarang');
+    var bar = el('div', { class: 'progress hide' }, el('i'));
+    var out = el('div');
+    area.replaceChildren(
+      el('div', { class: 'file-row' }, el('span', { class: 'file-ic ok' }, icon('file')),
+        el('div', null, el('b', { text: file.name }), el('span', { text: parsed.lokasi || 'Lokasi tidak tertulis di file' }))),
+      !okStore ? errBox(new Error('File ini bukan DSR toko ' + CFG.STORE + '.')) : null,
+      el('div', { class: 'stats' },
+        statEl('Periode', dShort(dates[0]) + ' – ' + dShort(dates[dates.length - 1]), true),
+        statEl('Transaksi', fNum(Object.keys(inv).length) + ' invoice'),
+        statEl('Baris item', fNum(rows.length)),
+        statEl('Sales bruto', fRpShort(bruto)), statEl('Sales netto', fRpShort(netto))),
+      parsed.bad ? el('p', { class: 'muted', text: parsed.bad + ' baris dilewati karena tanggalnya tidak terbaca.' }) : null,
+      btn, bar, out);
+    btn.addEventListener('click', function () {
+      btn.disabled = true; btn.lastChild.textContent = 'Menyiapkan…'; bar.classList.remove('hide');
+      prepareRows(rows).then(function (arrs) {
+        btn.lastChild.textContent = 'Mengunggah…';
+        bar.firstChild.style.width = '35%';
+        var slow = setTimeout(function () { bar.firstChild.style.width = '80%'; }, 4000);
+        return api('upload', { rows: arrs, lokasi: parsed.lokasi, fileName: file.name }).then(function (res) {
+          clearTimeout(slow);
+          bar.firstChild.style.width = '100%';
+          S.mon = null; S.info = null;
+          area.replaceChildren(el('div', { class: 'done' },
+            el('span', { class: 'done-ic' }, icon('check')),
+            el('h3', { text: 'Data berhasil diperbarui' }),
+            el('p', { class: 'muted', text: dShort(res.dari) + ' – ' + dShort(res.sampai) }),
+            el('div', { class: 'stats stats-3' }, statEl('Invoice baru', fNum(res.baru)), statEl('Diperbarui', fNum(res.diperbarui)), statEl('Sudah ada', fNum(res.sama))),
+            el('a', { class: 'btn btn-primary btn-block', href: '#/monitoring', text: 'Lihat Monitoring Sales' })));
+          if (onDone) onDone();
+        }, function (err) { clearTimeout(slow); throw err; });
+      }).catch(function (err) {
+        bar.classList.add('hide'); btn.disabled = false; btn.lastChild.textContent = 'Coba unggah lagi';
+        out.replaceChildren(errBox(err));
+      });
+    });
+  }
+
+
   function viewUnggah(v) {
     pageHead(v, 'Unggah DSR', 'Perbarui data penjualan dari file Item DSR Report.');
 
@@ -1222,70 +1290,7 @@
     drop.addEventListener('drop', function (e) { if (e.dataTransfer.files[0]) handle(e.dataTransfer.files[0]); });
     input.addEventListener('change', function () { if (input.files[0]) handle(input.files[0]); input.value = ''; });
 
-    function handle(file) {
-      area.replaceChildren(el('div', { class: 'file-row' }, el('span', { class: 'file-ic' }, icon('file')),
-        el('div', null, el('b', { text: file.name }), el('span', { text: 'Membaca file…' }))));
-      if (!window.XLSX) { area.replaceChildren(errBox(new Error('Pembaca Excel belum termuat. Periksa koneksi lalu muat ulang halaman.'))); return; }
-      var reader = new FileReader();
-      reader.onload = function () {
-        try {
-          var wb = XLSX.read(new Uint8Array(reader.result), { type: 'array', cellDates: false });
-          var ws = wb.Sheets[wb.SheetNames[0]];
-          var aoa = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: null });
-          var parsed = DSR.parse(aoa, { SSF: XLSX.SSF });
-          if (!parsed.rows.length) throw new Error('Tidak ada baris transaksi di file ini.');
-          preview(file, parsed);
-        } catch (err) { area.replaceChildren(errBox(err)); }
-      };
-      reader.onerror = function () { area.replaceChildren(errBox(new Error('File tidak bisa dibaca'))); };
-      reader.readAsArrayBuffer(file);
-    }
-
-    function preview(file, parsed) {
-      var rows = parsed.rows;
-      var inv = {}; rows.forEach(function (r) { inv[r.invoice] = 1; });
-      var dates = rows.map(function (r) { return r.tanggal; }).sort();
-      var agg = DSR.aggregateDaily(rows);
-      var bruto = agg.reduce(function (s, x) { return s + x.bruto; }, 0), netto = agg.reduce(function (s, x) { return s + x.netto; }, 0);
-      var okStore = !parsed.lokasi || parsed.lokasi.indexOf(CFG.STORE) >= 0;
-      var btn = el('button', { class: 'btn btn-orange btn-block', disabled: !okStore }, icon('upload'), 'Unggah sekarang');
-      var bar = el('div', { class: 'progress hide' }, el('i'));
-      var out = el('div');
-      area.replaceChildren(
-        el('div', { class: 'file-row' }, el('span', { class: 'file-ic ok' }, icon('file')),
-          el('div', null, el('b', { text: file.name }), el('span', { text: parsed.lokasi || 'Lokasi tidak tertulis di file' }))),
-        !okStore ? errBox(new Error('File ini bukan DSR toko ' + CFG.STORE + '.')) : null,
-        el('div', { class: 'stats' },
-          stat('Periode', dShort(dates[0]) + ' – ' + dShort(dates[dates.length - 1]), true),
-          stat('Transaksi', fNum(Object.keys(inv).length) + ' invoice'),
-          stat('Baris item', fNum(rows.length)),
-          stat('Sales bruto', fRpShort(bruto)), stat('Sales netto', fRpShort(netto))),
-        parsed.bad ? el('p', { class: 'muted', text: parsed.bad + ' baris dilewati karena tanggalnya tidak terbaca.' }) : null,
-        btn, bar, out);
-      btn.addEventListener('click', function () {
-        btn.disabled = true; btn.lastChild.textContent = 'Menyiapkan…'; bar.classList.remove('hide');
-        prepareRows(rows).then(function (arrs) {
-          btn.lastChild.textContent = 'Mengunggah…';
-          bar.firstChild.style.width = '35%';
-          var slow = setTimeout(function () { bar.firstChild.style.width = '80%'; }, 4000);
-          return api('upload', { rows: arrs, lokasi: parsed.lokasi, fileName: file.name }).then(function (res) {
-            clearTimeout(slow);
-            bar.firstChild.style.width = '100%';
-            S.mon = null; S.info = null;
-            area.replaceChildren(el('div', { class: 'done' },
-              el('span', { class: 'done-ic' }, icon('check')),
-              el('h3', { text: 'Data berhasil diperbarui' }),
-              el('p', { class: 'muted', text: dShort(res.dari) + ' – ' + dShort(res.sampai) }),
-              el('div', { class: 'stats stats-3' }, stat('Invoice baru', fNum(res.baru)), stat('Diperbarui', fNum(res.diperbarui)), stat('Sudah ada', fNum(res.sama))),
-              el('a', { class: 'btn btn-primary btn-block', href: '#/monitoring', text: 'Lihat Monitoring Sales' })));
-            loadHist();
-          }, function (err) { clearTimeout(slow); throw err; });
-        }).catch(function (err) {
-          bar.classList.add('hide'); btn.disabled = false; btn.lastChild.textContent = 'Coba unggah lagi';
-          out.replaceChildren(errBox(err));
-        });
-      });
-    }
+    function handle(file) { dsrProses(file, area, loadHist); }
 
     function stat(label, val, wide) { return el('div', { class: 'stat' + (wide ? ' wide' : '') }, el('span', { text: label }), el('b', { text: val })); }
 
@@ -1655,17 +1660,16 @@
   }
   function prosesSafe(file, onDone) {
     toast('Membaca ' + file.name + '…');
-    bacaXlsx(file).then(function (aoa) { return api('safeUpload', { aoa: aoa, fileName: file.name }); })
-      .then(function (r) { toast('Store Safe CARE: ' + r.baru + ' transaksi baru' + (r.ubah ? ', ' + r.ubah + ' berubah' : '') + ' · saldo brankas ' + rpx(r.saldo)); swrClear(); if (onDone) onDone(); })
-      .catch(function (e) { toast(e.message, true); });
+    kirimCare('safe', file).then(function (r) { toast(pesanCare('safe', r)); if (onDone) onDone(); }).catch(function (e) { toast(e.message, true); });
   }
+
   var CARA_SETOR = { atm: 'ATM', teller: 'Teller', brankas: 'Brankas', internal: 'Internal' };
   function viewKasSetor(v) {
     pageHead(v, 'Setoran Bank', 'Uang Cash at Till masuk brankas lalu disetor besoknya (Sabtu–Minggu lewat ATM, sisanya Senin). Data diambil dari laporan Store Safe CARE.');
     var body = el('div', null, skel(2));
     v.append(body);
     function load() {
-      api('setoranList').then(function (d) {
+      apiSwr('setoranList').then(function (d) {
         var dz = dropZone({ judul: 'Unggah laporan Store Safe CARE', ket: '…_StoreSafe.xlsx · ketuk atau seret & lepas ke sini', onFiles: function (fs) { prosesSafe(fs[0], load); } });
         var top = el('div', { class: 'card' },
           el('div', { class: 'card-head' }, el('div', null, el('h3', { text: 'Belum disetor' }),
@@ -1721,19 +1725,37 @@
   }
   // file yang dilepas di luar kotak unggah jangan sampai membuka file itu di browser
   ['dragover', 'drop'].forEach(function (t) { window.addEventListener(t, function (e) { if (!e.target.closest || !e.target.closest('.drop')) e.preventDefault(); }); });
+  /** Kirim hanya transaksi 35 hari sebelum data terakhir yang sudah ada (laporan CARE berisi seluruh riwayat). */
+  function saringCare(aoa, jenis) {
+    var sampai = store.get('careSampai.' + jenis);
+    if (!sampai) return aoa;
+    var p = dParts(sampai.slice(0, 10)), batas = new Date(Date.UTC(p.y, p.m - 1, p.d - 35)).toISOString().slice(0, 10);
+    return aoa.filter(function (r) {
+      for (var i = 0; i < r.length; i++) { var v = String(r[i] == null ? '' : r[i]); if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}/.test(v)) return v.slice(0, 10) >= batas; }
+      return true;
+    });
+  }
+  function kirimCare(jenis, file) {
+    return bacaXlsx(file).then(function (aoa) {
+      return api(jenis === 'safe' ? 'safeUpload' : 'pettyUpload', { aoa: saringCare(aoa, jenis), fileName: file.name });
+    }).then(function (r) { if (r.sampai) store.set('careSampai.' + jenis, r.sampai); swrClear(); return r; });
+  }
+  function pesanCare(jenis, r) {
+    return (jenis === 'safe' ? 'Store Safe CARE: ' : 'Petty Cash CARE: ') + r.baru + ' transaksi baru' + (r.ubah ? ', ' + r.ubah + ' berubah' : '') +
+      ' · saldo ' + (jenis === 'safe' ? 'brankas ' : '') + rpx(r.saldo) + (jenis === 'safe' && r.belum ? ' · belum disetor ' + rpx(r.belum) : '');
+  }
   function prosesPetty(file, onDone) {
     toast('Membaca ' + file.name + '…');
-    bacaXlsx(file).then(function (aoa) { return api('pettyUpload', { aoa: aoa, fileName: file.name }); })
-      .then(function (r) { toast('Petty cash CARE: ' + r.baru + ' transaksi baru' + (r.ubah ? ', ' + r.ubah + ' berubah' : '') + ' · saldo ' + rpx(r.saldo)); swrClear(); if (onDone) onDone(); })
-      .catch(function (e) { toast(e.message, true); });
+    kirimCare('petty', file).then(function (r) { toast(pesanCare('petty', r)); if (onDone) onDone(); }).catch(function (e) { toast(e.message, true); });
   }
+
   function viewKasPetty(v) {
     pageHead(v, 'Petty Cash', 'Saldo dan pengeluaran dari laporan Petty Cash CARE. Uang fisik di BAP dicocokkan dengan saldo CARE saat closing.');
     var tools = el('div', { class: 'toolbar2' }), body = el('div', null, skel(3));
     v.append(tools, body);
     var cari = '';
     function load(bulan) {
-      api('pettyList', { bulan: bulan || '' }).then(function (p) {
+      apiSwr('pettyList', { bulan: bulan || '' }).then(function (p) {
         tools.replaceChildren(p.bulanTersedia.length ? monthSel(p.bulanTersedia, p.bulan, load) : null);
         var dz = dropZone({ judul: 'Unggah laporan Petty Cash CARE', ket: '…_PettyCash.xlsx · ketuk atau seret & lepas ke sini', onFiles: function (fs) { prosesPetty(fs[0], function () { load(p.bulan); }); } });
         if (!p.waktu) {
@@ -1781,25 +1803,76 @@
   }
 
   /* ---------- Rekap BAP ---------- */
-  function prosesPos(file, onDone) {
-    if (!window.XLSX) { toast('Pembaca Excel belum termuat, coba lagi', true); return; }
-    toast('Membaca ' + file.name + '…');
-    file.arrayBuffer().then(function (buf) {
+  function kirimPos(file) {
+    if (!window.XLSX) return Promise.reject(new Error('Pembaca Excel belum termuat, coba lagi'));
+    return file.arrayBuffer().then(function (buf) {
       var wb = XLSX.read(buf, { type: 'array' });
       var aoa = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, raw: true, defval: '' }).slice(0, 3000);
       aoa = aoa.map(function (r) { return r.map(function (c) { return c instanceof Date ? c.toISOString().slice(0, 10) : c; }); });
       return api('posUpload', { aoa: aoa, fileName: file.name });
-    }).then(function (r) {
-      toast('Laporan POS ' + r.hari.map(function (h) { return dShort(h.tanggal) + ' tunai ' + rpx(h.tunai); }).join(' · ') + ' tersimpan');
-      swrClear(); if (onDone) onDone();
-    }).catch(function (e) { toast(e.message, true); });
+    }).then(function (r) { swrClear(); return r; });
   }
+  function pesanPos(r) { return 'Laporan POS ' + r.hari.map(function (h) { return dShort(h.tanggal) + ' tunai ' + rpx(h.tunai); }).join(' · ') + ' tersimpan'; }
+  function prosesPos(file, onDone) {
+    toast('Membaca ' + file.name + '…');
+    kirimPos(file).then(function (r) { toast(pesanPos(r)); if (onDone) onDone(); }).catch(function (e) { toast(e.message, true); });
+  }
+
+  /* ---------- Unggah Data: satu tempat untuk semua file ---------- */
+  var JENIS_FILE = { dsr: ['DSR (Item DSR Report)', 'chart'], bin: ['Stok By Bin', 'box'], pos: ['Laporan POS Receivable', 'cash'], petty: ['Petty Cash CARE', 'wallet'], safe: ['Store Safe CARE', 'bank'] };
+  function kenaliFile(file) {
+    if (!window.XLSX) return Promise.reject(new Error('Pembaca Excel belum termuat. Periksa koneksi lalu muat ulang halaman.'));
+    return file.arrayBuffer().then(function (buf) {
+      var wb = XLSX.read(buf, { type: 'array', sheetRows: 40 });
+      var aoa = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, raw: false, defval: '' });
+      for (var i = 0; i < aoa.length; i++) {
+        var r = (aoa[i] || []).map(function (x) { return String(x).trim().toLowerCase().replace(/\s+/g, ' '); });
+        var has = function (k) { return r.indexOf(k) >= 0; };
+        if (has('invoice no') && has('order date')) return 'dsr';
+        if (has('sku code') && has('bin code')) return 'bin';
+        if (has('site code') && has('description')) return 'pos';
+        if (has('id code') && has('deposit type')) return 'safe';
+        if (has('id code') && has('balance')) return 'petty';
+      }
+      return null;
+    });
+  }
+  function viewUnggahData(v) {
+    pageHead(v, 'Unggah Data', 'Seret beberapa file sekaligus: DSR, By Bin, laporan POS, Petty Cash, dan Store Safe. Jenis file dikenali otomatis.');
+    var list = el('div', { class: 'ud-list' });
+    var dz = dropZone({ accept: '.xlsx,.xls,.csv', multiple: true, judul: 'Seret semua file ke sini', ket: 'Bisa beberapa file sekaligus · atau ketuk untuk memilih', onFiles: function (fs) { antre(fs); } });
+    v.append(el('div', { class: 'card' }, dz,
+      el('div', { class: 'tags', style: 'margin-top:12px' }, Object.keys(JENIS_FILE).map(function (k) { return el('span', { class: 'tag' }, JENIS_FILE[k][0]); }))),
+      list,
+      el('p', { class: 'note', text: 'DSR dan By Bin tetap menampilkan ringkasan dulu, tekan "Unggah sekarang" untuk menyimpan. Laporan CARE dan POS langsung disimpan (data yang sama tidak dobel).' }));
+    var rantai = Promise.resolve();
+    function antre(files) { files.forEach(function (f) { var kartu = baris(f); rantai = rantai.then(function () { return proses(f, kartu); }); }); }
+    function baris(file) {
+      var st = el('span', { class: 'muted', text: 'Menunggu…' }), ic = el('span', { class: 'file-ic' }, icon('file')), area = el('div');
+      var k = el('div', { class: 'card ud-item' }, el('div', { class: 'file-row' }, ic, el('div', null, el('b', { text: file.name }), st)), area);
+      list.prepend(k);
+      return { st: st, ic: ic, area: area, set: function (t, cls) { st.textContent = t; st.className = cls || 'muted'; } };
+    }
+    function proses(file, k) {
+      k.set('Mengenali jenis file…');
+      return kenaliFile(file).then(function (j) {
+        if (!j) throw new Error('Jenis file tidak dikenali. Pastikan file asli dari CARE / sistem (DSR, By Bin, POS Receivable, Petty Cash, Store Safe).');
+        k.ic.replaceChildren(icon(JENIS_FILE[j][1])); k.ic.className = 'file-ic ok';
+        k.set(JENIS_FILE[j][0] + ' · memproses…');
+        if (j === 'dsr') { k.set(JENIS_FILE[j][0]); dsrProses(file, k.area, null); return; }
+        if (j === 'bin') { k.set(JENIS_FILE[j][0]); binProses(file, k.area, null); return; }
+        var p = j === 'pos' ? kirimPos(file) : kirimCare(j, file);
+        return p.then(function (r) { k.set('✓ ' + (j === 'pos' ? pesanPos(r) : pesanCare(j, r)), 'c-good'); });
+      }).catch(function (e) { k.ic.className = 'file-ic'; k.set('✗ ' + (e.message || e), 'c-bad'); });
+    }
+  }
+
   function viewKasRekap(v) {
     pageHead(v, 'Rekap BAP Kas', 'Semua BAP per bulan, dicocokkan dengan nota dan laporan POS. Versi Google Sheet terbarui otomatis.');
     var tools = el('div', { class: 'toolbar2' }), body = el('div', null, skel(3));
     v.append(tools, body);
     function load(bulan) {
-      api('bapList', { bulan: bulan || qparam('bulan') }).then(function (d) {
+      apiSwr('bapList', { bulan: bulan || qparam('bulan') }).then(function (d) {
         tools.replaceChildren(monthSel(d.bulanTersedia, d.bulan, function (b) { history.replaceState(null, '', '#/kas-rekap?bulan=' + b); load(b); }),
           d.tautan.rekap ? el('a', { class: 'btn btn-ghost btn-sm', href: d.tautan.rekap, target: '_blank', rel: 'noopener' }, icon('file'), 'Google Sheet rekap') : null,
           d.tautan.arsip ? el('a', { class: 'btn btn-ghost btn-sm', href: d.tautan.arsip, target: '_blank', rel: 'noopener' }, icon('file'), 'BAP lama') : null,
@@ -4780,6 +4853,48 @@
     }
     return { rows: rows, lokasi: lokasi };
   }
+  function binProses(file, area, onDone) {
+    area.replaceChildren(el('div', { class: 'file-row' }, el('span', { class: 'file-ic' }, icon('file')), el('div', null, el('b', { text: file.name }), el('span', { text: 'Membaca file…' }))));
+    if (!window.XLSX) { area.replaceChildren(errBox(new Error('Pembaca Excel belum termuat. Periksa koneksi lalu muat ulang halaman.'))); return; }
+    var reader = new FileReader();
+    reader.onload = function () {
+      try {
+        var wb = XLSX.read(new Uint8Array(reader.result), { type: 'array' });
+        var aoa = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, raw: false, defval: null });
+        var p = parseBin(aoa);
+        if (!p.rows.length) throw new Error('Tidak ada baris stok di file ini.');
+        binPreview(file, p, area, onDone);
+      } catch (err) { area.replaceChildren(errBox(err)); }
+    };
+    reader.readAsArrayBuffer(file);
+  }
+  function binPreview(file, p, area, onDone) {
+    var zones = {}, skus = {}, pcs = 0, bins = {};
+    p.rows.forEach(function (r) { zones[r[4]] = (zones[r[4]] || 0) + r[10]; skus[r[0]] = 1; pcs += r[10]; bins[r[3]] = 1; });
+    var okStore = !p.lokasi || p.lokasi.indexOf(CFG.STORE) >= 0;
+    var btn = el('button', { class: 'btn btn-orange btn-block', disabled: !okStore }, icon('upload'), 'Unggah sekarang');
+    var out = el('div');
+    area.replaceChildren(
+      el('div', { class: 'file-row' }, el('span', { class: 'file-ic ok' }, icon('file')), el('div', null, el('b', { text: file.name }), el('span', { text: p.lokasi || 'Lokasi tidak tertulis' }))),
+      !okStore ? errBox(new Error('File ini bukan stok toko ' + CFG.STORE + '.')) : null,
+      el('div', { class: 'stats' }, statEl('Baris', fNum(p.rows.length)), statEl('SKU', fNum(Object.keys(skus).length)), statEl('Total', fNum(pcs) + ' pcs'), statEl('Bin', fNum(Object.keys(bins).length))),
+      el('div', { class: 'tags', style: 'margin:8px 0 12px' }, Object.keys(zones).map(function (z) { return el('span', { class: 'tag', text: z + ' ' + fNum(zones[z]) }); })),
+      btn, out);
+    btn.addEventListener('click', function () {
+      btn.disabled = true; btn.lastChild.textContent = 'Mengunggah…';
+      api('binUpload', { rows: p.rows, lokasi: p.lokasi, fileName: file.name }).then(function (res) {
+        S.bin = null; S.master = null;
+        area.replaceChildren(el('div', { class: 'done' }, el('span', { class: 'done-ic' }, icon('check')),
+          el('h3', { text: 'Stok by bin diperbarui' }),
+          el('div', { class: 'stats stats-3' }, statEl('SKU', fNum(res.sku)), statEl('Total', fNum(res.pcs) + ' pcs'), statEl('Varian baru tercatat', res.awal ? 'patokan awal' : fNum(res.varianBaru))),
+          el('div', { class: 'grid grid-2', style: 'gap:8px' },
+            el('a', { class: 'btn btn-primary btn-block', href: '#/display', text: 'Cek Display' }),
+            el('a', { class: 'btn btn-ghost btn-block', href: '#/stokart', text: 'Stok Artikel' }))));
+        if (onDone) onDone();
+      }).catch(function (err) { btn.disabled = false; btn.lastChild.textContent = 'Coba unggah lagi'; out.replaceChildren(errBox(err)); });
+    });
+  }
+
   function viewUnggahBin(v) {
     pageHead(v, 'Unggah By Bin', 'Perbarui stok per lokasi bin dari file export stock by bin. Siapa saja boleh, kapan saja.');
     var input = el('input', { type: 'file', accept: '.xlsx,.xls,.csv', id: 'bin-file' });
@@ -4801,47 +4916,7 @@
     drop.addEventListener('drop', function (e) { if (e.dataTransfer.files[0]) handle(e.dataTransfer.files[0]); });
     input.addEventListener('change', function () { if (input.files[0]) handle(input.files[0]); input.value = ''; });
     function stat(label, val) { return el('div', { class: 'stat' }, el('span', { text: label }), el('b', { text: val })); }
-    function handle(file) {
-      area.replaceChildren(el('div', { class: 'file-row' }, el('span', { class: 'file-ic' }, icon('file')), el('div', null, el('b', { text: file.name }), el('span', { text: 'Membaca file…' }))));
-      if (!window.XLSX) { area.replaceChildren(errBox(new Error('Pembaca Excel belum termuat. Periksa koneksi lalu muat ulang halaman.'))); return; }
-      var reader = new FileReader();
-      reader.onload = function () {
-        try {
-          var wb = XLSX.read(new Uint8Array(reader.result), { type: 'array' });
-          var aoa = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, raw: false, defval: null });
-          var p = parseBin(aoa);
-          if (!p.rows.length) throw new Error('Tidak ada baris stok di file ini.');
-          preview(file, p);
-        } catch (err) { area.replaceChildren(errBox(err)); }
-      };
-      reader.readAsArrayBuffer(file);
-    }
-    function preview(file, p) {
-      var zones = {}, skus = {}, pcs = 0, bins = {};
-      p.rows.forEach(function (r) { zones[r[4]] = (zones[r[4]] || 0) + r[10]; skus[r[0]] = 1; pcs += r[10]; bins[r[3]] = 1; });
-      var okStore = !p.lokasi || p.lokasi.indexOf(CFG.STORE) >= 0;
-      var btn = el('button', { class: 'btn btn-orange btn-block', disabled: !okStore }, icon('upload'), 'Unggah sekarang');
-      var out = el('div');
-      area.replaceChildren(
-        el('div', { class: 'file-row' }, el('span', { class: 'file-ic ok' }, icon('file')), el('div', null, el('b', { text: file.name }), el('span', { text: p.lokasi || 'Lokasi tidak tertulis' }))),
-        !okStore ? errBox(new Error('File ini bukan stok toko ' + CFG.STORE + '.')) : null,
-        el('div', { class: 'stats' }, stat('Baris', fNum(p.rows.length)), stat('SKU', fNum(Object.keys(skus).length)), stat('Total', fNum(pcs) + ' pcs'), stat('Bin', fNum(Object.keys(bins).length))),
-        el('div', { class: 'tags', style: 'margin:8px 0 12px' }, Object.keys(zones).map(function (z) { return el('span', { class: 'tag', text: z + ' ' + fNum(zones[z]) }); })),
-        btn, out);
-      btn.addEventListener('click', function () {
-        btn.disabled = true; btn.lastChild.textContent = 'Mengunggah…';
-        api('binUpload', { rows: p.rows, lokasi: p.lokasi, fileName: file.name }).then(function (res) {
-          S.bin = null; S.master = null;
-          area.replaceChildren(el('div', { class: 'done' }, el('span', { class: 'done-ic' }, icon('check')),
-            el('h3', { text: 'Stok by bin diperbarui' }),
-            el('div', { class: 'stats stats-3' }, stat('SKU', fNum(res.sku)), stat('Total', fNum(res.pcs) + ' pcs'), stat('Varian baru tercatat', res.awal ? 'patokan awal' : fNum(res.varianBaru))),
-            el('div', { class: 'grid grid-2', style: 'gap:8px' },
-              el('a', { class: 'btn btn-primary btn-block', href: '#/display', text: 'Cek Display' }),
-              el('a', { class: 'btn btn-ghost btn-block', href: '#/stokart', text: 'Stok Artikel' }))));
-          loadHist();
-        }).catch(function (err) { btn.disabled = false; btn.lastChild.textContent = 'Coba unggah lagi'; out.replaceChildren(errBox(err)); });
-      });
-    }
+    function handle(file) { binProses(file, area, loadHist); }
     function loadHist() {
       api('binUploads').then(function (list) {
         hist.replaceChildren(el('h3', { text: 'Riwayat unggahan' }), list.length ? el('ul', { class: 'hist' }, list.map(function (u) {
@@ -5366,7 +5441,7 @@
 
   Object.assign(VIEWS, {
     beranda: viewBeranda, briefing: viewBriefing, mingguan: viewMingguan, omni: viewOmni, kesehatan: viewKesehatan, pengumuman: viewPengumuman, handover: viewHandover, feedback: viewFeedback, apresiasi: viewApresiasi, dokumentasi: viewDokumentasi, monitoring: viewMonitoring, trend: viewTrend, ra: viewRA, produk: viewProduk, customer: viewCustomer,
-    stok: viewStok, stokart: viewStokArt, saranreq: viewSaranReq, display: viewDisplay, cari: viewCari, unggahbin: viewUnggahBin, kas: viewKas, 'kas-rekap': viewKasRekap, 'kas-setor': viewKasSetor, 'kas-petty': viewKasPetty, unggah: viewUnggah,
+    stok: viewStok, stokart: viewStokArt, saranreq: viewSaranReq, display: viewDisplay, cari: viewCari, unggahbin: viewUnggahBin, unggahdata: viewUnggahData, kas: viewKas, 'kas-rekap': viewKasRekap, 'kas-setor': viewKasSetor, 'kas-petty': viewKasPetty, unggah: viewUnggah,
     jadwal: viewJadwal, jadwaldraf: viewJadwalDraf, persetujuan: viewPersetujuan, targetadm: viewTargetAdm, pengaturan: viewPengaturan, request: viewRequest, tukar: viewTukar, simpanan: viewSimpanan,
     akun: viewAkun, admin: viewAdmin, aktivitas: viewAktivitas, pica: viewPica
   });

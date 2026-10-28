@@ -1409,3 +1409,9 @@ html[data-theme=dark] .bap-tabs button{background:var(--panel)}
 .drop-sm .drop-txt b{font-size:15px}
 .section-sm{margin-bottom:14px}
 html[data-theme=dark] .drop{background:var(--panel)}
+.ud-list{display:flex;flex-direction:column;gap:12px;margin-top:14px}
+.ud-item .file-row span.c-good,.ud-item .file-row span.c-bad{font-weight:600;font-size:13px}
+.ud-item > div:last-child:empty{display:none}
+.file-row span.c-good{color:var(--good)} .file-row span.c-bad{color:var(--bad)}
+.ud-item .file-row:first-child{margin-top:0}
+.file-ic .ic{width:20px;height:20px}
