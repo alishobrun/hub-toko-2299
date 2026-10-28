@@ -241,6 +241,8 @@
     grid: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><rect x="14" y="14" width="7" height="7" rx="2"/></svg>',
     alert: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 2 20h20z"/><path d="M12 10v4M12 17h.01"/></svg>',
     info: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg>',
+    bank: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10 12 4l9 6M5 10v8M9.5 10v8M14.5 10v8M19 10v8M3 21h18"/></svg>',
+    wallet: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h14a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h11"/><path d="M16 13.5h.01"/></svg>',
     store: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16"><path d="M3 9l1.5-5h15L21 9M4 9v11h16V9M3 9h18M9 20v-6h6v6"/></svg>'
   };
   function icon(name, cls) { return el('span', { class: 'ic' + (cls ? ' ' + cls : ''), html: IC[name], 'aria-hidden': 'true' }); }
@@ -265,8 +267,10 @@
       { icon: 'search', id: 'cari', label: 'Cari Barang', desc: 'Lokasi bin per SKU, scan barcode' },
       { icon: 'inbox', id: 'saranreq', label: 'Saran Request', desc: 'Laris tapi stok tipis/habis' }] },
     { id: 'kasg', label: 'Kas', icon: 'cash', color: '#22C55E', items: [
-      { icon: 'cash', id: 'kas', label: 'Cek Kas', desc: 'Till, Store Safe, Floating, Petty' },
-      { icon: 'scale', id: 'kas-rekap', label: 'Rekap Selisih', desc: 'Selisih kas per orang' }] },
+      { icon: 'cash', id: 'kas', label: 'BAP Kas', desc: 'Hitung semua pos kas saat closing' },
+      { icon: 'bank', id: 'kas-setor', label: 'Setoran Bank', desc: 'Uang belum disetor & riwayat setor' },
+      { icon: 'wallet', id: 'kas-petty', label: 'Petty Cash', desc: 'Saldo, pengajuan & pengisian' },
+      { icon: 'scale', id: 'kas-rekap', label: 'Rekap BAP', desc: 'Per bulan, laporan POS & Google Sheet' }] },
     { id: 'data', label: 'Data', icon: 'upload', color: '#A78BFA', items: [
       { icon: 'upload', id: 'unggah', label: 'Unggah DSR', desc: 'Perbarui data penjualan' },
       { icon: 'box', id: 'unggahbin', label: 'Unggah By Bin', desc: 'Perbarui stok per bin' },
@@ -864,6 +868,7 @@
     var admin = isAdmin();
     if (admin) v.append(adminCard()); else v.append(tugasCard());
     v.append(pengBanner());
+    v.append(lipat('kas', 'Kas hari ini', kasCard()));
     if (!admin) { v.append(sayaCard()); v.append(hoBeranda()); }
     v.append(el('div', { class: 'sec-lab', text: 'Pencapaian sales' }), kpis);
     if (admin) v.append(hoBeranda());
@@ -885,7 +890,7 @@
       el('a', { href: '#/briefing' }, icon('sun'), 'Briefing Pagi', el('span', { text: 'Teks WA untuk tim' })),
       el('a', { href: '#/unggah' }, icon('upload'), 'Unggah DSR', el('span', { text: 'Perbarui data sales' })),
       el('a', { href: '#/monitoring' }, icon('chart'), 'Monitoring', el('span', { text: 'Achievement & UPT' })),
-      el('a', { href: '#/kas' }, icon('cash'), 'Cek Kas', el('span', { text: 'Hitung uang di laci' })),
+      el('a', { href: '#/kas' }, icon('cash'), 'BAP Kas', el('span', { text: 'Isi saat closing' })),
       el('a', { href: '#/request' }, icon('cal'), 'Request Jadwal', el('span', { text: 'OFF, cuti, tukar shift' }))));
 
     apiSwr('info').then(function (info) {
@@ -1336,202 +1341,469 @@
     return el('div', { class: 'rp-input' }, el('span', { text: 'Rp' }), inp);
   }
 
-  var POS = [
-    { id: 'till', label: 'Till', judul: 'Uang di laci kasir', desc: 'Dicocokkan dengan modal till + penjualan tunai sistem' },
-    { id: 'floating', label: 'Floating Cash', judul: 'Floating Cash (modal besar)', desc: 'Dicocokkan dengan standar floating cash' },
-    { id: 'safe', label: 'Store Safe', judul: 'Store Safe (sisa cash)', desc: 'Dicatat jumlahnya, tanpa pembanding' },
-    { id: 'petty', label: 'Petty Cash', judul: 'Petty Cash (kas toko)', desc: 'Dicatat jumlahnya, tanpa pembanding' }
+  /* ---------- BAP Kas harian (closing) ---------- */
+  var BAP_POS = [
+    { id: 'floating', label: 'Floating', judul: 'Floating Cash', desc: 'Modal besar (cadangan uang kembalian)', cepat: true },
+    { id: 'float_till', label: 'Float to Till', judul: 'Float to Till', desc: 'Modal di laci kasir untuk besok pagi', cepat: true },
+    { id: 'cash_till', label: 'Cash at Till', judul: 'Cash at Till', desc: 'Penjualan tunai hari ini (di luar modal), lalu dipindah ke brankas' },
+    { id: 'safe', label: 'Store Safe', judul: 'Store Safe', desc: 'Uang di brankas yang belum disetor, tidak termasuk Cash at Till hari ini', cepat: true },
+    { id: 'petty', label: 'Petty Cash', judul: 'Petty Cash', desc: 'Kas kecil toko (plafon dari pusat)', cepat: true }
   ];
-  function posOf(id) { return POS.filter(function (p) { return p.id === id; })[0] || POS[0]; }
+  function rpx(n) { return n == null ? '—' : 'Rp ' + nf.format(n); }
+  function sumPec(o) { return PECAHAN.reduce(function (s, p) { return s + ((o || {})[p] || 0) * p; }, 0); }
+  function qparam(k) { var m = location.hash.match(new RegExp('[?&]' + k + '=([^&]*)')); return m ? decodeURIComponent(m[1]) : ''; }
+  function selTag(s, pasText) {
+    if (s == null) return el('span', { class: 'tag', text: 'Belum ada pembanding' });
+    if (s === 0) return el('span', { class: 'tag tag-good', text: pasText || 'Pas' });
+    return el('span', { class: 'tag ' + (s < 0 ? 'tag-bad' : 'tag-warn'), text: (s < 0 ? 'Kurang ' : 'Lebih ') + rpx(Math.abs(s)) });
+  }
+  function tglBapLabel(t) { return dDayName(t) + ', ' + dLong(t).replace(/^\w+,\s*/, ''); }
+
+  /** Rincian satu BAP (dipakai di BAP Kas & Rekap). */
+  function bapDetail(b, opt) {
+    opt = opt || {};
+    var rows = [
+      ['Floating Cash', b.floating], ['Float to Till', b.floatTill], ['Cash at Till', b.cashTill], ['Store Safe', b.safe], ['Petty Cash', b.petty]
+    ];
+    var cek = el('ul', { class: 'calc bap-cek' },
+      el('li', null, el('span', null, 'Modal kembalian', el('small', { text: 'Floating + Float to Till = ' + rpx(b.floating + b.floatTill) + (b.modalTotal ? ' · standar ' + rpx(b.modalTotal) : '') })), selTag(b.selisihModal)),
+      el('li', null, el('span', null, 'Cash at Till vs nota', el('small', { text: b.tunaiNota == null ? 'tidak ada angka nota (BAP lama)' : 'nota ' + rpx(b.tunaiNota) })), b.tunaiNota == null ? el('span', { class: 'tag', text: '—' }) : selTag(b.selisihNota)),
+      el('li', null, el('span', null, 'Cash at Till vs laporan POS', el('small', { text: b.tunaiPos == null ? 'laporan POS belum masuk' : 'POS ' + rpx(b.tunaiPos) })), b.tunaiPos == null ? el('span', { class: 'tag', text: 'Menunggu' }) : selTag(b.selisihPos, '✓ Cocok')),
+      b.safeSeharusnya == null ? null : el('li', null, el('span', null, 'Store Safe', el('small', { text: 'seharusnya ' + rpx(b.safeSeharusnya) + ' (belum disetor)' })), selTag(b.selisihSafe)),
+      b.sisaSetor == null ? null : el('li', null, el('span', null, 'Setoran uang hari ini', el('small', { text: 'sudah disetor ' + rpx(b.disetor) })), el('span', { class: 'tag ' + (b.sisaSetor ? 'tag-warn' : 'tag-good'), text: b.sisaSetor ? 'Sisa ' + rpx(b.sisaSetor) : '✓ Disetor' })));
+    var pec = el('details', { class: 'kas-det' }, el('summary', { text: 'Rincian pecahan' }),
+      el('div', { class: 'kas-det-grid' }, BAP_POS.map(function (p) {
+        var o = (b.pecahan || {})[p.id] || {};
+        var ks = PECAHAN.filter(function (d) { return o[d]; });
+        return el('div', null, el('b', { text: p.judul }), ks.length ? el('ul', null, ks.map(function (d) {
+          return el('li', null, el('span', { text: nf.format(d) + ' × ' + o[d] }), el('span', { class: 'num', text: nf.format(d * o[d]) }));
+        })) : el('p', { class: 'muted', style: 'margin:4px 0', text: '—' }));
+      })));
+    return el('div', { class: 'bap-det' },
+      el('div', { class: 'bap-tot' }, rows.map(function (r) { return el('div', null, el('small', { text: r[0] }), el('b', { class: 'num', text: nf.format(r[1]) })); })),
+      cek,
+      b.tambahTill ? el('p', { class: 'note', text: 'Modal till ' + (b.tambahTill > 0 ? 'ditambah ' : 'dikurangi ') + rpx(Math.abs(b.tambahTill)) + ' dari standar (diambil/dikembalikan ke Floating).' }) : null,
+      b.catatan ? el('div', { class: 'hist-note', text: '“' + b.catatan + '”' }) : null,
+      b.cek ? el('p', { class: 'note warn', text: '⚠ ' + b.cek }) : null,
+      (b.koreksi || []).length ? el('details', { class: 'kas-det' }, el('summary', { text: 'Dikoreksi ' + b.koreksi.length + '×' }),
+        el('ul', { class: 'calc' }, b.koreksi.map(function (k) {
+          return el('li', null, el('span', null, k.waktu.slice(0, 16) + ' · ' + k.oleh, el('small', { text: k.alasan })),
+            el('small', { class: 'muted', text: 'sebelumnya: Cash ' + nf.format(k.lama.cash_till) + ' · Float ' + nf.format(k.lama.float_till) + ' · Floating ' + nf.format(k.lama.floating) + (k.lama.tunai_nota != null ? ' · Nota ' + nf.format(k.lama.tunai_nota) : '') }));
+        }))) : null,
+      opt.noPec ? null : pec);
+  }
 
   function viewKas(v) {
-    var pos = posOf(S.kasPos || store.get('kasPos') || 'till');
-    var key = 'kasDraft.' + pos.id + '.' + (S.user ? S.user.username : '');
+    var koreksi = isAdmin() && qparam('koreksi') === '1';
+    pageHead(v, koreksi ? 'Koreksi BAP Kas' : 'BAP Kas', koreksi ? 'Ubah BAP yang sudah tersimpan. Angka lama tetap tercatat di jejak koreksi.' : 'Hitung semua pos kas saat closing. Hasilnya dicocokkan otomatis dan masuk ke rekap.');
+    var body = el('div', null, skel(3));
+    v.append(body);
+    api('bapForm', { tanggal: qparam('tgl') }).then(function (F) {
+      if (!v.isConnected) return;
+      if (F.sudah && !koreksi) bapTersimpan(body, F); else bapFormulir(v, body, F, koreksi && F.sudah ? F.sudah : null);
+    }).catch(function (e) { body.replaceChildren(errBox(e)); });
+  }
+  function tglPilih(F) {
+    var t = F.tanggal;
+    if (isAdmin()) {
+      var inp = el('input', { type: 'date', class: 'sel-sm', value: t, max: F.today, 'aria-label': 'Tanggal BAP' });
+      inp.addEventListener('change', function () { if (inp.value) location.hash = '#/kas?tgl=' + inp.value; });
+      return inp;
+    }
+    var kem = addDays(F.today, -1);
+    return segmented([[F.today, 'Hari ini'], [kem, 'Kemarin']], t, function (x) { location.hash = '#/kas?tgl=' + x; });
+  }
+  function bapTersimpan(body, F) {
+    var b = F.sudah;
+    body.replaceChildren(
+      el('div', { class: 'card bap-head' }, el('div', null, el('small', { class: 'muted', text: 'BAP tanggal' }), el('h3', { text: tglBapLabel(b.tanggal) })), tglPilih(F)),
+      el('div', { class: 'card section' },
+        el('div', { class: 'card-head' }, el('div', null, el('h3', { text: '✓ BAP sudah disimpan' }), el('p', { class: 'sub', text: (b.nama || 'BAP lama') + (b.waktu ? ' · ' + b.waktu.slice(11, 16) : '') + ' · terkunci' })),
+          isAdmin() ? el('a', { class: 'btn btn-ghost btn-sm', href: '#/kas?tgl=' + b.tanggal + '&koreksi=1' }, 'Koreksi') : null),
+        bapDetail(b)),
+      el('div', { class: 'quick section' },
+        el('a', { href: '#/kas-setor' }, icon('upload'), 'Setoran Bank', el('span', { text: F.belumSetor.length ? 'Belum disetor ' + rpx(F.belumSetor.reduce(function (s, x) { return s + x.sisa; }, 0)) : 'Uang yang belum disetor' })),
+        el('a', { href: '#/kas-petty' }, icon('cash'), 'Petty Cash', el('span', { text: F.petty.fisik != null ? 'Sisa ' + rpx(F.petty.fisik) : 'Pengajuan & pengisian' })),
+        el('a', { href: '#/kas-rekap?bulan=' + b.tanggal.slice(0, 7) }, icon('file'), 'Rekap BAP', el('span', { text: 'Per bulan + Google Sheet' }))));
+  }
+
+  function bapFormulir(v, body, F, lama) {
+    var t = F.tanggal, set = F.set;
+    var key = (lama ? 'bapKor.' : 'bapDraft.') + (S.user ? S.user.username : '') + '.' + t;
     var draft;
     try { draft = JSON.parse(store.get(key) || 'null'); } catch (e) { draft = null; }
-    if (!draft || !draft.pecahan) draft = { pecahan: {}, tunai: 0, perubahan: [], catatan: '' };
-    var withTunai = pos.id === 'till', withCompare = pos.id === 'till' || pos.id === 'floating';
-    var modal = null;
-    function save() { store.set(key, JSON.stringify(draft)); }
-
-    pageHead(v, 'Cek Kas', 'Hitung uang fisik per pos kas, lalu lihat apakah jumlahnya cocok.');
-    v.append(el('div', { class: 'pos-tabs' }, POS.map(function (p) {
-      return el('button', { type: 'button', 'aria-pressed': String(p.id === pos.id), text: p.label, onclick: function () {
-        S.kasPos = p.id; store.set('kasPos', p.id); render();
-      } });
-    })));
-
-    /* 1. hitung pecahan */
-    var subEls = {}, totalEl = el('b', { class: 'num' });
-    var rows = PECAHAN.map(function (p) {
-      var inp = el('input', { type: 'number', inputmode: 'numeric', min: 0, step: 1, value: draft.pecahan[p] || '', placeholder: '0', 'aria-label': 'Jumlah lembar ' + nf.format(p) });
-      var setN = function (n) { n = Math.max(0, Math.floor(n || 0)); if (n) draft.pecahan[p] = n; else delete draft.pecahan[p]; inp.value = n || ''; update(); };
-      inp.addEventListener('input', function () { setN(Number(inp.value)); });
-      inp.addEventListener('focus', function () { inp.select(); });
-      subEls[p] = el('span', { class: 'den-sub num' });
-      return el('div', { class: 'den' + (p < 1000 ? ' coin' : '') },
-        el('span', { class: 'den-face', text: p >= 1000 ? nf.format(p / 1000) + 'rb' : nf.format(p) }),
-        el('div', { class: 'stepper' },
-          el('button', { type: 'button', class: 'st-btn', 'aria-label': 'Kurangi', html: IC.minus, onclick: function () { setN((draft.pecahan[p] || 0) - 1); } }),
-          inp,
-          el('button', { type: 'button', class: 'st-btn', 'aria-label': 'Tambah', html: IC.plus, onclick: function () { setN((draft.pecahan[p] || 0) + 1); } })),
-        subEls[p]);
-    });
-    var step = 1;
-    var cardHitung = el('div', { class: 'card' },
-      el('div', { class: 'card-head' }, el('div', null, el('h3', { text: (step++) + '. ' + pos.judul }), el('p', { class: 'sub', text: 'Isi jumlah lembar / keping per pecahan' })),
-        el('button', { type: 'button', class: 'btn btn-ghost btn-sm', text: 'Kosongkan', onclick: function () {
-          if (!confirm('Kosongkan semua isian ' + pos.label + '?')) return;
-          store.set(key, null); render();
-        } })),
-      el('div', { class: 'dens' }, rows),
-      el('div', { class: 'den-total' }, el('span', { text: 'Total uang fisik' }), totalEl));
-
-    var cardTunai = withTunai ? el('div', { class: 'card' },
-      el('h3', { text: (step++) + '. Penjualan tunai di sistem' }),
-      el('p', { class: 'sub', text: 'Lihat total pembayaran tunai di POS sampai jam ini' }),
-      rpInput('kas-tunai', draft.tunai, function (n) { draft.tunai = n; update(); })) : null;
-
-    var perBox = el('div', { class: 'per-list' });
-    function drawPer() {
-      perBox.replaceChildren(draft.perubahan.length ? null : el('p', { class: 'muted', style: 'margin:0', text: 'Belum ada. Tambahkan kalau ada uang yang diambil atau dimasukkan.' }));
-      draft.perubahan.forEach(function (x, i) {
-        var seg = segmented([['keluar', 'Uang keluar'], ['masuk', 'Uang masuk']], x.jenis, function (j) { x.jenis = j; update(); });
-        var ket = el('input', { class: 'per-ket', placeholder: 'Keterangan, mis. dipindah ke brankas', value: x.ket || '', maxlength: 200 });
-        ket.addEventListener('input', function () { x.ket = ket.value; save(); });
-        perBox.append(el('div', { class: 'per-item' },
-          el('div', { class: 'per-top' }, seg,
-            el('button', { type: 'button', class: 'st-btn ghost', 'aria-label': 'Hapus', html: IC.x, onclick: function () { draft.perubahan.splice(i, 1); drawPer(); update(); } })),
-          rpInput(null, x.jumlah, function (n) { x.jumlah = n; update(); }, 'Jumlah'),
-          ket));
-      });
+    if (!draft || !draft.pecahan) {
+      draft = { pecahan: {}, tunai: null, catatan: '', alasan: '', pos: 'floating' };
+      if (lama) { draft.pecahan = JSON.parse(JSON.stringify(lama.pecahan || {})); draft.tunai = lama.tunaiNota; draft.catatan = lama.catatan || ''; }
     }
-    var cardPer = withCompare ? el('div', { class: 'card' },
-      el('h3', { text: (step++) + '. Perubahan kas' }),
-      el('p', { class: 'sub', text: 'Uang yang keluar/masuk selain ' + (withTunai ? 'penjualan' : 'standar') + ', wajib dengan keterangan' }),
-      perBox,
-      el('button', { type: 'button', class: 'btn btn-ghost btn-block', style: 'margin-top:12px', onclick: function () {
-        draft.perubahan.push({ jenis: 'keluar', jumlah: 0, ket: '' }); drawPer(); update();
-      } }, icon('plus'), 'Tambah perubahan kas')) : null;
+    BAP_POS.forEach(function (p) { draft.pecahan[p.id] = draft.pecahan[p.id] || {}; });
+    draft.lihat = draft.lihat || (lama ? { safe: 1, petty: 1 } : {});
+    function save() { store.set(key, JSON.stringify(draft)); }
+    function tot(id) { return sumPec(draft.pecahan[id]); }
 
-    var r = { modal: el('b', { class: 'num' }), tunai: el('b', { class: 'num' }), masuk: el('b', { class: 'num' }), keluar: el('b', { class: 'num' }), seharusnya: el('b', { class: 'num' }), fisik: el('b', { class: 'num' }) };
-    var selisihBox = el('div', { class: 'selisih' });
-    var catatan = el('textarea', { id: 'kas-cat', rows: 2, maxlength: 300, placeholder: withCompare ? 'Wajib diisi kalau ada selisih' : 'Opsional' });
+    var tabsBox = el('div', { class: 'pos-tabs bap-tabs' });
+    var posCard = el('div', { class: 'card' });
+    var cekList = el('ul', { class: 'calc bap-cek' });
+    var catatan = el('textarea', { id: 'bap-cat', rows: 2, maxlength: 400, placeholder: 'Wajib diisi kalau ada selisih atau modal till ditambah' });
     catatan.value = draft.catatan || '';
     catatan.addEventListener('input', function () { draft.catatan = catatan.value; save(); });
+    var alasan = lama ? el('input', { id: 'bap-alasan', maxlength: 300, placeholder: 'Mis. salah hitung lembar 50rb', value: draft.alasan || '' }) : null;
+    if (alasan) alasan.addEventListener('input', function () { draft.alasan = alasan.value; save(); });
     var out = el('div');
-    var btnSave = el('button', { class: 'btn btn-orange btn-block', type: 'button' }, icon('check'), 'Simpan hitungan ' + pos.label);
-    var cardHasil = el('div', { class: 'card card-result' },
-      el('h3', { text: (step++) + '. Hasil pengecekan' }),
-      withCompare ? el('ul', { class: 'calc' },
-        el('li', null, el('span', { text: withTunai ? 'Modal till' : 'Standar floating cash' }), r.modal),
-        withTunai ? el('li', null, el('span', { text: '+ Penjualan tunai' }), r.tunai) : null,
-        el('li', null, el('span', { text: '+ Uang masuk' }), r.masuk),
-        el('li', null, el('span', { text: '− Uang keluar' }), r.keluar),
-        el('li', { class: 'sum' }, el('span', { text: 'Seharusnya' }), r.seharusnya),
-        el('li', null, el('span', { text: 'Uang fisik dihitung' }), r.fisik)) : el('ul', { class: 'calc' },
-        el('li', { class: 'sum' }, el('span', { text: 'Uang fisik dihitung' }), r.fisik)),
-      withCompare ? selisihBox : el('p', { class: 'note', text: pos.label + ' dicatat jumlahnya saja, tanpa pembanding.' }),
-      el('div', { class: 'field' }, el('label', { for: 'kas-cat', text: 'Catatan' }), catatan),
-      btnSave, out);
+    var btnSave = el('button', { class: 'btn btn-orange btn-block', type: 'button' }, icon('check'), lama ? 'Simpan koreksi' : 'Simpan BAP');
+    var kbM = el('b', { class: 'num' }), kbN = el('b', { class: 'num' });
+    var sticky = el('div', { class: 'kas-bar' },
+      el('div', null, el('span', { text: 'Modal' }), kbM), el('div', null, el('span', { text: 'Nota' }), kbN),
+      el('button', { class: 'btn btn-orange kb-save', type: 'button', onclick: function () { btnSave.click(); setTimeout(function () { if (out.childNodes.length) out.scrollIntoView({ block: 'center', behavior: 'smooth' }); }, 60); } }, icon('check'), 'Simpan'));
 
-    var sticky = el('div', { class: 'kas-bar' }, el('div', null, el('span', { text: 'Fisik' }), el('b', { class: 'num', id: 'kb-f' })),
-      withCompare ? el('div', null, el('span', { text: 'Selisih' }), el('b', { class: 'num', id: 'kb-s' })) : null,
-      el('button', { class: 'btn btn-orange kb-save', type: 'button', onclick: function () {
-        btnSave.click();
-        setTimeout(function () { if (out.childNodes.length) out.scrollIntoView({ block: 'center', behavior: 'smooth' }); }, 60);
-      } }, icon('check'), 'Simpan'));
+    body.replaceChildren(
+      el('div', { class: 'card bap-head' }, el('div', null, el('small', { class: 'muted', text: lama ? 'Koreksi BAP tanggal' : 'BAP tanggal' }), el('h3', { text: tglBapLabel(t) })), lama ? null : tglPilih(F)),
+      tabsBox,
+      el('div', { class: 'kas-grid' },
+        el('div', { class: 'kas-left' }, posCard),
+        el('div', { class: 'kas-right' }, el('div', { class: 'card card-result' },
+          el('h3', { text: 'Hasil pengecekan' }), cekList,
+          el('div', { class: 'field' }, el('label', { for: 'bap-cat', text: 'Catatan' }), catatan),
+          alasan ? el('div', { class: 'field' }, el('label', { for: 'bap-alasan', text: 'Alasan koreksi (wajib)' }), alasan) : null,
+          btnSave, out))),
+      sticky);
 
-    v.append(el('div', { class: 'kas-grid' },
-      el('div', { class: 'kas-left' }, cardHitung, cardTunai, cardPer),
-      el('div', { class: 'kas-right' }, cardHasil)), sticky);
-    var hist = el('div', { class: 'card section' });
-    v.append(hist);
-
-    function calc() {
-      var fisik = PECAHAN.reduce(function (s, p) { return s + (draft.pecahan[p] || 0) * p; }, 0);
-      var masuk = 0, keluar = 0;
-      if (withCompare) draft.perubahan.forEach(function (x) { if (x.jenis === 'masuk') masuk += x.jumlah || 0; else keluar += x.jumlah || 0; });
-      var seharusnya = !withCompare || modal == null ? null : modal + (withTunai ? draft.tunai || 0 : 0) + masuk - keluar;
-      return { fisik: fisik, masuk: masuk, keluar: keluar, seharusnya: seharusnya, selisih: seharusnya == null ? null : fisik - seharusnya };
+    function drawTabs() {
+      tabsBox.replaceChildren.apply(tabsBox, BAP_POS.map(function (p, i) {
+        var n = tot(p.id), done = p.id === 'cash_till' ? n > 0 || draft.tunai != null : p.id === 'safe' ? n > 0 || !!draft.lihat.safe : n > 0;
+        return el('button', { type: 'button', 'aria-pressed': String(p.id === draft.pos), class: done ? 'done' : '', onclick: function () { draft.pos = p.id; save(); drawTabs(); drawPos(); } },
+          el('span', { class: 'bt-no', text: done ? '✓' : String(i + 1) }), el('span', { class: 'bt-l' }, p.label, el('small', { class: 'num', text: n ? nf.format(n) : '—' })));
+      }));
     }
-    function rp(n) { return n == null ? '—' : 'Rp ' + nf.format(n); }
-    function update() {
-      save();
-      var c = calc();
-      PECAHAN.forEach(function (p) { var n = draft.pecahan[p] || 0; subEls[p].textContent = n ? nf.format(n * p) : '—'; subEls[p].classList.toggle('muted', !n); });
-      totalEl.textContent = rp(c.fisik);
-      r.modal.textContent = rp(modal); r.tunai.textContent = rp(draft.tunai || 0);
-      r.masuk.textContent = rp(c.masuk); r.keluar.textContent = rp(c.keluar);
-      r.seharusnya.textContent = rp(c.seharusnya); r.fisik.textContent = rp(c.fisik);
-      $('#kb-f').textContent = rp(c.fisik);
-      if (!withCompare) return;
-      var st = selisihState(c.selisih, c.fisik);
-      selisihBox.className = 'selisih s-' + st.cls;
-      selisihBox.replaceChildren(el('span', { text: 'Selisih' }), el('b', { class: 'num', text: st.text }), el('small', { text: st.note }));
-      var kb = $('#kb-s'); kb.textContent = st.short; kb.className = 'num c-' + st.cls;
+    function drawPos() {
+      var pos = BAP_POS.filter(function (p) { return p.id === draft.pos; })[0] || BAP_POS[0];
+      var c = draft.pecahan[pos.id];
+      draft.lihat[pos.id] = 1;
+      var subEls = {}, totalEl = el('b', { class: 'num' });
+      function upd() {
+        PECAHAN.forEach(function (p) { var n = c[p] || 0; subEls[p].textContent = n ? nf.format(n * p) : '—'; subEls[p].classList.toggle('muted', !n); });
+        totalEl.textContent = rpx(tot(pos.id));
+        save(); drawTabs(); drawCek();
+      }
+      var rows = PECAHAN.map(function (p) {
+        var inp = el('input', { type: 'number', inputmode: 'numeric', min: 0, step: 1, value: c[p] || '', placeholder: '0', 'aria-label': 'Jumlah lembar ' + nf.format(p) });
+        var setN = function (n) { n = Math.max(0, Math.floor(n || 0)); if (n) c[p] = n; else delete c[p]; inp.value = n || ''; upd(); };
+        inp.addEventListener('input', function () { setN(Number(inp.value)); });
+        inp.addEventListener('focus', function () { inp.select(); });
+        subEls[p] = el('span', { class: 'den-sub num' });
+        return el('div', { class: 'den' + (p < 1000 ? ' coin' : '') },
+          el('span', { class: 'den-face', text: p >= 1000 ? nf.format(p / 1000) + 'rb' : nf.format(p) }),
+          el('div', { class: 'stepper' },
+            el('button', { type: 'button', class: 'st-btn', 'aria-label': 'Kurangi', html: IC.minus, onclick: function () { setN((c[p] || 0) - 1); } }),
+            inp,
+            el('button', { type: 'button', class: 'st-btn', 'aria-label': 'Tambah', html: IC.plus, onclick: function () { setN((c[p] || 0) + 1); } })),
+          subEls[p]);
+      });
+      var lalu = F.lalu && F.lalu.pecahan && F.lalu.pecahan[pos.id] && Object.keys(F.lalu.pecahan[pos.id]).length ? F.lalu : null;
+      var cepat = pos.cepat && lalu && !lama ? el('button', { type: 'button', class: 'btn btn-ghost btn-sm', onclick: function () {
+        if (tot(pos.id) && !confirm('Ganti isian ' + pos.judul + ' dengan jumlah lembar BAP ' + dShort(lalu.tanggal) + '?')) return;
+        draft.pecahan[pos.id] = JSON.parse(JSON.stringify(lalu.pecahan[pos.id])); save(); drawPos(); drawTabs(); drawCek();
+        toast('Disalin dari BAP ' + dShort(lalu.tanggal) + ' — ubah yang berbeda saja');
+      } }, icon('copy'), 'Isi seperti ' + (lalu.tanggal === addDays(t, -1) ? 'kemarin' : dShort(lalu.tanggal))) : null;
+      var kosong = el('button', { type: 'button', class: 'btn btn-ghost btn-sm', text: 'Kosongkan', onclick: function () {
+        if (!tot(pos.id) || confirm('Kosongkan isian ' + pos.judul + '?')) { draft.pecahan[pos.id] = {}; save(); drawPos(); drawTabs(); drawCek(); }
+      } });
+      var nota = null;
+      if (pos.id === 'cash_till') {
+        nota = el('div', { class: 'field bap-nota' }, el('label', { for: 'bap-nota', text: 'Penjualan tunai dari nota' }),
+          rpInput('bap-nota', draft.tunai, function (n) { draft.tunai = n; save(); drawTabs(); drawCek(); }, 'isi 0 kalau tidak ada'),
+          el('small', { text: 'Angka tunai di nota/struk tutup kasir. Nanti dicocokkan juga dengan laporan POS dari CARE.' }));
+        var ni = nota.querySelector('input');
+        ni.addEventListener('input', function () { if (ni.value === '') { draft.tunai = null; save(); drawCek(); } });
+        if (draft.tunai === 0) ni.value = '0';
+      }
+      var idx = BAP_POS.indexOf(pos);
+      var next = BAP_POS[idx + 1];
+      posCard.replaceChildren(
+        el('h3', { text: (idx + 1) + '. ' + pos.judul }), el('p', { class: 'sub', text: pos.desc }),
+        el('div', { class: 'row-btns' }, cepat, kosong),
+        el('div', { class: 'dens' }, rows),
+        el('div', { class: 'den-total' }, el('span', { text: 'Total ' + pos.judul }), totalEl),
+        nota,
+        next ? el('button', { type: 'button', class: 'btn btn-primary btn-block', style: 'margin-top:12px', onclick: function () {
+          draft.pos = next.id; save(); drawTabs(); drawPos(); tabsBox.scrollIntoView({ block: 'start', behavior: 'smooth' });
+        } }, 'Lanjut: ' + next.judul, icon('arrow')) : el('p', { class: 'note', text: 'Semua pos sudah. Periksa hasil pengecekan lalu simpan.' }));
+      upd();
     }
-
+    function hitung() {
+      var x = {}; BAP_POS.forEach(function (p) { x[p.id] = tot(p.id); });
+      x.modal = x.floating + x.float_till;
+      x.sModal = x.floating && x.float_till ? x.modal - set.modal_total : null;
+      x.tambah = x.float_till ? x.float_till - set.modal_till : 0;
+      x.sNota = draft.tunai == null ? null : x.cash_till - draft.tunai;
+      x.sPos = F.pos ? x.cash_till - F.pos.tunai : null;
+      x.sSafe = F.safeSeharusnya == null || !draft.lihat.safe ? null : x.safe - F.safeSeharusnya;
+      x.pettyPakai = x.petty ? Math.max(0, set.petty_plafon - x.petty) : null;
+      x.pettyPct = x.petty ? Math.round(x.pettyPakai / set.petty_plafon * 100) : null;
+      return x;
+    }
+    function drawCek() {
+      var x = hitung();
+      cekList.replaceChildren(
+        el('li', null, el('span', null, 'Modal kembalian', el('small', { text: 'Floating + Float to Till = ' + rpx(x.modal) + ' · standar ' + rpx(set.modal_total) })), x.sModal == null ? el('span', { class: 'tag', text: 'Belum lengkap' }) : selTag(x.sModal)),
+        x.tambah && x.float_till ? el('li', { class: 'li-note' }, el('span', { text: 'Float to Till ' + (x.tambah > 0 ? 'ditambah ' : 'dikurangi ') + rpx(Math.abs(x.tambah)) + ' dari ' + rpx(set.modal_till) + '. Tulis keterangannya di catatan.' })) : null,
+        el('li', null, el('span', null, 'Cash at Till vs nota', el('small', { text: 'dihitung ' + rpx(x.cash_till) + ' · nota ' + (draft.tunai == null ? 'belum diisi' : rpx(draft.tunai)) })), x.sNota == null ? el('span', { class: 'tag', text: 'Isi nota' }) : selTag(x.sNota)),
+        el('li', null, el('span', null, 'Laporan POS', el('small', { text: F.pos ? 'tunai di laporan ' + rpx(F.pos.tunai) : 'belum masuk — dicocokkan otomatis setelah diekspor dari CARE' })), F.pos ? selTag(x.sPos, '✓ Cocok') : el('span', { class: 'tag', text: 'Menunggu' })),
+        el('li', null, el('span', null, 'Store Safe', el('small', { text: F.safeSeharusnya == null ? 'dicatat (pembanding mulai setelah BAP pertama di Basecamp)' : 'seharusnya ' + rpx(F.safeSeharusnya) + ' = uang belum disetor' })), !draft.lihat.safe ? el('span', { class: 'tag', text: 'Belum dihitung' }) : F.safeSeharusnya == null ? el('span', { class: 'tag', text: rpx(x.safe) }) : selTag(x.sSafe)),
+        el('li', null, el('span', null, 'Petty Cash', el('small', { text: x.petty ? 'terpakai ' + rpx(x.pettyPakai) + ' dari plafon ' + rpx(set.petty_plafon) : 'belum dihitung' })),
+          x.pettyPct == null ? el('span', { class: 'tag', text: '—' }) : el('span', { class: 'tag ' + (x.pettyPct >= set.petty_ambang ? 'tag-warn' : 'tag-good'), text: x.pettyPct >= set.petty_ambang ? x.pettyPct + '% · saatnya ajukan' : x.pettyPct + '% terpakai' })));
+      var st = function (b, s) { b.textContent = s == null ? '—' : s === 0 ? 'Pas' : (s > 0 ? '+' : '−') + nf.format(Math.abs(s)); b.className = 'num c-' + (s == null ? 'none' : s === 0 ? 'good' : s < 0 ? 'bad' : 'warn'); };
+      st(kbM, x.sModal); st(kbN, x.sNota);
+    }
     btnSave.addEventListener('click', function () {
       out.replaceChildren();
-      var c = calc();
-      if (!c.fisik) { out.replaceChildren(errBox(new Error('Isi dulu jumlah uangnya'))); return; }
-      var bad = draft.perubahan.filter(function (x) { return !x.jumlah || !String(x.ket || '').trim(); });
-      if (withCompare && bad.length) { out.replaceChildren(errBox(new Error('Setiap perubahan kas wajib diisi jumlah dan keterangannya'))); return; }
-      if (c.selisih && !String(draft.catatan || '').trim()) { out.replaceChildren(errBox(new Error('Ada selisih, isi catatan penjelasannya dulu'))); catatan.focus(); return; }
+      var x = hitung();
+      var err = function (m, foc) { out.replaceChildren(errBox(new Error(m))); if (foc) foc(); };
+      if (!x.floating) return err('Floating Cash belum dihitung', function () { draft.pos = 'floating'; drawTabs(); drawPos(); });
+      if (!x.float_till) return err('Float to Till belum dihitung', function () { draft.pos = 'float_till'; drawTabs(); drawPos(); });
+      if (!draft.lihat.safe) return err('Store Safe belum dihitung (isi 0 kalau kosong: buka tab Store Safe)', function () { draft.pos = 'safe'; drawTabs(); drawPos(); });
+      if (!x.petty) return err('Petty Cash belum dihitung', function () { draft.pos = 'petty'; drawTabs(); drawPos(); });
+      if (draft.tunai == null) return err('Isi penjualan tunai dari nota (isi 0 kalau tidak ada penjualan tunai)', function () { draft.pos = 'cash_till'; drawTabs(); drawPos(); });
+      if ((x.sModal || x.sNota || x.tambah || x.sSafe) && !String(draft.catatan || '').trim()) return err(x.tambah && !x.sModal && !x.sNota && !x.sSafe ? 'Float to Till bukan ' + rpx(set.modal_till) + ', tulis keterangannya di catatan' : 'Ada selisih, tulis penjelasannya di catatan', function () { catatan.focus(); });
+      if (lama && !String(draft.alasan || '').trim()) return err('Tulis alasan koreksi', function () { alasan.focus(); });
+      // peringatan salah ketik
+      var warn = [];
+      BAP_POS.forEach(function (p) { PECAHAN.forEach(function (d) { var n = draft.pecahan[p.id][d] || 0; if ((d >= 1000 && n > 400) || (d < 1000 && n > 600)) warn.push(p.judul + ': ' + n + ' lembar/keping ' + nf.format(d)); }); });
+      if (F.rataCash && x.cash_till > Math.max(3 * F.rataCash, 15000000)) warn.push('Cash at Till ' + rpx(x.cash_till) + ' jauh di atas rata-rata (' + rpx(F.rataCash) + ')');
+      if (x.sModal && Math.abs(x.sModal) >= 50000) warn.push('Selisih modal kembalian ' + rpx(x.sModal));
+      if (x.sNota && Math.abs(x.sNota) >= 50000) warn.push('Selisih Cash at Till vs nota ' + rpx(x.sNota));
+      if (x.petty > set.petty_plafon) warn.push('Petty Cash ' + rpx(x.petty) + ' melebihi plafon ' + rpx(set.petty_plafon));
+      if (warn.length && !confirm('Cek lagi, mungkin salah ketik:\n\n• ' + warn.join('\n• ') + '\n\nTetap simpan?')) return;
+      if (!lama && !confirm('Simpan BAP ' + tglBapLabel(t) + '? Setelah disimpan BAP terkunci (hanya admin yang bisa mengoreksi).')) return;
       btnSave.disabled = true; btnSave.lastChild.textContent = 'Menyimpan…';
-      api('kasSave', { pos: pos.id, pecahan: draft.pecahan, penjualanTunai: withTunai ? draft.tunai || 0 : 0, perubahan: withCompare ? draft.perubahan : [], catatan: draft.catatan })
-        .then(function () { store.set(key, null); toast('Hitungan ' + pos.label + ' tersimpan'); render(); })
-        .catch(function (err) { btnSave.disabled = false; btnSave.lastChild.textContent = 'Simpan hitungan ' + pos.label; out.replaceChildren(errBox(err)); });
+      api(lama ? 'bapKoreksi' : 'bapSave', { tanggal: t, pecahan: draft.pecahan, tunaiNota: draft.tunai, catatan: draft.catatan, alasan: draft.alasan })
+        .then(function () {
+          store.set(key, null); swrClear(); toast(lama ? 'Koreksi BAP disimpan' : 'BAP tersimpan');
+          if (lama) location.hash = '#/kas-rekap?bulan=' + t.slice(0, 7); else render();
+        })
+        .catch(function (e) { btnSave.disabled = false; btnSave.lastChild.textContent = lama ? 'Simpan koreksi' : 'Simpan BAP'; out.replaceChildren(errBox(e)); });
     });
+    drawTabs(); drawPos();
+  }
 
-    drawPer(); update();
-    if (withCompare) api('settings').then(function (s) { modal = Number(withTunai ? s.modal_till : s.floating_cash); update(); }).catch(function (err) { out.replaceChildren(errBox(err)); });
-
-    function loadHist(tgl) {
-      hist.replaceChildren(el('h3', { text: 'Riwayat ' + pos.label }), el('div', { class: 'skel', style: 'margin-top:12px;min-height:60px' }));
-      api('kasList', { tanggal: tgl || '', pos: pos.id }).then(function (d) {
-        var sel = el('select', { 'aria-label': 'Pilih tanggal', class: 'sel-sm' });
-        var opts = d.tanggalTersedia.indexOf(d.tanggal) < 0 ? [d.tanggal].concat(d.tanggalTersedia) : d.tanggalTersedia;
-        opts.forEach(function (t) { var o = el('option', { value: t, text: dShort(t) }); if (t === d.tanggal) o.selected = true; sel.append(o); });
-        sel.addEventListener('change', function () { loadHist(sel.value); });
-        hist.replaceChildren(el('div', { class: 'card-head' }, el('h3', { text: 'Riwayat ' + pos.label }), sel),
-          d.list.length ? el('ul', { class: 'hist' }, d.list.map(kasItem)) : el('div', { class: 'empty', text: 'Belum ada hitungan di tanggal ini' }));
-      }).catch(function (err) { hist.replaceChildren(el('h3', { text: 'Riwayat ' + pos.label }), errBox(err)); });
+  /* ---------- Setoran bank ---------- */
+  function setorModal(belum, onDone) {
+    var total = belum.reduce(function (s, x) { return s + x.sisa; }, 0);
+    var dow = new Date().getDay();
+    var val = { nominal: total, cara: dow === 0 || dow === 6 ? 'atm' : 'teller', tanggal: todayJkt(), catatan: '' };
+    var out = el('div');
+    var tgl = el('input', { type: 'date', value: val.tanggal, max: todayJkt(), class: 'inp' });
+    tgl.addEventListener('change', function () { val.tanggal = tgl.value; });
+    var cat = el('input', { class: 'inp', maxlength: 300, placeholder: 'Opsional, mis. setor ATM sebagian' });
+    cat.addEventListener('input', function () { val.catatan = cat.value; });
+    var btn = el('button', { class: 'btn btn-orange', type: 'button' }, icon('check'), 'Simpan setoran');
+    var back = el('div', { class: 'modal-back', onclick: function (e) { if (e.target === back) back.remove(); } },
+      el('div', { class: 'modal setor-modal', role: 'dialog', 'aria-modal': 'true' },
+        el('h3', { text: 'Catat setoran' }),
+        belum.length ? el('p', { class: 'muted', style: 'margin:0 0 10px', text: 'Uang belum disetor: ' + belum.map(function (b) { return dShort(b.tanggal) + ' ' + rpx(b.sisa); }).join(' · ') }) : el('p', { class: 'muted', text: 'Tidak ada uang yang tercatat belum disetor.' }),
+        el('div', { class: 'field' }, el('label', { text: 'Nominal disetor' }), rpInput('setor-nom', total, function (n) { val.nominal = n; })),
+        el('div', { class: 'field' }, el('label', { text: 'Cara setor' }), segmented([['teller', 'Teller bank'], ['atm', 'ATM']], val.cara, function (c) { val.cara = c; })),
+        el('div', { class: 'field' }, el('label', { text: 'Tanggal setor' }), tgl),
+        el('div', { class: 'field' }, el('label', { text: 'Catatan' }), cat),
+        el('p', { class: 'note', text: 'Setoran dibagikan ke uang tanggal paling lama dulu. Kalau sebagian (mis. ATM akhir pekan), sisanya tetap tercatat sampai disetor.' }),
+        out,
+        el('div', { class: 'row' }, el('button', { class: 'btn btn-ghost', type: 'button', text: 'Batal', onclick: function () { back.remove(); } }), btn)));
+    btn.addEventListener('click', function () {
+      out.replaceChildren();
+      if (!val.nominal) { out.replaceChildren(errBox(new Error('Isi nominal setoran'))); return; }
+      btn.disabled = true;
+      api('setoranSave', val).then(function (r) { back.remove(); toast('Setoran ' + rpx(val.nominal) + ' dicatat'); if (onDone) onDone(r); })
+        .catch(function (e) { btn.disabled = false; out.replaceChildren(errBox(e)); });
+    });
+    document.body.appendChild(back);
+  }
+  function belumList(belum) {
+    return el('ul', { class: 'calc setor-list' }, belum.map(function (b) {
+      return el('li', null, el('span', null, 'Uang ' + dDayName(b.tanggal) + ' ' + dShort(b.tanggal), el('small', { text: 'Cash at Till ' + rpx(b.cash) + (b.disetor ? ' · sudah ' + rpx(b.disetor) : '') + ' · batas ' + dShort(b.batas) })),
+        el('span', { class: 'tag ' + (b.telat ? 'tag-bad' : 'tag-warn'), text: (b.telat ? 'Terlambat · ' : '') + rpx(b.sisa) }));
+    }));
+  }
+  function viewKasSetor(v) {
+    pageHead(v, 'Setoran Bank', 'Uang Cash at Till masuk brankas lalu disetor besoknya. Sabtu–Minggu lewat ATM, sisanya Senin.');
+    var body = el('div', null, skel(2));
+    v.append(body);
+    function load() {
+      api('setoranList').then(function (d) {
+        var top = el('div', { class: 'card' },
+          el('div', { class: 'card-head' }, el('div', null, el('h3', { text: 'Belum disetor' }), el('p', { class: 'sub', text: d.mulai ? 'Dihitung dari BAP sejak ' + dShort(d.mulai) : 'Mulai terhitung setelah BAP pertama diisi di Basecamp' })),
+            el('b', { class: 'big-num num ' + (d.total ? 'c-warn' : 'c-good'), text: d.total ? rpx(d.total) : '✓ Beres' })),
+          d.belum.length ? belumList(d.belum) : el('p', { class: 'muted', text: 'Semua uang yang tercatat sudah disetor.' }),
+          el('button', { class: 'btn btn-orange btn-block', type: 'button', style: 'margin-top:12px', onclick: function () { setorModal(d.belum, function () { swrClear(); load(); }); } }, icon('check'), 'Sudah disetor'));
+        var hist = el('div', { class: 'card section' }, el('div', { class: 'card-head' }, el('h3', { text: 'Riwayat setoran' }),
+          d.tautan.rekap ? el('a', { class: 'btn btn-ghost btn-sm', href: d.tautan.rekap, target: '_blank', rel: 'noopener' }, icon('file'), 'Sheet rekap') : null),
+          d.list.length ? el('ul', { class: 'hist' }, d.list.map(function (s) {
+            var al = Object.keys(s.alokasi).map(function (k) { return (k === 'luar' ? 'di luar catatan' : 'uang ' + dShort(k)) + ' ' + nf.format(s.alokasi[k]); }).join(' · ');
+            return el('li', null, el('span', { class: 'avatar', text: initials(s.nama) }),
+              el('div', { class: 'hist-main' },
+                el('div', { class: 'hist-top' }, el('b', { text: rpx(s.nominal) + ' · ' + (s.cara === 'atm' ? 'ATM' : 'Teller') }), el('span', { class: 'muted', text: dShort(s.tanggal) })),
+                el('div', { class: 'muted', style: 'font-size:13px', text: s.nama + ' · ' + al }),
+                s.catatan ? el('div', { class: 'hist-note', text: '“' + s.catatan + '”' }) : null,
+                isAdmin() ? el('button', { class: 'btn btn-ghost btn-sm', type: 'button', style: 'margin-top:6px', text: 'Batalkan (salah catat)', onclick: function (e) {
+                  if (!confirm('Batalkan setoran ' + rpx(s.nominal) + ' tanggal ' + dShort(s.tanggal) + '?')) return;
+                  e.target.disabled = true; api('setoranBatal', { id: s.id }).then(function () { toast('Setoran dibatalkan'); load(); }).catch(function (er) { e.target.disabled = false; toast(er.message, true); });
+                } }) : null));
+          })) : el('div', { class: 'empty', text: 'Belum ada setoran yang dicatat' }));
+        body.replaceChildren(top, hist);
+      }).catch(function (e) { body.replaceChildren(errBox(e)); });
     }
-    loadHist();
+    load();
   }
 
-  function selisihState(s, fisik) {
-    if (fisik === 0) return { cls: 'none', text: '—', short: '—', note: 'Isi hitungan uang dulu' };
-    if (s == null) return { cls: 'none', text: '—', short: '—', note: 'Memuat standar…' };
-    if (s === 0) return { cls: 'good', text: 'Pas', short: 'Pas', note: 'Jumlah uang sesuai' };
-    if (s < 0) return { cls: 'bad', text: '− Rp ' + nf.format(-s), short: '−' + nf.format(-s), note: 'Uang kurang' };
-    return { cls: 'warn', text: '+ Rp ' + nf.format(s), short: '+' + nf.format(s), note: 'Uang lebih' };
+  /* ---------- Petty cash ---------- */
+  function pettyModal(jenis, nominal, onDone) {
+    var val = { jenis: jenis, nominal: nominal || 0, catatan: '' };
+    var out = el('div'), btn = el('button', { class: 'btn btn-orange', type: 'button' }, icon('check'), 'Simpan');
+    var cat = el('input', { class: 'inp', maxlength: 300, placeholder: jenis === 'ajukan' ? 'Opsional, mis. nomor pengajuan' : 'Opsional' });
+    cat.addEventListener('input', function () { val.catatan = cat.value; });
+    var back = el('div', { class: 'modal-back', onclick: function (e) { if (e.target === back) back.remove(); } },
+      el('div', { class: 'modal', role: 'dialog', 'aria-modal': 'true' },
+        el('h3', { text: jenis === 'ajukan' ? 'Catat pengajuan petty cash' : 'Dana petty cash cair & diisi' }),
+        el('div', { class: 'field' }, el('label', { text: jenis === 'ajukan' ? 'Nominal diajukan' : 'Nominal yang diisi ke petty cash' }), rpInput('pc-nom', val.nominal, function (n) { val.nominal = n; })),
+        el('div', { class: 'field' }, el('label', { text: 'Catatan' }), cat),
+        out, el('div', { class: 'row' }, el('button', { class: 'btn btn-ghost', type: 'button', text: 'Batal', onclick: function () { back.remove(); } }), btn)));
+    btn.addEventListener('click', function () {
+      if (!val.nominal) { out.replaceChildren(errBox(new Error('Isi nominal'))); return; }
+      btn.disabled = true;
+      api('pettySave', val).then(function (r) { back.remove(); toast('Tersimpan'); if (onDone) onDone(r); }).catch(function (e) { btn.disabled = false; out.replaceChildren(errBox(e)); });
+    });
+    document.body.appendChild(back);
+  }
+  function viewKasPetty(v) {
+    pageHead(v, 'Petty Cash', 'Saldo dari BAP terakhir. Ajukan ke pusat saat terpakai 75%, catat saat dana cair & diisi. Rincian pengeluaran tetap di CARE.');
+    var body = el('div', null, skel(2));
+    v.append(body);
+    function draw(p) {
+      var pct = p.pct == null ? 0 : p.pct;
+      var stat = el('div', { class: 'card' },
+        el('div', { class: 'card-head' }, el('div', null, el('h3', { text: 'Saldo petty cash' }), el('p', { class: 'sub', text: p.tanggal ? 'Dari BAP ' + dShort(p.tanggal) : 'Belum ada BAP' })),
+          el('b', { class: 'big-num num', text: rpx(p.fisik) })),
+        el('div', { class: 'bar-track petty-bar' }, el('i', { class: pct >= p.ambang ? 'warn' : '', style: 'width:' + Math.min(100, pct) + '%' })),
+        el('p', { class: 'sub', text: 'Terpakai ' + rpx(p.terpakai) + ' (' + pct + '%) dari plafon ' + rpx(p.plafon) + ' · ajukan saat ' + p.ambang + '%' }),
+        p.menunggu ? el('div', { class: 'note warn' }, 'Pengajuan ' + rpx(p.menunggu.nominal) + ' tanggal ' + dShort(p.menunggu.tanggal) + ' menunggu cair.') :
+          p.perluAjukan ? el('div', { class: 'note warn', text: 'Sudah terpakai ' + pct + '%. Saatnya pengajuan ke pusat.' }) : null,
+        el('div', { class: 'row', style: 'margin-top:12px' },
+          p.menunggu ? el('button', { class: 'btn btn-orange', type: 'button', onclick: function () { pettyModal('cair', p.menunggu.nominal, draw); } }, icon('check'), 'Dana cair & sudah diisi')
+            : el('button', { class: 'btn btn-primary', type: 'button', onclick: function () { pettyModal('ajukan', p.terpakai || 0, draw); } }, icon('upload'), 'Catat pengajuan'),
+          !p.menunggu ? el('button', { class: 'btn btn-ghost', type: 'button', text: 'Catat pengisian', onclick: function () { pettyModal('cair', p.terpakai || 0, draw); } }) : null));
+      var log = el('div', { class: 'card section' }, el('h3', { text: 'Riwayat pengajuan & pengisian' }),
+        (p.log || []).length ? el('ul', { class: 'hist' }, p.log.map(function (x) {
+          return el('li', null, el('span', { class: 'avatar', text: initials(x.nama) }), el('div', { class: 'hist-main' },
+            el('div', { class: 'hist-top' }, el('b', { text: (x.jenis === 'ajukan' ? 'Pengajuan ' : 'Diisi ') + rpx(x.nominal) }), el('span', { class: 'muted', text: dShort(x.tanggal) })),
+            el('div', { class: 'tags' }, el('span', { class: 'tag ' + (x.status === 'menunggu' ? 'tag-warn' : 'tag-good'), text: x.status === 'menunggu' ? 'menunggu cair' : x.status === 'cair' ? 'sudah cair' : 'diisi' }), el('span', { class: 'tag', text: x.nama })),
+            x.catatan ? el('div', { class: 'hist-note', text: '“' + x.catatan + '”' }) : null));
+        })) : el('div', { class: 'empty', text: 'Belum ada catatan' }));
+      body.replaceChildren(stat, log);
+      swrClear();
+    }
+    api('pettyList').then(draw).catch(function (e) { body.replaceChildren(errBox(e)); });
   }
 
-  function kasItem(k) {
-    var st = k.selisih == null ? null : selisihState(k.selisih, k.totalFisik);
-    var det = el('details', { class: 'kas-det' }, el('summary', { text: 'Lihat rincian' }),
-      el('div', { class: 'kas-det-grid' },
-        el('div', null, el('b', { text: 'Pecahan' }), el('ul', null, PECAHAN.filter(function (p) { return k.pecahan[p]; }).map(function (p) {
-          return el('li', null, el('span', { text: nf.format(p) + ' × ' + k.pecahan[p] }), el('span', { class: 'num', text: nf.format(p * k.pecahan[p]) }));
-        }))),
-        k.seharusnya == null ? null : el('div', null, el('b', { text: 'Perhitungan' }), el('ul', null,
-          el('li', null, el('span', { text: k.pos === 'floating' ? 'Standar' : 'Modal' }), el('span', { class: 'num', text: nf.format(k.modal) })),
-          k.pos === 'till' ? el('li', null, el('span', { text: 'Penjualan tunai' }), el('span', { class: 'num', text: nf.format(k.penjualanTunai) })) : null,
-          k.perubahan.map(function (x) { return el('li', null, el('span', { text: (x.jenis === 'masuk' ? '+ ' : '− ') + x.ket }), el('span', { class: 'num', text: nf.format(x.jumlah) })); }),
-          el('li', { class: 'sum' }, el('span', { text: 'Seharusnya' }), el('span', { class: 'num', text: nf.format(k.seharusnya) }))))));
-    return el('li', null,
-      el('span', { class: 'avatar', text: initials(k.nama) }),
-      el('div', { class: 'hist-main' },
-        el('div', { class: 'hist-top' }, el('b', { text: k.nama }), el('span', { class: 'muted', text: k.waktu.slice(11, 16) })),
-        el('div', { class: 'tags' },
-          el('span', { class: 'tag', text: 'Fisik Rp ' + nf.format(k.totalFisik) }),
-          st ? el('span', { class: 'tag tag-' + (st.cls === 'good' ? 'good' : st.cls === 'bad' ? 'bad' : 'warn'), text: st.cls === 'good' ? 'Pas' : 'Selisih ' + st.text }) : null),
-        k.catatan ? el('div', { class: 'hist-note', text: '“' + k.catatan + '”' }) : null,
-        det));
+  /* ---------- Rekap BAP ---------- */
+  function unggahPos(onDone) {
+    var f = el('input', { type: 'file', accept: '.xlsx,.xls', style: 'display:none' });
+    f.addEventListener('change', function () {
+      var file = f.files[0]; if (!file) return;
+      if (!window.XLSX) { toast('Pembaca Excel belum termuat, coba lagi', true); return; }
+      toast('Membaca ' + file.name + '…');
+      file.arrayBuffer().then(function (buf) {
+        var wb = XLSX.read(buf, { type: 'array' });
+        var aoa = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, raw: true, defval: '' }).slice(0, 3000);
+        aoa = aoa.map(function (r) { return r.map(function (c) { return c instanceof Date ? c.toISOString().slice(0, 10) : c; }); });
+        return api('posUpload', { aoa: aoa, fileName: file.name });
+      }).then(function (r) {
+        toast('Laporan POS ' + r.hari.map(function (h) { return dShort(h.tanggal) + ' tunai ' + rpx(h.tunai); }).join(' · ') + ' tersimpan');
+        if (onDone) onDone();
+      }).catch(function (e) { toast(e.message, true); });
+    });
+    document.body.appendChild(f); f.click(); setTimeout(function () { f.remove(); }, 60000);
   }
+  function viewKasRekap(v) {
+    pageHead(v, 'Rekap BAP Kas', 'Semua BAP per bulan, dicocokkan dengan nota dan laporan POS. Versi Google Sheet terbarui otomatis.');
+    var tools = el('div', { class: 'toolbar2' }), body = el('div', null, skel(3));
+    v.append(tools, body);
+    function load(bulan) {
+      api('bapList', { bulan: bulan || qparam('bulan') }).then(function (d) {
+        tools.replaceChildren(monthSel(d.bulanTersedia, d.bulan, function (b) { history.replaceState(null, '', '#/kas-rekap?bulan=' + b); load(b); }),
+          d.tautan.rekap ? el('a', { class: 'btn btn-ghost btn-sm', href: d.tautan.rekap, target: '_blank', rel: 'noopener' }, icon('file'), 'Google Sheet rekap') : null,
+          d.tautan.arsip ? el('a', { class: 'btn btn-ghost btn-sm', href: d.tautan.arsip, target: '_blank', rel: 'noopener' }, icon('file'), 'BAP lama') : null,
+          el('button', { class: 'btn btn-ghost btn-sm', type: 'button', onclick: function () { unggahPos(function () { load(d.bulan); }); } }, icon('upload'), 'Unggah laporan POS'),
+          d.list.length ? dlBtn(function () {
+            xlsxDownload('BAP Kas ' + bulanLabel(d.bulan), [{ name: 'BAP', rows: [['Tanggal', 'Penghitung', 'Floating', 'Float to Till', 'Selisih modal', 'Cash at Till', 'Tunai nota', 'Selisih nota', 'Tunai POS', 'Selisih POS', 'Store Safe', 'Petty Cash', 'Catatan']].concat(d.list.slice().reverse().map(function (b) {
+              return [b.tanggal, b.nama, b.floating, b.floatTill, b.selisihModal, b.cashTill, b.tunaiNota, b.selisihNota, b.tunaiPos, b.selisihPos, b.safe, b.petty, b.catatan];
+            })) }]);
+          }) : null);
+        if (!d.list.length && !d.pos.length) { body.replaceChildren(emptyCard('Belum ada BAP di bulan ini')); return; }
+        var cash = 0, sn = 0, hs = 0;
+        d.list.forEach(function (b) { cash += b.cashTill; sn += b.selisihNota || 0; if (b.selisihNota || b.selisihModal || b.selisihPos || b.selisihSafe) hs++; });
+        var stats = el('div', { class: 'stats' },
+          el('div', { class: 'stat' }, el('span', { text: 'Hari ada BAP' }), el('b', { text: String(d.list.length) })),
+          el('div', { class: 'stat' }, el('span', { text: 'Total Cash at Till' }), el('b', { class: 'num', text: nf.format(cash) })),
+          el('div', { class: 'stat' }, el('span', { text: 'Hari ada selisih' }), el('b', { class: hs ? 'c-warn' : 'c-good', text: String(hs) })),
+          el('div', { class: 'stat' }, el('span', { text: 'Belum disetor' }), el('b', { class: 'num ' + (d.totalBelum ? 'c-warn' : 'c-good'), text: d.totalBelum ? nf.format(d.totalBelum) : '✓' })));
+        var list = el('div', { class: 'bap-list' }, d.list.map(function (b) {
+          var lamaTag = b.sumber === 'impor';
+          var gid = lamaTag && d.gid && d.gid[b.ref] != null ? d.gid[b.ref] : null;
+          var tags = el('div', { class: 'tags' },
+            lamaTag ? el('span', { class: 'tag', text: 'BAP lama' }) : null,
+            b.selisihModal == null ? null : b.selisihModal ? el('span', { class: 'tag ' + (b.selisihModal < 0 ? 'tag-bad' : 'tag-warn'), text: 'Modal ' + (b.selisihModal > 0 ? '+' : '−') + nf.format(Math.abs(b.selisihModal)) }) : el('span', { class: 'tag tag-good', text: 'Modal pas' }),
+            b.selisihNota == null ? null : b.selisihNota ? el('span', { class: 'tag ' + (b.selisihNota < 0 ? 'tag-bad' : 'tag-warn'), text: 'Nota ' + (b.selisihNota > 0 ? '+' : '−') + nf.format(Math.abs(b.selisihNota)) }) : el('span', { class: 'tag tag-good', text: 'Nota pas' }),
+            b.tunaiPos == null ? (lamaTag ? null : el('span', { class: 'tag', text: 'POS menunggu' })) : b.selisihPos ? el('span', { class: 'tag tag-bad', text: '⚠ POS ' + (b.selisihPos > 0 ? '+' : '−') + nf.format(Math.abs(b.selisihPos)) }) : el('span', { class: 'tag tag-good', text: '✅ POS cocok' }),
+            b.sisaSetor ? el('span', { class: 'tag tag-warn', text: 'Belum disetor ' + nf.format(b.sisaSetor) }) : null,
+            b.cek ? el('span', { class: 'tag tag-warn', text: 'Perlu dicek' }) : null,
+            b.koreksi.length ? el('span', { class: 'tag', text: 'Dikoreksi' }) : null);
+          return el('details', { class: 'card bap-row' },
+            el('summary', null,
+              el('div', { class: 'bap-date' }, el('b', { text: String(Number(b.tanggal.slice(8))) }), el('span', { text: dDayName(b.tanggal).slice(0, 3) })),
+              el('div', { class: 'bap-main' }, el('div', { class: 'hist-top' }, el('b', { text: 'Cash ' + rpx(b.cashTill) }), el('span', { class: 'muted', text: b.nama || (b.ref ? 'tab ' + b.ref : '') })), tags)),
+            bapDetail(b),
+            el('div', { class: 'row', style: 'margin-top:10px' },
+              gid != null && d.tautan.arsip ? el('a', { class: 'btn btn-ghost btn-sm', href: d.tautan.arsip.replace(/\/edit$/, '/edit#gid=' + gid), target: '_blank', rel: 'noopener' }, icon('file'), 'Buka tab "' + b.ref + '"') : null,
+              isAdmin() ? el('a', { class: 'btn btn-ghost btn-sm', href: '#/kas?tgl=' + b.tanggal + '&koreksi=1' }, 'Koreksi') : null));
+        }));
+        var posCard = d.pos.length ? el('div', { class: 'card section' }, el('h3', { text: 'Laporan POS (CARE) bulan ini' }),
+          el('div', { class: 'tbl-wrap' }, el('table', { class: 't' },
+            el('thead', null, el('tr', null, ['Tanggal', 'Tunai', 'Non-tunai', 'Total', 'Bank charge', 'Sumber'].map(function (h) { return el('th', { text: h }); }))),
+            el('tbody', null, d.pos.map(function (p) {
+              return el('tr', null, el('td', { text: dShort(p.tanggal) }), el('td', { class: 'num', text: nf.format(p.tunai) }), el('td', { class: 'num', text: nf.format(p.nonTunai) }),
+                el('td', { class: 'num', text: nf.format(p.total) }), el('td', { class: 'num', text: nf.format(Math.round(p.bankCharge)) }), el('td', { text: p.sumber === 'email' ? 'email' : 'unggah' }));
+            }))))) : null;
+        body.replaceChildren(stats, list, posCard);
+      }).catch(function (e) { body.replaceChildren(errBox(e)); });
+    }
+    load();
+  }
+
+  /* ---------- Kartu Beranda: Kas hari ini ---------- */
+  function kasCard() {
+    var box = el('div', { class: 'card kas-home' }, el('div', { class: 'skel', style: 'min-height:60px' }));
+    function draw(r) {
+      var rows = [];
+      rows.push(el('li', null, el('span', { class: 'kh-ic ' + (r.bap ? 'ok' : 'wait') }, icon(r.bap ? 'check' : 'cash')),
+        el('div', null, el('b', { text: r.bap ? 'BAP hari ini sudah diisi' : 'BAP hari ini belum diisi' }), el('small', { text: r.bap ? r.bap.nama + ' · ' + r.bap.waktu.slice(11, 16) : 'Isi saat closing · pengingat jam ' + hhmmStr(r.ingat) })),
+        r.bap ? null : el('a', { class: 'btn btn-primary btn-sm', href: '#/kas' }, 'Isi BAP')));
+      if (r.mulai || r.totalBelum) {
+        var telat = r.belum.some(function (b) { return b.telat; });
+        rows.push(el('li', null, el('span', { class: 'kh-ic ' + (r.totalBelum ? (telat ? 'bad' : 'wait') : 'ok') }, icon('upload')),
+          el('div', null, el('b', { text: r.totalBelum ? 'Belum disetor ' + rpx(r.totalBelum) : 'Semua uang sudah disetor' }),
+            el('small', { text: r.totalBelum ? 'Uang ' + r.belum.map(function (b) { return dShort(b.tanggal); }).join(', ') + (telat ? ' · ada yang terlambat' : '') : 'Tercatat di Setoran Bank' })),
+          r.totalBelum ? el('button', { class: 'btn btn-orange btn-sm', type: 'button', text: 'Sudah disetor', onclick: function () { setorModal(r.belum, function (nr) { swrClear(); draw(nr); }); } }) : null));
+      }
+      var p = r.petty;
+      if (p && p.fisik != null) rows.push(el('li', null, el('span', { class: 'kh-ic ' + (p.perluAjukan ? 'wait' : 'ok') }, icon('cash')),
+        el('div', null, el('b', { text: 'Petty cash ' + rpx(p.fisik) }), el('small', { text: 'Terpakai ' + p.pct + '% dari ' + rpx(p.plafon) + (p.menunggu ? ' · pengajuan menunggu cair' : '') })),
+        p.perluAjukan ? el('a', { class: 'btn btn-ghost btn-sm', href: '#/kas-petty' }, 'Ajukan') : null));
+      box.replaceChildren(el('div', { class: 'card-head' }, el('h3', { text: 'Kas hari ini' }), el('a', { class: 'duty-link', href: '#/kas-rekap' }, 'Rekap', icon('arrow'))),
+        el('ul', { class: 'kh-list' }, rows));
+    }
+    apiSwr('kasStatus').then(draw).catch(function () { box.remove(); });
+    return box;
+  }
+  function hhmmStr(m) { m = Number(m) || 0; return String(Math.floor(m / 60)).padStart(2, '0') + '.' + String(m % 60).padStart(2, '0'); }
 
   /* =================== TAHAP 2: laporan, stok, jadwal =================== */
 
@@ -1917,36 +2189,6 @@
               { name: 'Per kategori', rows: [['MC LV 3', 'Qty', 'Display', 'Rasio'].concat(BUL3)].concat(kats.map(function (k) { return [k.mc3, k.qty, k.display, k.rasio].concat(k.sales); })) }]);
           }))));
     }).catch(function (e) { body.replaceChildren(errBox(e)); });
-  }
-
-  /* ---------- Rekap selisih kas ---------- */
-  function viewKasRekap(v) {
-    pageHead(v, 'Rekap Selisih Kas', 'Ringkasan hitungan kas per orang per bulan.');
-    var tools = el('div', { class: 'toolbar2' }), body = el('div', null, skel(2));
-    v.append(tools, body);
-    function load(bulan) {
-      api('kasRekap', { bulan: bulan || '' }).then(function (d) {
-        tools.replaceChildren(monthSel(d.bulanTersedia, d.bulan, load));
-        if (!d.list.length) { body.replaceChildren(emptyCard('Belum ada hitungan kas di bulan ini')); return; }
-        var by = {};
-        d.list.forEach(function (x) { (by[x.username] = by[x.username] || { nama: x.nama, rows: [] }).rows.push(x); });
-        tools.append(dlBtn(function () {
-          xlsxDownload('Rekap selisih kas ' + bulanLabel(d.bulan), [{ name: 'Rekap', rows: [['Nama', 'Pos', 'Jumlah hitung', 'Ada selisih', 'Total kurang', 'Total lebih']].concat(d.list.map(function (x) { return [x.nama, posOf(x.pos).label, x.hitungan, x.adaSelisih, x.kurang, x.lebih]; })) }]);
-        }));
-        body.replaceChildren(el('div', { class: 'grid grid-2' }, Object.keys(by).map(function (u) {
-          var p = by[u];
-          var kurang = p.rows.reduce(function (s, x) { return s + x.kurang; }, 0);
-          return el('div', { class: 'card' },
-            el('div', { class: 'card-head' }, el('div', { class: 'who' }, el('span', { class: 'avatar', text: initials(p.nama) }), el('b', { text: p.nama })),
-              el('span', { class: 'tag ' + (kurang ? 'tag-bad' : 'tag-good'), text: kurang ? 'Kurang ' + fRpShort(kurang) : 'Tidak ada kurang' })),
-            el('ul', { class: 'calc' }, p.rows.map(function (x) {
-              return el('li', null, el('span', { text: posOf(x.pos).label + ' · ' + x.hitungan + '× hitung' }),
-                el('b', { class: 'num ' + (x.adaSelisih ? 'c-bad' : 'c-good'), text: x.adaSelisih ? x.adaSelisih + '× selisih (−' + nf.format(x.kurang) + ' / +' + nf.format(x.lebih) + ')' : 'selalu pas' }));
-            })));
-        })));
-      }).catch(function (e) { body.replaceChildren(errBox(e)); });
-    }
-    load();
   }
 
   /* ---------- Jadwal: request ---------- */
@@ -2468,7 +2710,7 @@
     if (part === 'target') v.append(raTargetAdmin(), setCard);
     if (part === 'atur') v.append(setCard);
     if (part !== 'akun') api('settings').then(function (s) {
-      var vals = { modal_till: Number(s.modal_till) || 0, floating_cash: Number(s.floating_cash) || 0 };
+      var vals = { modal_till: Number(s.modal_till) || 0, modal_total: Number(s.modal_total) || 0, petty_plafon: Number(s.petty_plafon) || 0 };
       var row = function (key, id, label) {
         var btn = el('button', { class: 'btn btn-primary', type: 'button', text: 'Simpan' });
         var inp = rpInput(id, vals[key], function (n) { vals[key] = n; });
@@ -2494,11 +2736,50 @@
         row('target_basket', 'set-basket', 'Target basket size'),
         el('p', { class: 'sub', style: 'margin-top:12px' }, 'Target OmniChannel diubah di menu ', el('a', { href: '#/omni', text: 'OmniChannel' }), '.'));
       else setCard.replaceChildren(el('h3', { text: 'Pengaturan kas' }),
-        el('p', { class: 'sub', text: 'Angka standar yang dipakai di menu Cek Kas.' }),
-        row('modal_till', 'set-modal', 'Modal till (Float To Till)'),
-        row('floating_cash', 'set-float', 'Floating Cash (modal besar)'),
+        el('p', { class: 'sub', text: 'Angka standar yang dipakai di BAP Kas.' }),
+        row('modal_total', 'set-mtot', 'Total modal kembalian (Floating + Float to Till)'),
+        row('modal_till', 'set-modal', 'Float to Till standar (sisanya = Floating Cash)'),
+        row('petty_plafon', 'set-petty', 'Plafon Petty Cash'),
+        angkaRow('petty_ambang', 'Ajukan petty cash saat terpakai (%)', s.petty_ambang),
+        jamRow('bap_ingat', 'Pengingat BAP closing (jam)', s.bap_ingat),
+        bapAdminBox(),
         dokAdmin(s));
     }).catch(function (err) { setCard.replaceChildren(el('h3', { text: 'Pengaturan kas' }), errBox(err)); });
+    function angkaRow(key, label, cur) {
+      var inp = el('input', { inputmode: 'numeric', value: String(cur == null ? '' : cur), style: 'max-width:140px' });
+      var btn = el('button', { class: 'btn btn-primary', type: 'button', text: 'Simpan', onclick: function () {
+        var n = Number(String(inp.value).replace(',', '.'));
+        if (!isFinite(n) || n < 0) { toast('Isi angka', true); return; }
+        btn.disabled = true; api('setSetting', { key: key, value: n }).then(function () { btn.disabled = false; toast(label + ' disimpan'); }).catch(function (e) { btn.disabled = false; toast(e.message, true); });
+      } });
+      return el('div', { class: 'field' }, el('label', { text: label }), el('div', { class: 'inline' }, inp, btn));
+    }
+    function jamRow(key, label, cur) {
+      var inp = el('input', { type: 'time', value: hhmmStr(cur).replace('.', ':'), style: 'max-width:160px' });
+      var btn = el('button', { class: 'btn btn-primary', type: 'button', text: 'Simpan', onclick: function () {
+        var m = String(inp.value).match(/^(\d{1,2}):(\d{2})/); if (!m) { toast('Pilih jam', true); return; }
+        btn.disabled = true; api('setSetting', { key: key, value: Number(m[1]) * 60 + Number(m[2]) }).then(function () { btn.disabled = false; toast(label + ' disimpan'); }).catch(function (e) { btn.disabled = false; toast(e.message, true); });
+      } });
+      return el('div', { class: 'field' }, el('label', { text: label }), el('div', { class: 'inline' }, inp, btn));
+    }
+    function bapAdminBox() {
+      var out = el('div');
+      var mk = function (aksi, label) {
+        var b = el('button', { class: 'btn btn-ghost btn-sm', type: 'button', text: label, onclick: function () {
+          b.disabled = true; out.replaceChildren(el('p', { class: 'muted', text: 'Sedang diproses, bisa sampai 1 menit…' }));
+          api('bapAdmin', { aksi: aksi }).then(function (r) {
+            b.disabled = false;
+            if (aksi === 'impor') { out.replaceChildren(el('div', { class: 'note' }, el('b', { text: r.baris + ' hari terbaca (' + dShort(r.dari) + ' ' + r.dari.slice(0, 4) + ' – ' + dShort(r.sampai) + ' ' + r.sampai.slice(0, 4) + '), ' + r.baru + ' baru masuk.' }),
+              r.cek.length ? el('details', null, el('summary', { text: r.cek.length + ' hari perlu dicek' }), el('ul', null, r.cek.map(function (c) { return el('li', { text: c }); }))) : null,
+              r.lewat.length ? el('details', null, el('summary', { text: r.lewat.length + ' tab dilewati' }), el('p', { text: r.lewat.join(', ') })) : null)); return; }
+            out.replaceChildren(el('p', { class: 'note' }, aksi === 'arsip' ? 'Arsip BAP lama diperbarui (' + r.tab + ' tab). ' : 'Rekap dibangun ulang (' + r.bulan + ' bulan). ', r.url ? el('a', { href: r.url, target: '_blank', rel: 'noopener', text: 'Buka' }) : null));
+          }).catch(function (e) { b.disabled = false; out.replaceChildren(errBox(e)); });
+        } });
+        return b;
+      };
+      return el('div', { class: 'field' }, el('label', { text: 'Google Sheet BAP (dilihat semua orang yang punya link)' }),
+        el('div', { class: 'row', style: 'flex-wrap:wrap' }, mk('arsip', '1. Perbarui arsip BAP lama'), mk('impor', '2. Impor riwayat BAP lama'), mk('rekap', '3. Bangun ulang rekap')), out);
+    }
     function load() {
       Promise.all([api('users'), api('tim').catch(function () { return { namaJadwal: [], users: [] }; })]).then(function (res) {
         var users = res[0], tim = res[1];
@@ -4189,7 +4470,7 @@
         ['CR (traffic SOH)', cr != null ? fPct(cr) : '—', trf ? 'traffic ' + fNum(trf) : 'traffic belum tercatat'],
         ['Kontribusi NEW', M && M.info ? fPct(sales ? naS / sales : 0) : '—', M && M.info ? fRpShort(naS) : 'master belum dimuat'],
         ['Display (saat ini)', R ? fPct(R.pctG) + ' generic · ' + fPct(R.pctV) + ' varian' : '—', 'target 95%'],
-        ['Selisih kas', d.kas.selisih ? d.kas.selisih + '× selisih' : 'tidak ada', d.kas.hitung + '× hitung · kurang ' + fRpShort(d.kas.kurang) + ' · lebih ' + fRpShort(d.kas.lebih)],
+        ['Selisih kas', d.kas.selisih ? d.kas.selisih + '× selisih' : 'tidak ada', d.kas.hitung + ' BAP · kurang ' + fRpShort(d.kas.kurang) + ' · lebih ' + fRpShort(d.kas.lebih)],
         ['Dokumentasi video', d.dok ? d.dok.lengkap + ' / ' + d.dok.hari + ' hari lengkap' : '—', 'opening & closing']
       ];
       function waText() {
@@ -4213,7 +4494,7 @@
           })) },
           { name: 'Produk', rows: [['Varian', 'Nama', 'Qty', 'Bruto', 'Netto']].concat(d.varian) },
           { name: 'RA', rows: [['Nama', 'Bruto', 'Netto', 'Qty', 'Transaksi']].concat(d.ra) },
-          { name: 'Selisih kas', rows: [['Tanggal', 'Nama', 'Pos', 'Selisih', 'Catatan']].concat(d.kas.list) },
+          { name: 'Selisih kas', rows: [['Tanggal', 'Nama', 'Pengecekan', 'Selisih', 'Catatan']].concat(d.kas.list) },
           { name: 'Video per RA', rows: dokRaRows(d.dokRA || []) }]);
       }
       var hmax = Math.max.apply(null, d.hari.map(function (h) { return Math.max(h[K], h.target || 0); }).concat([1]));
@@ -4250,7 +4531,7 @@
             return el('li', null, el('span', { class: 'rank' + (i < 3 ? ' top' : ''), text: i + 1 }), el('div', { class: 'ra-main' }, el('div', { class: 'ra-top' }, el('b', { text: titleCase(r[0]) }), el('b', { class: 'num', text: fRpShort(r[rcol]) })), el('div', { class: 'muted', style: 'font-size:12.5px', text: r[4] + ' trx · UPT ' + fDec(r[4] ? r[3] / r[4] : null) })));
           })))),
         d.dokRA && d.dokRA.length ? dokRaCard(d.dokRA, 'Kepatuhan video per RA') : null,
-        d.kas.list.length ? el('div', { class: 'card section' }, el('h3', { text: 'Selisih kas minggu ini' }), el('ul', { class: 'calc' }, d.kas.list.map(function (k) { return el('li', null, el('span', { text: dShort(k[0]) + ' · ' + k[1] + ' · ' + posOf(k[2]).label + (k[4] ? ' · ' + k[4] : '') }), el('b', { class: 'num ' + (k[3] < 0 ? 'c-bad' : 'c-good'), text: (k[3] > 0 ? '+' : '') + nf.format(k[3]) })); }))) : null);
+        d.kas.list.length ? el('div', { class: 'card section' }, el('h3', { text: 'Selisih kas minggu ini' }), el('ul', { class: 'calc' }, d.kas.list.map(function (k) { return el('li', null, el('span', { text: dShort(k[0]) + ' · ' + k[1] + ' · ' + k[2] + (k[4] ? ' · ' + k[4] : '') }), el('b', { class: 'num ' + (k[3] < 0 ? 'c-bad' : 'c-good'), text: (k[3] > 0 ? '+' : '') + nf.format(k[3]) })); }))) : null);
     }
     load();
   }
@@ -5005,7 +5286,7 @@
 
   Object.assign(VIEWS, {
     beranda: viewBeranda, briefing: viewBriefing, mingguan: viewMingguan, omni: viewOmni, kesehatan: viewKesehatan, pengumuman: viewPengumuman, handover: viewHandover, feedback: viewFeedback, apresiasi: viewApresiasi, dokumentasi: viewDokumentasi, monitoring: viewMonitoring, trend: viewTrend, ra: viewRA, produk: viewProduk, customer: viewCustomer,
-    stok: viewStok, stokart: viewStokArt, saranreq: viewSaranReq, display: viewDisplay, cari: viewCari, unggahbin: viewUnggahBin, kas: viewKas, 'kas-rekap': viewKasRekap, unggah: viewUnggah,
+    stok: viewStok, stokart: viewStokArt, saranreq: viewSaranReq, display: viewDisplay, cari: viewCari, unggahbin: viewUnggahBin, kas: viewKas, 'kas-rekap': viewKasRekap, 'kas-setor': viewKasSetor, 'kas-petty': viewKasPetty, unggah: viewUnggah,
     jadwal: viewJadwal, jadwaldraf: viewJadwalDraf, persetujuan: viewPersetujuan, targetadm: viewTargetAdm, pengaturan: viewPengaturan, request: viewRequest, tukar: viewTukar, simpanan: viewSimpanan,
     akun: viewAkun, admin: viewAdmin, aktivitas: viewAktivitas, pica: viewPica
   });
