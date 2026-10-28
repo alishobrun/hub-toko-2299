@@ -11,7 +11,7 @@
 /** Versi kode. WAJIB dinaikkan setiap kali Code.gs diubah (format yyyy-MM-dd.n),
  *  lalu simpan ke GitHub (alishobrun/hub-toko-2299) SEBELUM dipasang. Halaman Kesehatan Data
  *  membandingkan angka ini dengan GitHub supaya kode yang dipasang di luar GitHub ketahuan. */
-const KODE_VERSI = '2026-10-28.5';
+const KODE_VERSI = '2026-10-28.6';
 
 const CFG = {
   STORE: '2299',
@@ -89,6 +89,7 @@ const TABS = {
   // buku petty cash dari CARE (laporan PettyCash.xlsx diunggah manual)
   petty_care: ['id', 'kode', 'waktu', 'debit', 'kredit', 'saldo', 'akun', 'status', 'ket', 'oleh', 'diubah'],
   // buku Store Safe (brankas) dari CARE: uang masuk saat closing (POS Desktop) & setoran ke bank
+  tag_na: ['sku', 'bulan', 'username', 'nama', 'waktu'],
   safe_care: ['kode', 'waktu', 'debit', 'kredit', 'saldo', 'dari', 'akun', 'status', 'jenis', 'mesin', 'alamat', 'ket', 'tgl_jual', 'oleh', 'diubah']
 };
 
@@ -4228,7 +4229,7 @@ function cacheSimpanBesar_(k, obj, detik) {
   try {
     const z = Utilities.base64Encode(Utilities.gzip(Utilities.newBlob(JSON.stringify(obj), 'application/json')).getBytes());
     const n = Math.ceil(z.length / 90000), m = {};
-    if (n > 9) return;
+    if (n > 40) return;
     for (let i = 0; i < n; i++) m[k + '_' + i] = z.slice(i * 90000, (i + 1) * 90000);
     m[k + '_n'] = String(n);
     CacheService.getScriptCache().putAll(m, detik);
@@ -5208,3 +5209,82 @@ function bapImpor_(cobaSaja) {
   return { baris: hasil.length, baru: baru, dari: hasil.map(function (h) { return h.tanggal; }).sort()[0], sampai: hasil.map(function (h) { return h.tanggal; }).sort().pop(),
     total: hasil.reduce(function (s, h) { return s + h.cash_till; }, 0), lewat: lewat, cek: cek };
 }
+
+/* =====================================================================
+ * TAHAP 16: List promo bulanan (New Arrival resmi + Store Selected)
+ * File LIST_PROMO_<bulan>.xlsb dibaca di browser; disimpan sebagai JSON di Drive "Sistem".
+ * ===================================================================== */
+const PROMO_FILE = 'promo_bulanan.json';
+function promoFile_() {
+  const it = folderSistem_().getFilesByName(PROMO_FILE);
+  return it.hasNext() ? it.next() : null;
+}
+function promoBaca_() {
+  const ver = PropertiesService.getScriptProperties().getProperty('PROMO_VER') || '0';
+  const k = 'promo_v' + ver;
+  const hit = cacheAmbilBesar_(k);
+  if (hit) return hit;
+  const f = promoFile_();
+  if (!f) return null;
+  const P = JSON.parse(f.getBlob().getDataAsString());
+  cacheSimpanBesar_(k, P, 21600);
+  return P;
+}
+Object.assign(API, {
+  /** Simpan list promo bulanan. na: [[sku, crossSite, nama, lv2, lv3, lv4, harga]], sel: [[sku, disc, netto, harga, remark]]. */
+  promoUpload: function (req) {
+    const u = auth_(req);
+    const bulan = /^\d{4}-\d{2}$/.test(String(req.bulan || '')) ? String(req.bulan) : today_().slice(0, 7);
+    const na = (req.na || []).filter(function (r) { return Array.isArray(r) && /^\d{9,13}$/.test(String(r[0])); }).map(function (r) {
+      return [String(r[0]), String(r[1] || ''), String(r[2] || '').slice(0, 120), String(r[3] || ''), String(r[4] || ''), String(r[5] || ''), Number(r[6]) || 0];
+    });
+    const sel = {};
+    (req.sel || []).forEach(function (r) { if (Array.isArray(r) && /^\d{9,13}$/.test(String(r[0]))) sel[String(r[0])] = [Number(r[1]) || 0, Number(r[2]) || 0, Number(r[3]) || 0, String(r[4] || '')]; });
+    if (!na.length && !Object.keys(sel).length) throw new Error('Tidak ada data New Arrival / Store Selected di file ini');
+    const P = { bulan: bulan, file: String(req.fileName || '').slice(0, 120), waktu: now_(), oleh: u.nama, na: na, sel: sel };
+    withLock_(function () {
+      const blob = Utilities.newBlob(JSON.stringify(P), 'application/json', PROMO_FILE);
+      const f = promoFile_();
+      if (f) f.setContent(blob.getDataAsString()); else folderSistem_().createFile(blob);
+      const p = PropertiesService.getScriptProperties();
+      p.setProperty('PROMO_VER', String(Number(p.getProperty('PROMO_VER') || 0) + 1));
+      log_(u.username, 'list promo ' + bulan, na.length + ' New Arrival, ' + Object.keys(sel).length + ' Store Selected');
+      if (u.role !== 'admin') notif_('admin', 'info', 'stok', 'List promo ' + bulan + ' diunggah ' + u.nama, na.length + ' SKU New Arrival · ' + Object.keys(sel).length + ' SKU Store Selected', '#/newarrival');
+    }, 60000);
+    return { bulan: bulan, na: na.length, sel: Object.keys(sel).length };
+  },
+  /** Data promo untuk SKU yang ada di toko: New Arrival lengkap + Store Selected hanya untuk SKU yang diminta + status tag. */
+  promoData: function (req) {
+    auth_(req);
+    const P = promoBaca_();
+    if (!P) return { ada: false };
+    const ask = {}; (req.skus || []).forEach(function (k) { ask[String(k)] = 1; });
+    const sel = {};
+    Object.keys(ask).forEach(function (k) { if (P.sel[k]) sel[k] = P.sel[k]; });
+    const tag = {};
+    read_('tag_na').forEach(function (t) { if (String(t.bulan) === P.bulan) tag[String(t.sku)] = [String(t.nama), String(t.waktu)]; });
+    return { ada: true, bulan: P.bulan, file: P.file, waktu: P.waktu, oleh: P.oleh, na: P.na, sel: sel, selTotal: Object.keys(P.sel).length, tag: tag };
+  },
+  /** Centang / batal centang "sudah dipasang tag NEW ARRIVAL" untuk beberapa SKU sekaligus. */
+  naTag: function (req) {
+    const u = auth_(req);
+    const P = promoBaca_();
+    if (!P) throw new Error('List promo belum diunggah');
+    const skus = (req.skus || []).map(String).filter(function (k) { return /^\d{9,13}$/.test(k); });
+    if (!skus.length) throw new Error('Tidak ada SKU');
+    let n = 0;
+    withLock_(function () {
+      const all = read_('tag_na'), ada = {};
+      all.forEach(function (t, i) { if (String(t.bulan) === P.bulan) ada[String(t.sku)] = i; });
+      let rows = all;
+      if (req.on) {
+        skus.forEach(function (k) { if (ada[k] == null) { rows.push({ sku: k, bulan: P.bulan, username: u.username, nama: u.nama, waktu: now_() }); n++; } });
+      } else {
+        const buang = {}; skus.forEach(function (k) { if (ada[k] != null) { buang[ada[k]] = 1; n++; } });
+        rows = all.filter(function (t, i) { return !buang[i]; });
+      }
+      if (n) writeAll_('tag_na', rows);
+    });
+    return { diubah: n };
+  }
+});

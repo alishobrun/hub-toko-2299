@@ -1415,3 +1415,15 @@ html[data-theme=dark] .drop{background:var(--panel)}
 .file-row span.c-good{color:var(--good)} .file-row span.c-bad{color:var(--bad)}
 .ud-item .file-row:first-child{margin-top:0}
 .file-ic .ic{width:20px;height:20px}
+.promo-tag{background:#FFF1E8;color:#C2410C}
+html[data-theme=dark] .promo-tag{background:var(--orange-50);color:#FDBA74}
+.promo-line{font-size:12.5px;color:#C2410C;font-weight:600;margin-top:4px}
+.na-card .card-head{align-items:flex-start;gap:10px}
+.na-skus{display:flex;flex-direction:column;gap:6px;margin-top:10px}
+.na-sku{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:8px 10px;border:1px solid var(--line);border-radius:12px;cursor:pointer}
+.na-sku.on{background:var(--good-50);border-color:transparent}
+.na-sku input{width:22px;height:22px;flex:none;accent-color:var(--good)}
+.na-sz{display:flex;flex-direction:column;min-width:96px}
+.na-sz b{font-size:14px}
+.na-sz small{font-size:11px;color:var(--muted)}
+.na-oleh{margin-left:auto;font-size:11.5px}
