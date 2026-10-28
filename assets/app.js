@@ -269,7 +269,7 @@
     { id: 'kasg', label: 'Kas', icon: 'cash', color: '#22C55E', items: [
       { icon: 'cash', id: 'kas', label: 'BAP Kas', desc: 'Hitung semua pos kas saat closing' },
       { icon: 'bank', id: 'kas-setor', label: 'Setoran Bank', desc: 'Uang belum disetor & riwayat setor' },
-      { icon: 'wallet', id: 'kas-petty', label: 'Petty Cash', desc: 'Saldo, pengajuan & pengisian' },
+      { icon: 'wallet', id: 'kas-petty', label: 'Petty Cash', desc: 'Saldo CARE, pengeluaran & penggantian' },
       { icon: 'scale', id: 'kas-rekap', label: 'Rekap BAP', desc: 'Per bulan, laporan POS & Google Sheet' }] },
     { id: 'data', label: 'Data', icon: 'upload', color: '#A78BFA', items: [
       { icon: 'upload', id: 'unggah', label: 'Unggah DSR', desc: 'Perbarui data penjualan' },
@@ -1347,7 +1347,7 @@
     { id: 'float_till', label: 'Float to Till', judul: 'Float to Till', desc: 'Modal di laci kasir untuk besok pagi', cepat: true },
     { id: 'cash_till', label: 'Cash at Till', judul: 'Cash at Till', desc: 'Penjualan tunai hari ini (di luar modal), lalu dipindah ke brankas' },
     { id: 'safe', label: 'Store Safe', judul: 'Store Safe', desc: 'Uang di brankas yang belum disetor, tidak termasuk Cash at Till hari ini', cepat: true },
-    { id: 'petty', label: 'Petty Cash', judul: 'Petty Cash', desc: 'Kas kecil toko (plafon dari pusat)', cepat: true }
+    { id: 'petty', label: 'Petty Cash', judul: 'Petty Cash', desc: 'Kas kecil toko, dicocokkan dengan saldo di CARE', cepat: true }
   ];
   function rpx(n) { return n == null ? '—' : 'Rp ' + nf.format(n); }
   function sumPec(o) { return PECAHAN.reduce(function (s, p) { return s + ((o || {})[p] || 0) * p; }, 0); }
@@ -1370,6 +1370,8 @@
       el('li', null, el('span', null, 'Cash at Till vs nota', el('small', { text: b.tunaiNota == null ? 'tidak ada angka nota (BAP lama)' : 'nota ' + rpx(b.tunaiNota) })), b.tunaiNota == null ? el('span', { class: 'tag', text: '—' }) : selTag(b.selisihNota)),
       el('li', null, el('span', null, 'Cash at Till vs laporan POS', el('small', { text: b.tunaiPos == null ? 'laporan POS belum masuk' : 'POS ' + rpx(b.tunaiPos) })), b.tunaiPos == null ? el('span', { class: 'tag', text: 'Menunggu' }) : selTag(b.selisihPos, '✓ Cocok')),
       b.safeSeharusnya == null ? null : el('li', null, el('span', null, 'Store Safe', el('small', { text: 'seharusnya ' + rpx(b.safeSeharusnya) + ' (belum disetor)' })), selTag(b.selisihSafe)),
+      b.petty ? el('li', null, el('span', null, 'Petty Cash vs saldo CARE', el('small', { text: b.pettyCare == null ? 'laporan CARE belum mencakup waktu ini' : 'saldo CARE ' + rpx(b.pettyCare) })),
+        b.selisihPetty == null ? el('span', { class: 'tag', text: '—' }) : Math.abs(b.selisihPetty) < 1000 ? el('span', { class: 'tag tag-good', text: '✓ Cocok' }) : selTag(b.selisihPetty)) : null,
       b.sisaSetor == null ? null : el('li', null, el('span', null, 'Setoran uang hari ini', el('small', { text: 'sudah disetor ' + rpx(b.disetor) })), el('span', { class: 'tag ' + (b.sisaSetor ? 'tag-warn' : 'tag-good'), text: b.sisaSetor ? 'Sisa ' + rpx(b.sisaSetor) : '✓ Disetor' })));
     var pec = el('details', { class: 'kas-det' }, el('summary', { text: 'Rincian pecahan' }),
       el('div', { class: 'kas-det-grid' }, BAP_POS.map(function (p) {
@@ -1423,7 +1425,7 @@
         bapDetail(b)),
       el('div', { class: 'quick section' },
         el('a', { href: '#/kas-setor' }, icon('upload'), 'Setoran Bank', el('span', { text: F.belumSetor.length ? 'Belum disetor ' + rpx(F.belumSetor.reduce(function (s, x) { return s + x.sisa; }, 0)) : 'Uang yang belum disetor' })),
-        el('a', { href: '#/kas-petty' }, icon('cash'), 'Petty Cash', el('span', { text: F.petty.fisik != null ? 'Sisa ' + rpx(F.petty.fisik) : 'Pengajuan & pengisian' })),
+        el('a', { href: '#/kas-petty' }, icon('cash'), 'Petty Cash', el('span', { text: F.care && F.care.sampai ? 'Saldo CARE ' + rpx(F.care.saldo) : 'Unggah laporan CARE' })),
         el('a', { href: '#/kas-rekap?bulan=' + b.tanggal.slice(0, 7) }, icon('file'), 'Rekap BAP', el('span', { text: 'Per bulan + Google Sheet' }))));
   }
 
@@ -1538,8 +1540,7 @@
       x.sNota = draft.tunai == null ? null : x.cash_till - draft.tunai;
       x.sPos = F.pos ? x.cash_till - F.pos.tunai : null;
       x.sSafe = F.safeSeharusnya == null || !draft.lihat.safe ? null : x.safe - F.safeSeharusnya;
-      x.pettyPakai = x.petty ? Math.max(0, set.petty_plafon - x.petty) : null;
-      x.pettyPct = x.petty ? Math.round(x.pettyPakai / set.petty_plafon * 100) : null;
+      x.sPetty = F.care && F.care.saldo != null && x.petty ? x.petty - F.care.saldo : null;
       return x;
     }
     function drawCek() {
@@ -1550,8 +1551,8 @@
         el('li', null, el('span', null, 'Cash at Till vs nota', el('small', { text: 'dihitung ' + rpx(x.cash_till) + ' · nota ' + (draft.tunai == null ? 'belum diisi' : rpx(draft.tunai)) })), x.sNota == null ? el('span', { class: 'tag', text: 'Isi nota' }) : selTag(x.sNota)),
         el('li', null, el('span', null, 'Laporan POS', el('small', { text: F.pos ? 'tunai di laporan ' + rpx(F.pos.tunai) : 'belum masuk — dicocokkan otomatis setelah diekspor dari CARE' })), F.pos ? selTag(x.sPos, '✓ Cocok') : el('span', { class: 'tag', text: 'Menunggu' })),
         el('li', null, el('span', null, 'Store Safe', el('small', { text: F.safeSeharusnya == null ? 'dicatat (pembanding mulai setelah BAP pertama di Basecamp)' : 'seharusnya ' + rpx(F.safeSeharusnya) + ' = uang belum disetor' })), !draft.lihat.safe ? el('span', { class: 'tag', text: 'Belum dihitung' }) : F.safeSeharusnya == null ? el('span', { class: 'tag', text: rpx(x.safe) }) : selTag(x.sSafe)),
-        el('li', null, el('span', null, 'Petty Cash', el('small', { text: x.petty ? 'terpakai ' + rpx(x.pettyPakai) + ' dari plafon ' + rpx(set.petty_plafon) : 'belum dihitung' })),
-          x.pettyPct == null ? el('span', { class: 'tag', text: '—' }) : el('span', { class: 'tag ' + (x.pettyPct >= set.petty_ambang ? 'tag-warn' : 'tag-good'), text: x.pettyPct >= set.petty_ambang ? x.pettyPct + '% · saatnya ajukan' : x.pettyPct + '% terpakai' })));
+        el('li', null, el('span', null, 'Petty Cash vs saldo CARE', el('small', null, F.care && F.care.saldo != null ? 'saldo CARE ' + rpx(F.care.saldo) + ' (data sampai ' + fTime(F.care.sampai) + ')' : 'laporan petty cash CARE belum diunggah hari ini — ', F.care && F.care.saldo != null ? null : el('a', { href: '#/kas-petty', text: 'unggah' }))),
+          !x.petty ? el('span', { class: 'tag', text: 'Belum dihitung' }) : x.sPetty == null ? el('span', { class: 'tag', text: 'Menunggu' }) : Math.abs(x.sPetty) < 1000 ? el('span', { class: 'tag tag-good', text: x.sPetty ? '✓ Cocok (receh ' + nf.format(x.sPetty) + ')' : '✓ Cocok' }) : selTag(x.sPetty)));
       var st = function (b, s) { b.textContent = s == null ? '—' : s === 0 ? 'Pas' : (s > 0 ? '+' : '−') + nf.format(Math.abs(s)); b.className = 'num c-' + (s == null ? 'none' : s === 0 ? 'good' : s < 0 ? 'bad' : 'warn'); };
       st(kbM, x.sModal); st(kbN, x.sNota);
     }
@@ -1572,7 +1573,7 @@
       if (F.rataCash && x.cash_till > Math.max(3 * F.rataCash, 15000000)) warn.push('Cash at Till ' + rpx(x.cash_till) + ' jauh di atas rata-rata (' + rpx(F.rataCash) + ')');
       if (x.sModal && Math.abs(x.sModal) >= 50000) warn.push('Selisih modal kembalian ' + rpx(x.sModal));
       if (x.sNota && Math.abs(x.sNota) >= 50000) warn.push('Selisih Cash at Till vs nota ' + rpx(x.sNota));
-      if (x.petty > set.petty_plafon) warn.push('Petty Cash ' + rpx(x.petty) + ' melebihi plafon ' + rpx(set.petty_plafon));
+      if (x.sPetty != null && Math.abs(x.sPetty) >= 50000) warn.push('Petty Cash beda ' + rpx(x.sPetty) + ' dengan saldo CARE');
       if (warn.length && !confirm('Cek lagi, mungkin salah ketik:\n\n• ' + warn.join('\n• ') + '\n\nTetap simpan?')) return;
       if (!lama && !confirm('Simpan BAP ' + tglBapLabel(t) + '? Setelah disimpan BAP terkunci (hanya admin yang bisa mengoreksi).')) return;
       btnSave.disabled = true; btnSave.lastChild.textContent = 'Menyimpan…';
@@ -1654,53 +1655,79 @@
     load();
   }
 
-  /* ---------- Petty cash ---------- */
-  function pettyModal(jenis, nominal, onDone) {
-    var val = { jenis: jenis, nominal: nominal || 0, catatan: '' };
-    var out = el('div'), btn = el('button', { class: 'btn btn-orange', type: 'button' }, icon('check'), 'Simpan');
-    var cat = el('input', { class: 'inp', maxlength: 300, placeholder: jenis === 'ajukan' ? 'Opsional, mis. nomor pengajuan' : 'Opsional' });
-    cat.addEventListener('input', function () { val.catatan = cat.value; });
-    var back = el('div', { class: 'modal-back', onclick: function (e) { if (e.target === back) back.remove(); } },
-      el('div', { class: 'modal', role: 'dialog', 'aria-modal': 'true' },
-        el('h3', { text: jenis === 'ajukan' ? 'Catat pengajuan petty cash' : 'Dana petty cash cair & diisi' }),
-        el('div', { class: 'field' }, el('label', { text: jenis === 'ajukan' ? 'Nominal diajukan' : 'Nominal yang diisi ke petty cash' }), rpInput('pc-nom', val.nominal, function (n) { val.nominal = n; })),
-        el('div', { class: 'field' }, el('label', { text: 'Catatan' }), cat),
-        out, el('div', { class: 'row' }, el('button', { class: 'btn btn-ghost', type: 'button', text: 'Batal', onclick: function () { back.remove(); } }), btn)));
-    btn.addEventListener('click', function () {
-      if (!val.nominal) { out.replaceChildren(errBox(new Error('Isi nominal'))); return; }
-      btn.disabled = true;
-      api('pettySave', val).then(function (r) { back.remove(); toast('Tersimpan'); if (onDone) onDone(r); }).catch(function (e) { btn.disabled = false; out.replaceChildren(errBox(e)); });
+  /* ---------- Petty cash (dari laporan CARE) ---------- */
+  function bacaXlsx(file) {
+    if (!window.XLSX) return Promise.reject(new Error('Pembaca Excel belum termuat, coba lagi'));
+    return file.arrayBuffer().then(function (buf) {
+      var wb = XLSX.read(buf, { type: 'array' });
+      return XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, raw: false, defval: '' }).slice(0, 20000);
     });
-    document.body.appendChild(back);
+  }
+  function pilihFile(onFile) {
+    var f = el('input', { type: 'file', accept: '.xlsx,.xls', style: 'display:none' });
+    f.addEventListener('change', function () { if (f.files[0]) onFile(f.files[0]); });
+    document.body.appendChild(f); f.click(); setTimeout(function () { f.remove(); }, 60000);
+  }
+  function unggahPetty(onDone) {
+    pilihFile(function (file) {
+      toast('Membaca ' + file.name + '…');
+      bacaXlsx(file).then(function (aoa) { return api('pettyUpload', { aoa: aoa, fileName: file.name }); })
+        .then(function (r) { toast('Petty cash CARE: ' + r.baru + ' transaksi baru' + (r.ubah ? ', ' + r.ubah + ' berubah' : '') + ' · saldo ' + rpx(r.saldo)); swrClear(); if (onDone) onDone(); })
+        .catch(function (e) { toast(e.message, true); });
+    });
   }
   function viewKasPetty(v) {
-    pageHead(v, 'Petty Cash', 'Saldo dari BAP terakhir. Ajukan ke pusat saat terpakai 75%, catat saat dana cair & diisi. Rincian pengeluaran tetap di CARE.');
-    var body = el('div', null, skel(2));
-    v.append(body);
-    function draw(p) {
-      var pct = p.pct == null ? 0 : p.pct;
-      var stat = el('div', { class: 'card' },
-        el('div', { class: 'card-head' }, el('div', null, el('h3', { text: 'Saldo petty cash' }), el('p', { class: 'sub', text: p.tanggal ? 'Dari BAP ' + dShort(p.tanggal) : 'Belum ada BAP' })),
-          el('b', { class: 'big-num num', text: rpx(p.fisik) })),
-        el('div', { class: 'bar-track petty-bar' }, el('i', { class: pct >= p.ambang ? 'warn' : '', style: 'width:' + Math.min(100, pct) + '%' })),
-        el('p', { class: 'sub', text: 'Terpakai ' + rpx(p.terpakai) + ' (' + pct + '%) dari plafon ' + rpx(p.plafon) + ' · ajukan saat ' + p.ambang + '%' }),
-        p.menunggu ? el('div', { class: 'note warn' }, 'Pengajuan ' + rpx(p.menunggu.nominal) + ' tanggal ' + dShort(p.menunggu.tanggal) + ' menunggu cair.') :
-          p.perluAjukan ? el('div', { class: 'note warn', text: 'Sudah terpakai ' + pct + '%. Saatnya pengajuan ke pusat.' }) : null,
-        el('div', { class: 'row', style: 'margin-top:12px' },
-          p.menunggu ? el('button', { class: 'btn btn-orange', type: 'button', onclick: function () { pettyModal('cair', p.menunggu.nominal, draw); } }, icon('check'), 'Dana cair & sudah diisi')
-            : el('button', { class: 'btn btn-primary', type: 'button', onclick: function () { pettyModal('ajukan', p.terpakai || 0, draw); } }, icon('upload'), 'Catat pengajuan'),
-          !p.menunggu ? el('button', { class: 'btn btn-ghost', type: 'button', text: 'Catat pengisian', onclick: function () { pettyModal('cair', p.terpakai || 0, draw); } }) : null));
-      var log = el('div', { class: 'card section' }, el('h3', { text: 'Riwayat pengajuan & pengisian' }),
-        (p.log || []).length ? el('ul', { class: 'hist' }, p.log.map(function (x) {
-          return el('li', null, el('span', { class: 'avatar', text: initials(x.nama) }), el('div', { class: 'hist-main' },
-            el('div', { class: 'hist-top' }, el('b', { text: (x.jenis === 'ajukan' ? 'Pengajuan ' : 'Diisi ') + rpx(x.nominal) }), el('span', { class: 'muted', text: dShort(x.tanggal) })),
-            el('div', { class: 'tags' }, el('span', { class: 'tag ' + (x.status === 'menunggu' ? 'tag-warn' : 'tag-good'), text: x.status === 'menunggu' ? 'menunggu cair' : x.status === 'cair' ? 'sudah cair' : 'diisi' }), el('span', { class: 'tag', text: x.nama })),
-            x.catatan ? el('div', { class: 'hist-note', text: '“' + x.catatan + '”' }) : null));
-        })) : el('div', { class: 'empty', text: 'Belum ada catatan' }));
-      body.replaceChildren(stat, log);
-      swrClear();
+    pageHead(v, 'Petty Cash', 'Saldo dan pengeluaran dari laporan Petty Cash CARE. Uang fisik di BAP dicocokkan dengan saldo CARE saat closing.');
+    var tools = el('div', { class: 'toolbar2' }), body = el('div', null, skel(3));
+    v.append(tools, body);
+    var cari = '';
+    function load(bulan) {
+      api('pettyList', { bulan: bulan || '' }).then(function (p) {
+        tools.replaceChildren(
+          p.bulanTersedia.length ? monthSel(p.bulanTersedia, p.bulan, load) : null,
+          el('button', { class: 'btn btn-primary btn-sm', type: 'button', onclick: function () { unggahPetty(function () { load(p.bulan); }); } }, icon('upload'), 'Unggah laporan CARE'));
+        if (!p.waktu) {
+          body.replaceChildren(el('div', { class: 'card' }, el('h3', { text: 'Belum ada data petty cash' }),
+            el('p', { class: 'sub', text: 'Unduh laporan Petty Cash dari CARE (file …_PettyCash.xlsx), lalu tekan "Unggah laporan CARE". Unggah ulang kapan saja; transaksi yang sama tidak dobel.' })));
+          return;
+        }
+        var cek = p.bap, beda = cek && cek.selisih != null && Math.abs(cek.selisih) >= 1000;
+        var top = el('div', { class: 'card' },
+          el('div', { class: 'card-head' }, el('div', null, el('h3', { text: 'Saldo petty cash (CARE)' }), el('p', { class: 'sub', text: 'Transaksi terakhir ' + fTime(p.waktu) + ' · diunggah ' + fTime(p.unggah) })),
+            el('b', { class: 'big-num num', text: rpx(p.saldo) })),
+          cek ? el('ul', { class: 'calc bap-cek' }, el('li', null, el('span', null, 'Fisik di BAP ' + dShort(cek.tanggal), el('small', { text: rpx(cek.petty) + (cek.care != null ? ' · saldo CARE saat itu ' + rpx(cek.care) : ' · laporan CARE belum mencakup BAP ini') })),
+            cek.selisih == null ? el('span', { class: 'tag', text: 'Menunggu' }) : !beda ? el('span', { class: 'tag tag-good', text: '✓ Cocok' }) : selTag(cek.selisih))) : null,
+          el('p', { class: 'note', text: 'Unggah laporan CARE sebelum closing supaya petty cash di BAP langsung dicocokkan.' }));
+        var maxK = Math.max.apply(null, p.kategori.map(function (k) { return Math.max(k.ini, k.lalu); }).concat([1]));
+        var katCard = el('div', { class: 'card section' },
+          el('div', { class: 'card-head' }, el('div', null, el('h3', { text: 'Pengeluaran ' + bulanLabel(p.bulan) }), el('p', { class: 'sub', text: 'Bulan lalu ' + rpx(p.totalLalu) })),
+            el('b', { class: 'big-num num', text: rpx(p.totalIni) })),
+          p.kategori.length ? el('ul', { class: 'kat-list' }, p.kategori.map(function (k) {
+            return el('li', null, el('div', { class: 'kat-top' }, el('span', { text: k.akun.charAt(0) + k.akun.slice(1).toLowerCase() }), el('b', { class: 'num', text: nf.format(Math.round(k.ini)) })),
+              bar(Math.max(0, k.ini), maxK), el('small', { class: 'muted', text: k.n + ' transaksi · bulan lalu ' + nf.format(Math.round(k.lalu)) }));
+          })) : el('div', { class: 'empty', text: 'Belum ada pengeluaran' }));
+        var ganti = el('div', { class: 'card section' }, el('h3', { text: 'Penggantian dari regional' }),
+          p.penggantian.length ? el('ul', { class: 'calc setor-list' }, p.penggantian.map(function (g) {
+            return el('li', null, el('span', null, dShort(g.waktu.slice(0, 10)) + ' ' + g.waktu.slice(0, 4), el('small', { text: g.ket || 'Kas regional' })), el('span', { class: 'tag tag-good', text: '+ ' + rpx(g.nominal) }));
+          })) : el('div', { class: 'empty', text: 'Belum ada' }));
+        var listBox = el('div');
+        var inp = el('input', { type: 'search', class: 'inp', placeholder: 'Cari transaksi (mis. transport, cetak, galon)', value: cari });
+        function drawTrx() {
+          var q = cari.trim().toLowerCase();
+          var xs = p.trx.filter(function (x) { return !q || (x.akun + ' ' + x.ket + ' ' + x.kode).toLowerCase().indexOf(q) >= 0; });
+          listBox.replaceChildren(xs.length ? el('ul', { class: 'calc trx-list' }, xs.map(function (x) {
+            var masuk = x.debit > 0;
+            return el('li', { class: x.status === 'Reversed' ? 'rev' : '' }, el('span', null, x.ket || x.akun, el('small', { text: x.waktu.slice(8, 10) + '/' + x.waktu.slice(5, 7) + ' ' + x.waktu.slice(11, 16) + ' · ' + x.akun.toLowerCase() + (x.status === 'Reversed' ? ' · dibatalkan' : '') + ' · saldo ' + nf.format(x.saldo) })),
+              el('b', { class: 'num ' + (masuk ? 'c-good' : ''), text: (masuk ? '+' : '−') + nf.format(masuk ? x.debit : x.kredit) }));
+          })) : el('div', { class: 'empty', text: 'Tidak ada transaksi' }));
+        }
+        inp.addEventListener('input', function () { cari = inp.value; drawTrx(); });
+        var trx = el('div', { class: 'card section' }, el('h3', { text: 'Transaksi ' + bulanLabel(p.bulan) + ' (' + p.trx.length + ')' }), inp, listBox);
+        drawTrx();
+        body.replaceChildren(top, katCard, ganti, trx);
+      }).catch(function (e) { body.replaceChildren(errBox(e)); });
     }
-    api('pettyList').then(draw).catch(function (e) { body.replaceChildren(errBox(e)); });
+    load();
   }
 
   /* ---------- Rekap BAP ---------- */
@@ -1733,13 +1760,13 @@
           d.tautan.arsip ? el('a', { class: 'btn btn-ghost btn-sm', href: d.tautan.arsip, target: '_blank', rel: 'noopener' }, icon('file'), 'BAP lama') : null,
           el('button', { class: 'btn btn-ghost btn-sm', type: 'button', onclick: function () { unggahPos(function () { load(d.bulan); }); } }, icon('upload'), 'Unggah laporan POS'),
           d.list.length ? dlBtn(function () {
-            xlsxDownload('BAP Kas ' + bulanLabel(d.bulan), [{ name: 'BAP', rows: [['Tanggal', 'Penghitung', 'Floating', 'Float to Till', 'Selisih modal', 'Cash at Till', 'Tunai nota', 'Selisih nota', 'Tunai POS', 'Selisih POS', 'Store Safe', 'Petty Cash', 'Catatan']].concat(d.list.slice().reverse().map(function (b) {
-              return [b.tanggal, b.nama, b.floating, b.floatTill, b.selisihModal, b.cashTill, b.tunaiNota, b.selisihNota, b.tunaiPos, b.selisihPos, b.safe, b.petty, b.catatan];
+            xlsxDownload('BAP Kas ' + bulanLabel(d.bulan), [{ name: 'BAP', rows: [['Tanggal', 'Penghitung', 'Floating', 'Float to Till', 'Selisih modal', 'Cash at Till', 'Tunai nota', 'Selisih nota', 'Tunai POS', 'Selisih POS', 'Store Safe', 'Petty Cash', 'Saldo CARE', 'Selisih petty', 'Catatan']].concat(d.list.slice().reverse().map(function (b) {
+              return [b.tanggal, b.nama, b.floating, b.floatTill, b.selisihModal, b.cashTill, b.tunaiNota, b.selisihNota, b.tunaiPos, b.selisihPos, b.safe, b.petty, b.pettyCare, b.selisihPetty, b.catatan];
             })) }]);
           }) : null);
         if (!d.list.length && !d.pos.length) { body.replaceChildren(emptyCard('Belum ada BAP di bulan ini')); return; }
         var cash = 0, sn = 0, hs = 0;
-        d.list.forEach(function (b) { cash += b.cashTill; sn += b.selisihNota || 0; if (b.selisihNota || b.selisihModal || b.selisihPos || b.selisihSafe) hs++; });
+        d.list.forEach(function (b) { cash += b.cashTill; sn += b.selisihNota || 0; if (b.selisihNota || b.selisihModal || b.selisihPos || b.selisihSafe || Math.abs(b.selisihPetty || 0) >= 1000) hs++; });
         var stats = el('div', { class: 'stats' },
           el('div', { class: 'stat' }, el('span', { text: 'Hari ada BAP' }), el('b', { text: String(d.list.length) })),
           el('div', { class: 'stat' }, el('span', { text: 'Total Cash at Till' }), el('b', { class: 'num', text: nf.format(cash) })),
@@ -1753,6 +1780,7 @@
             b.selisihModal == null ? null : b.selisihModal ? el('span', { class: 'tag ' + (b.selisihModal < 0 ? 'tag-bad' : 'tag-warn'), text: 'Modal ' + (b.selisihModal > 0 ? '+' : '−') + nf.format(Math.abs(b.selisihModal)) }) : el('span', { class: 'tag tag-good', text: 'Modal pas' }),
             b.selisihNota == null ? null : b.selisihNota ? el('span', { class: 'tag ' + (b.selisihNota < 0 ? 'tag-bad' : 'tag-warn'), text: 'Nota ' + (b.selisihNota > 0 ? '+' : '−') + nf.format(Math.abs(b.selisihNota)) }) : el('span', { class: 'tag tag-good', text: 'Nota pas' }),
             b.tunaiPos == null ? (lamaTag ? null : el('span', { class: 'tag', text: 'POS menunggu' })) : b.selisihPos ? el('span', { class: 'tag tag-bad', text: '⚠ POS ' + (b.selisihPos > 0 ? '+' : '−') + nf.format(Math.abs(b.selisihPos)) }) : el('span', { class: 'tag tag-good', text: '✅ POS cocok' }),
+            b.selisihPetty == null ? null : Math.abs(b.selisihPetty) < 1000 ? el('span', { class: 'tag tag-good', text: 'Petty ✓' }) : el('span', { class: 'tag ' + (b.selisihPetty < 0 ? 'tag-bad' : 'tag-warn'), text: 'Petty ' + (b.selisihPetty > 0 ? '+' : '−') + nf.format(Math.abs(b.selisihPetty)) }),
             b.sisaSetor ? el('span', { class: 'tag tag-warn', text: 'Belum disetor ' + nf.format(b.sisaSetor) }) : null,
             b.cek ? el('span', { class: 'tag tag-warn', text: 'Perlu dicek' }) : null,
             b.koreksi.length ? el('span', { class: 'tag', text: 'Dikoreksi' }) : null);
@@ -1794,9 +1822,13 @@
           r.totalBelum ? el('button', { class: 'btn btn-orange btn-sm', type: 'button', text: 'Sudah disetor', onclick: function () { setorModal(r.belum, function (nr) { swrClear(); draw(nr); }); } }) : null));
       }
       var p = r.petty;
-      if (p && p.fisik != null) rows.push(el('li', null, el('span', { class: 'kh-ic ' + (p.perluAjukan ? 'wait' : 'ok') }, icon('cash')),
-        el('div', null, el('b', { text: 'Petty cash ' + rpx(p.fisik) }), el('small', { text: 'Terpakai ' + p.pct + '% dari ' + rpx(p.plafon) + (p.menunggu ? ' · pengajuan menunggu cair' : '') })),
-        p.perluAjukan ? el('a', { class: 'btn btn-ghost btn-sm', href: '#/kas-petty' }, 'Ajukan') : null));
+      if (p && (p.saldo != null || p.fisik != null)) {
+        var beda = p.selisih != null && Math.abs(p.selisih) >= 1000;
+        rows.push(el('li', null, el('span', { class: 'kh-ic ' + (beda ? 'bad' : p.selisih == null ? 'wait' : 'ok') }, icon('wallet')),
+          el('div', null, el('b', { text: 'Petty cash ' + (p.saldo != null ? 'CARE ' + rpx(p.saldo) : rpx(p.fisik)) }),
+            el('small', { text: p.selisih == null ? (p.sampai ? 'Data CARE sampai ' + fTime(p.sampai) : 'Laporan CARE belum diunggah') : 'BAP ' + dShort(p.tanggal) + ' ' + rpx(p.fisik) + (beda ? ' · beda ' + rpx(p.selisih) : ' · cocok') })),
+          el('a', { class: 'btn btn-ghost btn-sm', href: '#/kas-petty' }, 'Lihat')));
+      }
       box.replaceChildren(el('div', { class: 'card-head' }, el('h3', { text: 'Kas hari ini' }), el('a', { class: 'duty-link', href: '#/kas-rekap' }, 'Rekap', icon('arrow'))),
         el('ul', { class: 'kh-list' }, rows));
     }
@@ -2710,7 +2742,7 @@
     if (part === 'target') v.append(raTargetAdmin(), setCard);
     if (part === 'atur') v.append(setCard);
     if (part !== 'akun') api('settings').then(function (s) {
-      var vals = { modal_till: Number(s.modal_till) || 0, modal_total: Number(s.modal_total) || 0, petty_plafon: Number(s.petty_plafon) || 0 };
+      var vals = { modal_till: Number(s.modal_till) || 0, modal_total: Number(s.modal_total) || 0 };
       var row = function (key, id, label) {
         var btn = el('button', { class: 'btn btn-primary', type: 'button', text: 'Simpan' });
         var inp = rpInput(id, vals[key], function (n) { vals[key] = n; });
@@ -2739,8 +2771,6 @@
         el('p', { class: 'sub', text: 'Angka standar yang dipakai di BAP Kas.' }),
         row('modal_total', 'set-mtot', 'Total modal kembalian (Floating + Float to Till)'),
         row('modal_till', 'set-modal', 'Float to Till standar (sisanya = Floating Cash)'),
-        row('petty_plafon', 'set-petty', 'Plafon Petty Cash'),
-        angkaRow('petty_ambang', 'Ajukan petty cash saat terpakai (%)', s.petty_ambang),
         jamRow('bap_ingat', 'Pengingat BAP closing (jam)', s.bap_ingat),
         bapAdminBox(),
         dokAdmin(s));

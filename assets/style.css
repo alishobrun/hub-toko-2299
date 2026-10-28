@@ -1394,3 +1394,13 @@ html[data-theme=dark] .jd-dl,html[data-theme=dark] .btn-primary{background:#2C4F
 .kh-list .btn{flex:none}
 html[data-theme=dark] .kas-home{background:var(--panel)}
 html[data-theme=dark] .bap-tabs button{background:var(--panel)}
+.kat-list{list-style:none;margin:12px 0 0;padding:0;display:flex;flex-direction:column;gap:12px}
+.kat-top{display:flex;justify-content:space-between;gap:10px;font-size:14px;margin-bottom:5px}
+.kat-list .bar-track{display:block}
+.kat-list small{display:block;margin-top:4px;font-size:12px}
+.trx-list li{align-items:center;gap:10px}
+.trx-list li > span:first-child{display:flex;flex-direction:column;color:var(--fg);font-weight:600;min-width:0}
+.trx-list li small{color:var(--muted);font-weight:400;font-size:12px}
+.trx-list li.rev{opacity:.55}
+.trx-list li.rev b{text-decoration:line-through}
+.card .inp + div{margin-top:4px}
