@@ -3967,7 +3967,7 @@
     var body = el('div', null, skel(3));
     v.append(body);
     var st = S.naState || (S.naState = { tab: 'na', f: 'belum', lok: '', q: '', show: 40, disc: '' });
-    function dz(onDone) { return dropZone({ kecil: true, judul: 'Unggah LIST PROMO bulanan', ket: '…_LIST_PROMO_….xlsb · ketuk atau seret & lepas ke sini', onFiles: function (fs) {
+    function dz(onDone) { return dropZone({ kecil: true, accept: '.xlsb,.xlsx,.xls', judul: 'Unggah LIST PROMO bulanan', ket: '…_LIST_PROMO_….xlsb · ketuk atau seret & lepas ke sini', onFiles: function (fs) {
       toast('Membaca ' + fs[0].name + '… (file besar, tunggu sebentar)');
       kirimPromo(fs[0]).then(function (r) { toast(pesanPromo(r)); onDone(); }).catch(function (e) { toast(e.message, true); });
     } }); }
