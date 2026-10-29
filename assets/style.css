@@ -1427,3 +1427,16 @@ html[data-theme=dark] .promo-tag{background:var(--orange-50);color:#FDBA74}
 .na-sz b{font-size:14px}
 .na-sz small{font-size:11px;color:var(--muted)}
 .na-oleh{margin-left:auto;font-size:11.5px}
+/* BAP: usulan Float to Till dari isi laci */
+.bap-usul{margin-top:12px}
+.bap-usul .note{margin-top:10px}
+.bap-usul-t{width:100%;border-collapse:collapse;font-size:14px}
+.bap-usul-t th,.bap-usul-t td{padding:6px 8px;border-bottom:1px solid var(--line);text-align:left}
+.bap-usul-t th{font-size:12px;color:var(--muted);font-weight:600}
+.bap-usul-t .num{text-align:right;font-variant-numeric:tabular-nums}
+.bap-usul-t td.strong{font-weight:700;color:var(--orange,#E8590C)}
+.bap-usul-t tr.besar td:first-child::after{content:' setor';font-size:11px;color:var(--muted);margin-left:4px}
+.bap-usul-t tfoot td{font-weight:700;border-bottom:0}
+.komp-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(92px,1fr));gap:8px;margin-top:8px}
+.komp-grid label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--muted)}
+.komp-grid input{width:100%}

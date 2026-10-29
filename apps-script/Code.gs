@@ -11,7 +11,7 @@
 /** Versi kode. WAJIB dinaikkan setiap kali Code.gs diubah (format yyyy-MM-dd.n),
  *  lalu simpan ke GitHub (alishobrun/hub-toko-2299) SEBELUM dipasang. Halaman Kesehatan Data
  *  membandingkan angka ini dengan GitHub supaya kode yang dipasang di luar GitHub ketahuan. */
-const KODE_VERSI = '2026-10-28.6';
+const KODE_VERSI = '2026-10-29.1';
 
 const CFG = {
   STORE: '2299',
@@ -95,7 +95,9 @@ const TABS = {
 
 const PECAHAN = [100000, 50000, 20000, 10000, 5000, 2000, 1000, 500, 200, 100];
 const SETTING_DEFAULTS = { modal_till: 600000, floating_cash: 2400000, target_upt: 2, target_basket: 0, dok_max_mb: 300, dok_batas_open: 630, dok_batas_close: 1350, na_hari: 60, dok_ingat_open: 570, dok_ingat_close: 1290, data_batas: 660,
-  modal_total: 3000000, petty_plafon: 6000000, petty_ambang: 75, bap_ingat: 1320 };
+  modal_total: 3000000, petty_plafon: 6000000, petty_ambang: 75, bap_ingat: 1320,
+  // komposisi standar Float to Till (lembar per pecahan) untuk usulan di BAP
+  ftt_100000: 0, ftt_50000: 0, ftt_20000: 8, ftt_10000: 15, ftt_5000: 30, ftt_2000: 50, ftt_1000: 30, ftt_500: 20, ftt_200: 0, ftt_100: 0 };
 
 // Kolom yang disimpan sebagai teks (supaya tanggal/kode tidak diubah Sheets)
 const NUM_COLS = {
@@ -4524,6 +4526,17 @@ function bapHitung_(req) {
     });
     clean[pos] = o; tot[pos] = s;
   });
+  // rincian tambahan (tidak memengaruhi total): isi laci saat closing & tukar dengan Floating
+  const lembar = function (c) {
+    const o = {}; c = c || {};
+    PECAHAN.forEach(function (p) { const n = Number(c[p] || 0); if (isFinite(n) && n > 0 && Math.floor(n) === n && n <= 100000) o[p] = n; });
+    return o;
+  };
+  if (pec.laci && typeof pec.laci === 'object') {
+    clean.laci = lembar(pec.laci);
+    const tk = pec.tukar || {};
+    clean.tukar = { dari: lembar(tk.dari), ke: lembar(tk.ke), balik: lembar(tk.balik) };
+  }
   if (!tot.floating) throw new Error('Floating Cash belum dihitung');
   if (!tot.float_till) throw new Error('Float to Till belum dihitung');
   const nota = req.tunaiNota;
@@ -4543,7 +4556,8 @@ Object.assign(API, {
     const cash = K.bap.filter(function (b) { return b.tanggal < t && b.cash_till > 0; }).slice(-30).map(function (b) { return b.cash_till; });
     return {
       tanggal: t, today: today_(),
-      set: { modal_total: set.modal_total, modal_till: set.modal_till },
+      set: { modal_total: set.modal_total, modal_till: set.modal_till,
+        komposisi: PECAHAN.reduce(function (o, p) { const n = Number(set['ftt_' + p]) || 0; if (n) o[p] = n; return o; }, {}) },
       sudah: ini ? bapOut_(ini, K, S) : null,
       lalu: lalu ? { tanggal: lalu.tanggal, pecahan: jsonOr_(lalu.pecahan, {}), floating: lalu.floating, float_till: lalu.float_till, safe: lalu.safe, petty: lalu.petty } : null,
       rataCash: cash.length ? Math.round(cash.reduce(function (s, x) { return s + x; }, 0) / cash.length) : 0,

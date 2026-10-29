@@ -1364,6 +1364,93 @@
     return el('span', { class: 'tag ' + (s < 0 ? 'tag-bad' : 'tag-warn'), text: (s < 0 ? 'Kurang ' : 'Lebih ') + rpx(Math.abs(s)) });
   }
   function tglBapLabel(t) { return dDayName(t) + ', ' + dLong(t).replace(/^\w+,\s*/, ''); }
+  var PEC_BESAR = [100000, 50000];
+  var KOMP_STD = { 20000: 8, 10000: 15, 5000: 30, 2000: 50, 1000: 30, 500: 20 };
+  function pecBersih(o) { var r = {}; PECAHAN.forEach(function (d) { if ((o || {})[d] > 0) r[d] = o[d]; }); return r; }
+  function pecTeks(o) { return PECAHAN.filter(function (d) { return (o || {})[d]; }).map(function (d) { return o[d] + ' × ' + nf.format(d); }).join(', '); }
+  /** Cari lembar dari stok yang jumlahnya pas G. naik=true mulai pecahan kecil (enak untuk kembalian), false mulai yang besar (lembar sedikit). */
+  function tukarPas(st, G, kecil, naik) {
+    if (G <= 0) return G === 0 ? {} : null;
+    var ds = PECAHAN.filter(function (d) { return (st[d] || 0) > 0 && (!kecil || PEC_BESAR.indexOf(d) < 0); });
+    if (naik) ds.reverse();
+    var hasil = null, langkah = 0;
+    (function cari(i, sisa, pakai) {
+      if (hasil || langkah++ > 5000) return;
+      if (sisa === 0) { hasil = Object.assign({}, pakai); return; }
+      if (i >= ds.length) return;
+      var d = ds[i], mx = Math.min(st[d], Math.floor(sisa / d));
+      for (var n = mx; n >= 0 && !hasil; n--) { if (n) pakai[d] = n; else delete pakai[d]; cari(i + 1, sisa - n * d, pakai); }
+      delete pakai[d];
+    })(0, G, {});
+    return hasil;
+  }
+  /** Usulan Float to Till untuk besok dari isi laci (L), mengikuti komposisi standar (T).
+   *  Tiap pecahan diambil dari laci dulu; kalau kurang, ditukar dengan Floating (Fo) yang pecahannya sama.
+   *  Pecahan yang tidak ada sama sekali diganti pecahan kecil lain sampai pas. 50rb & 100rb diprioritaskan untuk disetor.
+   *  Uang yang diambil dari Floating diganti uang laci (≤20rb dulu). */
+  function usulFloat(L, Fo, T) {
+    var sL = Object.assign({}, L), sF = Object.assign({}, Fo), fl = {}, flL = {}, dari = {}, kurang = 0;
+    var add = function (o, d, n) { if (n) o[d] = (o[d] || 0) + n; };
+    var dariLaci = function (d, n) { sL[d] -= n; add(fl, d, n); add(flL, d, n); };
+    var dariFloating = function (d, n) { sF[d] -= n; add(fl, d, n); add(dari, d, n); };
+    PECAHAN.slice().reverse().forEach(function (d) {
+      var n = T[d] || 0; if (!n) return;
+      var a = Math.min(n, sL[d] || 0); if (a) dariLaci(d, a);
+      var b = Math.min(n - a, sF[d] || 0); if (b) dariFloating(d, b);
+      kurang += (n - a - b) * d;
+    });
+    var pakai = function (pk) { // laci dulu, sisanya Floating
+      PECAHAN.forEach(function (d) { var n = pk[d] || 0; if (!n) return; var a = Math.min(n, sL[d] || 0); if (a) dariLaci(d, a); if (n - a) dariFloating(d, n - a); });
+    };
+    var gab = function () { var g = {}; PECAHAN.forEach(function (d) { g[d] = (sL[d] || 0) + (sF[d] || 0); }); return g; };
+    if (kurang > 0) { // pecahan yang tidak ada diganti pecahan kecil lain
+      var pk = tukarPas(sL, kurang, true, true) || tukarPas(gab(), kurang, true, true);
+      for (var i = 0, ds = PECAHAN.slice().reverse(); !pk && i < ds.length; i++) { // lepas 1–3 lembar kecil supaya bisa pas
+        var e = ds[i];
+        for (var c = 1; !pk && c <= Math.min(3, fl[e] || 0); c++) {
+          var st = gab(); st[e] = 0;
+          var x = tukarPas(st, kurang + c * e, true, true);
+          if (x) { // kembalikan c lembar e ke asalnya
+            var kL = Math.min(c, flL[e] || 0); sL[e] += kL; flL[e] -= kL; sF[e] = (sF[e] || 0) + (c - kL); dari[e] = (dari[e] || 0) - (c - kL); fl[e] -= c;
+            pk = x;
+          }
+        }
+      }
+      if (!pk) pk = tukarPas(sL, kurang, false, true); // terakhir: 50rb/100rb dari laci
+      if (pk) { pakai(pk); kurang = 0; }
+    }
+    // uang yang diambil dari Floating diganti uang laci; kalau tidak pas, Floating memberi kembalian yang ikut disetor
+    var G = sumPec(dari), ke = {}, balik = {};
+    if (G) {
+      ke = tukarPas(sL, G, true, false) || tukarPas(sL, G, false, false);
+      [true, false].forEach(function (kc) { // ≤20rb dulu, baru boleh 50rb/100rb
+        for (var k = 500; !ke && k <= 50000; k += 500) {
+          var y = tukarPas(sF, k, false, true), x2 = y && tukarPas(sL, G + k, kc, false);
+          if (x2) { ke = x2; balik = y; }
+        }
+      });
+      if (!ke) { // tetap tidak bisa: batalkan pinjaman dari Floating
+        PECAHAN.forEach(function (d) { if (dari[d] > 0) { fl[d] -= dari[d]; kurang += dari[d] * d; } });
+        dari = {}; ke = {};
+      }
+    }
+    return { float: pecBersih(fl), dari: pecBersih(dari), ke: pecBersih(ke), balik: pecBersih(balik), kurang: Math.max(0, kurang) };
+  }
+  /** Floating sesudah tukar dengan laci (arah = 1) atau sebelum tukar dari yang tersimpan (arah = −1). */
+  function floatingTukar(fo, tk, arah) {
+    var r = {}; tk = tk || {};
+    PECAHAN.forEach(function (d) { var n = (fo[d] || 0) + arah * (((tk.ke || {})[d] || 0) - ((tk.dari || {})[d] || 0) - ((tk.balik || {})[d] || 0)); if (n > 0) r[d] = n; });
+    return r;
+  }
+  /** Cash at Till = isi laci − bagian Float to Till yang dari laci − uang laci yang masuk ke Floating. */
+  function bagiLaci(L, fl, tk) {
+    var c = {}, minus = [];
+    PECAHAN.forEach(function (d) {
+      var n = (L[d] || 0) - ((fl[d] || 0) - (tk.dari[d] || 0)) - (tk.ke[d] || 0) + ((tk.balik || {})[d] || 0);
+      if (n > 0) c[d] = n; else if (n < 0) minus.push(-n + ' × ' + nf.format(d));
+    });
+    return { cash: c, minus: minus };
+  }
 
   /** Rincian satu BAP (dipakai di BAP Kas & Rekap). */
   function bapDetail(b, opt) {
@@ -1382,13 +1469,17 @@
         b.selisihPetty == null ? el('span', { class: 'tag', text: '—' }) : Math.abs(b.selisihPetty) < 1000 ? el('span', { class: 'tag tag-good', text: '✓ Cocok' }) : selTag(b.selisihPetty)) : null,
       b.sisaSetor == null ? null : el('li', null, el('span', null, 'Setoran uang hari ini', el('small', { text: 'sudah disetor ' + rpx(b.disetor) })), el('span', { class: 'tag ' + (b.sisaSetor ? 'tag-warn' : 'tag-good'), text: b.sisaSetor ? 'Sisa ' + rpx(b.sisaSetor) : '✓ Disetor' })));
     var pec = el('details', { class: 'kas-det' }, el('summary', { text: 'Rincian pecahan' }),
-      el('div', { class: 'kas-det-grid' }, BAP_POS.map(function (p) {
+      el('div', { class: 'kas-det-grid' }, BAP_POS.concat((b.pecahan || {}).laci ? [{ id: 'laci', judul: 'Isi laci saat closing' }] : []).map(function (p) {
         var o = (b.pecahan || {})[p.id] || {};
         var ks = PECAHAN.filter(function (d) { return o[d]; });
         return el('div', null, el('b', { text: p.judul }), ks.length ? el('ul', null, ks.map(function (d) {
           return el('li', null, el('span', { text: nf.format(d) + ' × ' + o[d] }), el('span', { class: 'num', text: nf.format(d * o[d]) }));
         })) : el('p', { class: 'muted', style: 'margin:4px 0', text: '—' }));
-      })));
+      })),
+      (function () {
+        var tk = (b.pecahan || {}).tukar;
+        return tk && sumPec(tk.dari) ? el('p', { class: 'note', text: 'Tukar dengan Floating: ' + pecTeks(tk.dari) + ' dari Floating ke laci, diganti ' + pecTeks(tk.ke) + ' dari laci' + (sumPec(tk.balik) ? ' (kembalian ' + pecTeks(tk.balik) + ' ikut disetor)' : '') + '.' }) : null;
+      })());
     return el('div', { class: 'bap-det' },
       el('div', { class: 'bap-tot' }, rows.map(function (r) { return el('div', null, el('small', { text: r[0] }), el('b', { class: 'num', text: nf.format(r[1]) })); })),
       cek,
@@ -1422,6 +1513,12 @@
     rows.push(['Cash at Till', [b.tunaiNota != null ? 'nota ' + nf.format(b.tunaiNota) + sel(b.selisihNota) : '', b.tunaiPos != null ? 'laporan POS ' + nf.format(b.tunaiPos) + sel(b.selisihPos) : ''].filter(String).join(' · ')]);
     if (b.safeSeharusnya != null) rows.push(['Store Safe', 'seharusnya ' + nf.format(b.safeSeharusnya) + sel(b.selisihSafe)]);
     if (b.pettyCare != null) rows.push(['Petty Cash', 'saldo CARE ' + nf.format(b.pettyCare) + sel(b.selisihPetty)]);
+    if (pec.laci) {
+      rows.push([], ['Isi laci saat closing', 'Lembar', 'Rp']);
+      PECAHAN.forEach(function (d) { if (pec.laci[d]) rows.push([d, pec.laci[d], d * pec.laci[d]]); });
+      rows.push(['Total', '', sumPec(pec.laci)]);
+      if (pec.tukar && sumPec(pec.tukar.dari)) rows.push(['Tukar dengan Floating', 'dari Floating: ' + pecTeks(pec.tukar.dari) + ' · ke Floating: ' + pecTeks(pec.tukar.ke) + (sumPec(pec.tukar.balik) ? ' · kembalian disetor: ' + pecTeks(pec.tukar.balik) : '')]);
+    }
     if (b.catatan) rows.push(['Catatan', b.catatan]);
     rows.push([], ['Dihitung oleh', '', '', 'Diperiksa oleh'], [], [], ['(' + (b.nama || '..................') + ')', '', '', '(..................)']);
     xlsxDownload('BAP Kas ' + b.tanggal, [{ name: 'BAP ' + b.tanggal, rows: rows }]);
@@ -1475,6 +1572,44 @@
     draft.lihat = draft.lihat || (lama ? { safe: 1, petty: 1 } : {});
     function save() { store.set(key, JSON.stringify(draft)); }
     function tot(id) { return sumPec(draft.pecahan[id]); }
+    var komp = set.komposisi && Object.keys(set.komposisi).length ? set.komposisi : KOMP_STD;
+    var floatPagi = F.lalu && F.lalu.tanggal === addDays(t, -1) && F.lalu.float_till ? F.lalu.float_till : set.modal_till;
+    if (draft.modeLaci == null) {
+      var lp = lama ? lama.pecahan || {} : null;
+      if (lp) {
+        draft.modeLaci = !!lp.laci;
+        if (lp.laci) {
+          draft.laci = JSON.parse(JSON.stringify(lp.laci));
+          draft.tukar = { dari: (lp.tukar || {}).dari || {}, ke: (lp.tukar || {}).ke || {}, balik: (lp.tukar || {}).balik || {} };
+          draft.pecahan.floating = floatingTukar(draft.pecahan.floating, draft.tukar, -1); draft.ftManual = true;
+        }
+      } else draft.modeLaci = !tot('cash_till');
+    }
+    draft.laci = draft.laci || {}; draft.tukar = draft.tukar || { dari: {}, ke: {}, balik: {} };
+    var minus = [], usul = null;
+    /** Mode isi laci: Float to Till diusulkan dari isi laci, Cash at Till = sisanya. */
+    function sinkron() {
+      minus = []; usul = null;
+      if (!draft.modeLaci) return;
+      if (!sumPec(draft.laci)) { draft.pecahan.cash_till = {}; return; }
+      usul = usulFloat(draft.laci, draft.pecahan.floating, komp);
+      if (!draft.ftManual) { // ubah di tempat supaya referensi isian di tab Float to Till tetap sama
+        var ft = draft.pecahan.float_till; Object.keys(ft).forEach(function (k) { delete ft[k]; }); Object.assign(ft, usul.float);
+        draft.tukar = { dari: usul.dari, ke: usul.ke, balik: usul.balik };
+      }
+      var b = bagiLaci(draft.laci, draft.pecahan.float_till, draft.tukar);
+      draft.pecahan.cash_till = b.cash; minus = b.minus;
+    }
+    function urut() {
+      return draft.modeLaci ? ['floating', 'cash_till', 'float_till', 'safe', 'petty'].map(function (id) { return BAP_POS.filter(function (p) { return p.id === id; })[0]; }) : BAP_POS;
+    }
+    function info(p) {
+      if (draft.modeLaci && p.id === 'cash_till') return Object.assign({}, p, { label: 'Isi Laci', judul: 'Isi laci → Cash at Till', cepat: false,
+        desc: 'Hitung semua uang di laci saat closing (modal + penjualan). Aplikasi menyusun Float to Till untuk besok; sisanya jadi Cash at Till untuk disetor.' });
+      if (draft.modeLaci && p.id === 'float_till') return Object.assign({}, p, { cepat: false, desc: 'Disusun otomatis dari isi laci untuk kembalian besok. Hanya saran — boleh diubah.' });
+      return p;
+    }
+    function gantiMode(m) { draft.modeLaci = m; if (m) draft.ftManual = false; draft.pos = 'cash_till'; save(); sinkron(); drawTabs(); drawPos(); drawCek(); }
 
     var tabsBox = el('div', { class: 'pos-tabs bap-tabs' });
     var posCard = el('div', { class: 'card' });
@@ -1504,25 +1639,72 @@
       sticky);
 
     function drawTabs() {
-      tabsBox.replaceChildren.apply(tabsBox, BAP_POS.map(function (p, i) {
-        var n = tot(p.id), done = p.id === 'cash_till' ? n > 0 || draft.tunai != null : p.id === 'safe' ? n > 0 || !!draft.lihat.safe : n > 0;
+      tabsBox.replaceChildren.apply(tabsBox, urut().map(function (p0, i) {
+        var p = info(p0), laciTab = draft.modeLaci && p.id === 'cash_till';
+        var n = laciTab ? sumPec(draft.laci) : tot(p.id);
+        var done = laciTab ? n > 0 && draft.tunai != null : p.id === 'cash_till' ? n > 0 || draft.tunai != null : p.id === 'safe' ? n > 0 || !!draft.lihat.safe : n > 0;
         return el('button', { type: 'button', 'aria-pressed': String(p.id === draft.pos), class: done ? 'done' : '', onclick: function () { draft.pos = p.id; save(); drawTabs(); drawPos(); } },
           el('span', { class: 'bt-no', text: done ? '✓' : String(i + 1) }), el('span', { class: 'bt-l' }, p.label, el('small', { class: 'num', text: n ? nf.format(n) : '—' })));
       }));
     }
     function drawPos() {
-      var pos = BAP_POS.filter(function (p) { return p.id === draft.pos; })[0] || BAP_POS[0];
-      var c = draft.pecahan[pos.id];
+      sinkron();
+      var L0 = urut();
+      var pos = info(L0.filter(function (p) { return p.id === draft.pos; })[0] || L0[0]);
+      var isLaci = draft.modeLaci && pos.id === 'cash_till', isFt = draft.modeLaci && pos.id === 'float_till';
+      var c = isLaci ? draft.laci : draft.pecahan[pos.id];
       draft.lihat[pos.id] = 1;
-      var subEls = {}, totalEl = el('b', { class: 'num' });
+      var subEls = {}, totalEl = el('b', { class: 'num' }), usulBox = el('div', { class: 'bap-usul' });
       function upd() {
         PECAHAN.forEach(function (p) { var n = c[p] || 0; subEls[p].textContent = n ? nf.format(n * p) : '—'; subEls[p].classList.toggle('muted', !n); });
-        totalEl.textContent = rpx(tot(pos.id));
-        save(); drawTabs(); drawCek();
+        sinkron();
+        totalEl.textContent = rpx(sumPec(c));
+        save(); drawTabs(); drawCek(); drawUsul();
+      }
+      function pakaiUsul() { draft.ftManual = false; save(); drawPos(); drawTabs(); drawCek(); toast('Float to Till kembali ke usulan'); }
+      function drawUsul() {
+        var tk = draft.tukar, adaTk = draft.modeLaci && sumPec(tk.dari) > 0, kids = [];
+        var bTk = adaTk ? el('div', { class: 'note' }, el('b', { text: 'Tukar dengan Floating' }),
+          el('div', { text: '• Ambil dari Floating ke laci: ' + pecTeks(tk.dari) + ' (' + rpx(sumPec(tk.dari)) + ')' }),
+          el('div', { text: '• Masukkan dari laci ke Floating: ' + pecTeks(tk.ke) + ' (' + rpx(sumPec(tk.ke)) + ')' }),
+          sumPec(tk.balik) ? el('div', { text: '• Kembalian dari Floating ikut disetor: ' + pecTeks(tk.balik) + ' (' + rpx(sumPec(tk.balik)) + ')' }) : null) : null;
+        var bMinus = minus.length ? el('p', { class: 'note warn', text: '⚠ Float to Till memakai lembar yang tidak ada di laci: ' + minus.join(', ') + '. Kurangi di tab Float to Till.' }) : null;
+        var bManual = draft.ftManual && usul ? el('div', { class: 'row-btns', style: 'margin-top:8px' }, el('span', { class: 'muted', text: 'Float to Till sudah diubah manual.' }),
+          el('button', { type: 'button', class: 'btn btn-ghost btn-sm', text: 'Pakai usulan lagi', onclick: pakaiUsul })) : null;
+        if (isLaci) {
+          var L = sumPec(draft.laci);
+          if (!L) { usulBox.replaceChildren(el('p', { class: 'note', text: 'Isi jumlah lembar/keping yang ada di laci. Usulan Float to Till untuk besok dan Cash at Till muncul di sini.' })); return; }
+          var harus = draft.tunai == null ? null : floatPagi + draft.tunai;
+          kids.push(el('ul', { class: 'calc bap-cek' },
+            el('li', null, el('span', null, 'Isi laci seharusnya', el('small', { text: harus == null ? 'isi penjualan tunai dari nota dulu' : 'Float to Till pagi ' + rpx(floatPagi) + ' + nota ' + rpx(draft.tunai) + ' = ' + rpx(harus) })),
+              harus == null ? el('span', { class: 'tag', text: 'Isi nota' }) : selTag(L - harus))));
+          var fl = draft.pecahan.float_till, cs = draft.pecahan.cash_till;
+          var ds = PECAHAN.filter(function (d) { return draft.laci[d] || fl[d] || cs[d]; });
+          var td = function (n, b) { return el('td', { class: 'num' + (n ? '' : ' muted') + (b ? ' strong' : ''), text: n ? String(n) : '—' }); };
+          kids.push(el('h4', { style: 'margin:14px 0 6px', text: 'Usulan pembagian' }),
+            el('table', { class: 'bap-usul-t' },
+              el('thead', null, el('tr', null, el('th', { text: 'Pecahan' }), el('th', { class: 'num', text: 'Di laci' }), el('th', { class: 'num', text: 'Float to Till besok' }), el('th', { class: 'num', text: 'Disetor' }))),
+              el('tbody', null, ds.map(function (d) {
+                return el('tr', { class: PEC_BESAR.indexOf(d) >= 0 ? 'besar' : '' }, el('td', { text: nf.format(d) }), td(draft.laci[d]), td(fl[d], true), td(cs[d]));
+              })),
+              el('tfoot', null, el('tr', null, el('td', { text: 'Total' }), el('td', { class: 'num', text: nf.format(L) }), el('td', { class: 'num strong', text: nf.format(sumPec(fl)) }), el('td', { class: 'num', text: nf.format(sumPec(cs)) })))));
+          if (usul && usul.kurang && !draft.ftManual) kids.push(el('p', { class: 'note warn', text: '⚠ Pecahan kecil kurang ' + rpx(usul.kurang) + ' untuk komposisi standar, jadi Float to Till ' + rpx(sumPec(fl)) + '. Tukar uang kecil dulu atau tambah manual di tab Float to Till.' }));
+          kids.push(bTk, bMinus, bManual,
+            el('p', { class: 'muted', style: 'margin:10px 0 0;font-size:.85rem', text: 'Pecahan 100rb & 50rb diprioritaskan untuk disetor. Komposisi standar Float to Till diatur admin di Pengaturan.' }),
+            el('button', { type: 'button', class: 'btn btn-ghost btn-sm', style: 'margin-top:6px', text: 'Hitung Cash at Till langsung (tanpa isi laci)', onclick: function () { gantiMode(false); } }));
+        } else if (isFt) {
+          kids.push(sumPec(draft.laci) ? null : el('p', { class: 'note', text: 'Hitung isi laci dulu di tab Isi Laci — Float to Till disusun otomatis dari sana.' }), bTk, bMinus, bManual);
+        } else if (pos.id === 'floating' && adaTk) {
+          var fin = floatingTukar(c, tk, 1);
+          kids.push(el('p', { class: 'note', text: 'Isi Floating yang dihitung sebelum tukar. Setelah tukar dengan laci, Floating jadi: ' + pecTeks(fin) + ' (' + rpx(sumPec(fin)) + ').' }));
+        } else if (pos.id === 'cash_till' && !draft.modeLaci) {
+          kids.push(el('button', { type: 'button', class: 'btn btn-ghost btn-sm', style: 'margin-top:8px', text: 'Hitung isi laci saja (Float to Till diusulkan otomatis)', onclick: function () { gantiMode(true); } }));
+        }
+        usulBox.replaceChildren.apply(usulBox, kids.filter(Boolean));
       }
       var rows = PECAHAN.map(function (p) {
         var inp = el('input', { type: 'number', inputmode: 'numeric', min: 0, step: 1, value: c[p] || '', placeholder: '0', 'aria-label': 'Jumlah lembar ' + nf.format(p) });
-        var setN = function (n) { n = Math.max(0, Math.floor(n || 0)); if (n) c[p] = n; else delete c[p]; inp.value = n || ''; upd(); };
+        var setN = function (n) { n = Math.max(0, Math.floor(n || 0)); if (isFt) draft.ftManual = true; if (n) c[p] = n; else delete c[p]; inp.value = n || ''; upd(); };
         inp.addEventListener('input', function () { setN(Number(inp.value)); });
         inp.addEventListener('focus', function () { inp.select(); });
         subEls[p] = el('span', { class: 'den-sub num' });
@@ -1541,7 +1723,7 @@
         toast('Disalin dari BAP ' + dShort(lalu.tanggal) + ' — ubah yang berbeda saja');
       } }, icon('copy'), 'Isi seperti ' + (lalu.tanggal === addDays(t, -1) ? 'kemarin' : dShort(lalu.tanggal))) : null;
       var kosong = el('button', { type: 'button', class: 'btn btn-ghost btn-sm', text: 'Kosongkan', onclick: function () {
-        if (!tot(pos.id) || confirm('Kosongkan isian ' + pos.judul + '?')) { draft.pecahan[pos.id] = {}; save(); drawPos(); drawTabs(); drawCek(); }
+        if (!sumPec(c) || confirm('Kosongkan isian ' + pos.judul + '?')) { if (isLaci) draft.laci = {}; else draft.pecahan[pos.id] = {}; if (isFt) draft.ftManual = true; save(); drawPos(); drawTabs(); drawCek(); }
       } });
       var nota = null;
       if (pos.id === 'cash_till') {
@@ -1552,14 +1734,16 @@
         ni.addEventListener('input', function () { if (ni.value === '') { draft.tunai = null; save(); drawCek(); } });
         if (draft.tunai === 0) ni.value = '0';
       }
-      var idx = BAP_POS.indexOf(pos);
-      var next = BAP_POS[idx + 1];
+      var idx = L0.map(function (p) { return p.id; }).indexOf(pos.id);
+      var next = L0[idx + 1] ? info(L0[idx + 1]) : null;
       posCard.replaceChildren(
         el('h3', { text: (idx + 1) + '. ' + pos.judul }), el('p', { class: 'sub', text: pos.desc }),
+        isLaci ? nota : null,
         el('div', { class: 'row-btns' }, cepat, kosong),
         el('div', { class: 'dens' }, rows),
-        el('div', { class: 'den-total' }, el('span', { text: 'Total ' + pos.judul }), totalEl),
-        nota,
+        el('div', { class: 'den-total' }, el('span', { text: isLaci ? 'Total isi laci' : 'Total ' + pos.judul }), totalEl),
+        isLaci ? null : nota,
+        usulBox,
         next ? el('button', { type: 'button', class: 'btn btn-primary btn-block', style: 'margin-top:12px', onclick: function () {
           draft.pos = next.id; save(); drawTabs(); drawPos(); tabsBox.scrollIntoView({ block: 'start', behavior: 'smooth' });
         } }, 'Lanjut: ' + next.judul, icon('arrow')) : el('p', { class: 'note', text: 'Semua pos sudah. Periksa hasil pengecekan lalu simpan.' }));
@@ -1596,7 +1780,9 @@
       var x = hitung();
       var err = function (m, foc) { out.replaceChildren(errBox(new Error(m))); if (foc) foc(); };
       if (!x.floating) return err('Floating Cash belum dihitung', function () { draft.pos = 'floating'; drawTabs(); drawPos(); });
+      if (draft.modeLaci && !sumPec(draft.laci)) return err('Isi laci belum dihitung', function () { draft.pos = 'cash_till'; drawTabs(); drawPos(); });
       if (!x.float_till) return err('Float to Till belum dihitung', function () { draft.pos = 'float_till'; drawTabs(); drawPos(); });
+      if (draft.modeLaci && minus.length) return err('Float to Till memakai lembar yang tidak ada di laci: ' + minus.join(', '), function () { draft.pos = 'float_till'; drawTabs(); drawPos(); });
       if (!draft.lihat.safe) return err('Store Safe belum dihitung (isi 0 kalau kosong: buka tab Store Safe)', function () { draft.pos = 'safe'; drawTabs(); drawPos(); });
       if (!x.petty) return err('Petty Cash belum dihitung', function () { draft.pos = 'petty'; drawTabs(); drawPos(); });
       if (draft.tunai == null) return err('Isi penjualan tunai dari nota (isi 0 kalau tidak ada penjualan tunai)', function () { draft.pos = 'cash_till'; drawTabs(); drawPos(); });
@@ -1612,14 +1798,18 @@
       if (warn.length && !confirm('Cek lagi, mungkin salah ketik:\n\n• ' + warn.join('\n• ') + '\n\nTetap simpan?')) return;
       if (!lama && !confirm('Simpan BAP ' + tglBapLabel(t) + '? Setelah disimpan BAP terkunci (hanya admin yang bisa mengoreksi).')) return;
       btnSave.disabled = true; btnSave.lastChild.textContent = 'Menyimpan…';
-      api(lama ? 'bapKoreksi' : 'bapSave', { tanggal: t, pecahan: draft.pecahan, tunaiNota: draft.tunai, catatan: draft.catatan, alasan: draft.alasan })
+      var pec = {}; BAP_POS.forEach(function (p) { pec[p.id] = draft.pecahan[p.id]; });
+      if (draft.modeLaci) { // Floating disimpan sesudah tukar dengan laci
+        pec.floating = floatingTukar(draft.pecahan.floating, draft.tukar, 1); pec.laci = draft.laci; pec.tukar = draft.tukar;
+      }
+      api(lama ? 'bapKoreksi' : 'bapSave', { tanggal: t, pecahan: pec, tunaiNota: draft.tunai, catatan: draft.catatan, alasan: draft.alasan })
         .then(function () {
           store.set(key, null); swrClear(); toast(lama ? 'Koreksi BAP disimpan' : 'BAP tersimpan');
           if (lama) location.hash = '#/kas-rekap?bulan=' + t.slice(0, 7); else render();
         })
         .catch(function (e) { btnSave.disabled = false; btnSave.lastChild.textContent = lama ? 'Simpan koreksi' : 'Simpan BAP'; out.replaceChildren(errBox(e)); });
     });
-    drawTabs(); drawPos();
+    sinkron(); drawTabs(); drawPos();
   }
 
   /* ---------- Setoran bank ---------- */
@@ -2895,6 +3085,7 @@
         el('p', { class: 'sub', text: 'Angka standar yang dipakai di BAP Kas.' }),
         row('modal_total', 'set-mtot', 'Total modal kembalian (Floating + Float to Till)'),
         row('modal_till', 'set-modal', 'Float to Till standar (sisanya = Floating Cash)'),
+        kompRow(s),
         jamRow('bap_ingat', 'Pengingat BAP closing (jam)', s.bap_ingat),
         bapAdminBox(),
         dokAdmin(s));
@@ -2907,6 +3098,36 @@
         btn.disabled = true; api('setSetting', { key: key, value: n }).then(function () { btn.disabled = false; toast(label + ' disimpan'); }).catch(function (e) { btn.disabled = false; toast(e.message, true); });
       } });
       return el('div', { class: 'field' }, el('label', { text: label }), el('div', { class: 'inline' }, inp, btn));
+    }
+    /** Komposisi standar Float to Till (lembar per pecahan) untuk usulan di BAP. */
+    function kompRow(s) {
+      var val = {}, inps = {}, totEl = el('b', { class: 'num' }), warn = el('small');
+      var ds = [20000, 10000, 5000, 2000, 1000, 500, 200, 100, 50000, 100000];
+      ds.forEach(function (d) { val[d] = Number(s['ftt_' + d]) || 0; });
+      var hit = function () {
+        var tt = ds.reduce(function (a, d) { return a + val[d] * d; }, 0), std = Number(s.modal_till) || 0;
+        totEl.textContent = rpx(tt);
+        warn.textContent = tt === std ? '✓ sama dengan Float to Till standar' : '⚠ standar Float to Till ' + rpx(std) + ' (selisih ' + rpx(tt - std) + ')';
+        warn.className = tt === std ? 'c-good' : 'c-warn';
+      };
+      var grid = el('div', { class: 'komp-grid' }, ds.map(function (d) {
+        var inp = el('input', { type: 'number', inputmode: 'numeric', min: 0, step: 1, value: val[d] || '', placeholder: '0', 'aria-label': 'Lembar ' + nf.format(d) });
+        inp.addEventListener('input', function () { val[d] = Math.max(0, Math.floor(Number(inp.value) || 0)); hit(); });
+        inps[d] = inp;
+        return el('label', null, el('span', { text: nf.format(d) }), inp);
+      }));
+      var btn = el('button', { class: 'btn btn-primary', type: 'button', text: 'Simpan komposisi', onclick: function () {
+        var ubah = ds.filter(function (d) { return val[d] !== (Number(s['ftt_' + d]) || 0); });
+        if (!ubah.length) { toast('Tidak ada perubahan'); return; }
+        btn.disabled = true;
+        ubah.reduce(function (pr, d) { return pr.then(function () { return api('setSetting', { key: 'ftt_' + d, value: val[d] }).then(function () { s['ftt_' + d] = val[d]; }); }); }, Promise.resolve())
+          .then(function () { btn.disabled = false; toast('Komposisi Float to Till disimpan'); })
+          .catch(function (e) { btn.disabled = false; toast(e.message, true); });
+      } });
+      hit();
+      return el('div', { class: 'field' }, el('label', { text: 'Komposisi standar Float to Till (lembar per pecahan)' }),
+        el('small', { class: 'muted', text: 'Dipakai untuk usulan pecahan saat BAP closing. 50rb & 100rb sebaiknya 0 (diprioritaskan untuk disetor).' }),
+        grid, el('div', { class: 'inline', style: 'margin-top:8px;align-items:center;gap:10px' }, el('span', null, 'Total ', totEl), warn, btn));
     }
     function jamRow(key, label, cur) {
       var inp = el('input', { type: 'time', value: hhmmStr(cur).replace('.', ':'), style: 'max-width:160px' });
