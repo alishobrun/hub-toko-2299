@@ -1440,3 +1440,6 @@ html[data-theme=dark] .promo-tag{background:var(--orange-50);color:#FDBA74}
 .komp-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(92px,1fr));gap:8px;margin-top:8px}
 .komp-grid label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--muted)}
 .komp-grid input{width:100%}
+.ft-saran{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;margin:10px 0 12px;padding:12px;border-radius:12px;background:var(--orange-50);border:1px solid var(--line)}
+.ft-saran small{flex:1 1 220px;color:var(--muted);font-size:12.5px;line-height:1.4}
+[data-theme=dark] .ft-saran{background:rgba(242,107,58,.12)}
