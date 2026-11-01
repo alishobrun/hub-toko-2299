@@ -11,7 +11,7 @@
 /** Versi kode. WAJIB dinaikkan setiap kali Code.gs diubah (format yyyy-MM-dd.n),
  *  lalu simpan ke GitHub (alishobrun/hub-toko-2299) SEBELUM dipasang. Halaman Kesehatan Data
  *  membandingkan angka ini dengan GitHub supaya kode yang dipasang di luar GitHub ketahuan. */
-const KODE_VERSI = '2026-11-01.3';
+const KODE_VERSI = '2026-11-01.4';
 
 const CFG = {
   STORE: '2299',
@@ -89,6 +89,7 @@ const TABS = {
   // buku petty cash dari CARE (laporan PettyCash.xlsx diunggah manual)
   petty_care: ['id', 'kode', 'waktu', 'debit', 'kredit', 'saldo', 'akun', 'status', 'ket', 'oleh', 'diubah'],
   // buku Store Safe (brankas) dari CARE: uang masuk saat closing (POS Desktop) & setoran ke bank
+  putaway_tpl: ['kategori', 'bin_sell', 'bin_wa', 'diubah', 'oleh'],
   master_sku: ['sku', 'varian', 'ukuran', 'nama', 'lv2', 'lv3', 'lv4'],
   tag_na: ['sku', 'bulan', 'username', 'nama', 'waktu'],
   safe_care: ['kode', 'waktu', 'debit', 'kredit', 'saldo', 'dari', 'akun', 'status', 'jenis', 'mesin', 'alamat', 'ket', 'tgl_jual', 'oleh', 'diubah']
@@ -2163,10 +2164,28 @@ Object.assign(API, {
       };
     });
     const ml = prop_('master_loaded');
-    return { info: hasil, golden: golden, kat: kat, master: ml ? { nama: ml.nama, waktu: ml.waktu, sku: ml.sku || 0 } : null };
+    return { info: hasil, golden: golden, kat: kat, tpl: putawayTpl_(), master: ml ? { nama: ml.nama, waktu: ml.waktu, sku: ml.sku || 0 } : null };
   }
 });
 
+/** Template penempatan bin per kategori MC: {KATEGORI: [binSell, binWa]}. */
+function putawayTpl_() {
+  const o = {};
+  read_('putaway_tpl').forEach(function (r) { const k = String(r.kategori).trim().toUpperCase(); if (k) o[k] = [String(r.bin_sell || '').trim().toUpperCase(), String(r.bin_wa || '').trim().toUpperCase()]; });
+  return o;
+}
+Object.assign(API, {
+  putawayTpl: function (req) { auth_(req); return putawayTpl_(); },
+  /** Simpan template (admin): rows [[kategori, binSell, binWa]] — menggantikan seluruh template. */
+  putawayTplSave: function (req) {
+    const a = auth_(req, true);
+    const rows = (req.rows || []).filter(function (r) { return Array.isArray(r) && String(r[0] || '').trim() && (String(r[1] || '').trim() || String(r[2] || '').trim()); })
+      .map(function (r) { return { kategori: String(r[0]).trim().toUpperCase().slice(0, 60), bin_sell: String(r[1] || '').trim().toUpperCase().slice(0, 30), bin_wa: String(r[2] || '').trim().toUpperCase().slice(0, 30), diubah: now_(), oleh: a.username }; });
+    withLock_(function () { writeAll_('putaway_tpl', rows); });
+    log_(a.username, 'template putaway', rows.length + ' kategori');
+    return putawayTpl_();
+  }
+});
 /** Indeks SKU master {sku: [varian, ukuran, nama, lv2, lv3, lv4]} — disimpan di cache (dibaca ulang tiap master berganti). */
 function skuIndex_() {
   const ml = prop_('master_loaded'), k = 'msku_' + String((ml && ml.sig) || '').replace(/\W/g, '').slice(-24);

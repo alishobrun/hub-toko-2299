@@ -5410,8 +5410,13 @@
     });
     var terbanyak = function (o) { var b = null, n = -1; Object.keys(o || {}).forEach(function (k) { if (o[k] > n) { n = o[k]; b = k; } }); return b; };
     var LABEL = { sku: 'SKU ini sudah di bin ini', 'var': 'warna yang sama', gen: 'artikel (generic) yang sama', lv4: 'kategori MC Lv4', lv3: 'kategori MC Lv3', lv2: 'kategori MC Lv2' };
+    var T = D.tpl || {};
     function cariBin(jenis, a, levels) {
       for (var i = 0; i < levels.length; i++) {
+        if (levels[i] === 'lv4') { // template penempatan bin dulu (Lv4 lalu Lv3/Lv2), baru kebiasaan di By Bin
+          var tk = ['lv4', 'lv3', 'lv2'].map(function (l) { return String(a[l] || '').toUpperCase(); }).filter(function (k) { return k && T[k] && T[k][jenis === 'sell' ? 0 : 1]; })[0];
+          if (tk) return { bin: T[tk][jenis === 'sell' ? 0 : 1], dasar: 'template kategori ' + tk };
+        }
         var lv = levels[i], key = lv === 'sku' ? a.sku : lv === 'var' ? a.varian : lv === 'gen' ? a.generic : String(a[lv] || '').toUpperCase();
         var b = key && terbanyak((idx[jenis][lv] || {})[key]);
         if (b) return { bin: b, dasar: LABEL[lv] + (lv.charAt(0) === 'l' ? ' (' + key + ')' : '') };
@@ -5486,7 +5491,51 @@
       var it = paBaca(aoa); if (!it.length) { toast('Belum ada SKU yang terbaca', true); return; }
       proses(it, 'tempel'); ta.value = '';
     } }, icon('check'), 'Proses');
-    v.append(info, el('div', { class: 'card section' }, dz, el('div', { class: 'field', style: 'margin-top:12px' }, ta), el('div', { class: 'row-btns' }, btnTempel)), hasil);
+    var tplBox = el('details', { class: 'card section pa-tpl' }, el('summary', null, el('b', { text: 'Template penempatan bin per kategori' }), el('span', { class: 'muted', text: ' · dipakai untuk artikel baru yang belum punya bin' })));
+    v.append(info, tplBox, el('div', { class: 'card section' }, dz, el('div', { class: 'field', style: 'margin-top:12px' }, ta), el('div', { class: 'row-btns' }, btnTempel)), hasil);
+    tplBox.addEventListener('toggle', function () { if (tplBox.open && !tplBox.__isi) { tplBox.__isi = 1; gambarTpl(); } });
+    /** Template: kategori MC → bin selling area & bin gudang. Bawaan = bin yang paling sering dipakai kategori itu di By Bin. */
+    function gambarTpl() {
+      var isi = el('div', null, skel(2)); tplBox.append(isi);
+      Promise.all([api('putawayTpl'), loadBin()]).then(function (x) {
+        var T = x[0] || {}, Bn = x[1], kebiasaan = {};
+        Bn.rows.forEach(function (r) {
+          if (r.total <= 0 || r.damage || r.nonjual || !r.lv4) return;
+          var k = String(r.lv4).toUpperCase(), o = kebiasaan[k] || (kebiasaan[k] = { sell: {}, wh: {} }), j = r.sell ? 'sell' : r.wh ? 'wh' : null;
+          if (j) o[j][r.bin] = (o[j][r.bin] || 0) + r.total;
+        });
+        var top = function (o) { var b = '', n = -1; Object.keys(o).forEach(function (k) { if (o[k] > n) { n = o[k]; b = k; } }); return b; };
+        var kat = Object.keys(kebiasaan).concat(Object.keys(T)).filter(function (k, i, a) { return a.indexOf(k) === i; }).sort();
+        var nilai = {}; kat.forEach(function (k) { nilai[k] = (T[k] || ['', '']).slice(); });
+        var rows = kat.map(function (k) {
+          var d = kebiasaan[k] || { sell: {}, wh: {} };
+          var i1 = el('input', { value: nilai[k][0], placeholder: top(d.sell) || 'bin selling', list: 'pa-bins-tpl', 'aria-label': 'Bin selling ' + k });
+          var i2 = el('input', { value: nilai[k][1], placeholder: top(d.wh) || 'bin gudang', list: 'pa-bins-tpl', 'aria-label': 'Bin gudang ' + k });
+          i1.addEventListener('input', function () { nilai[k][0] = i1.value.trim().toUpperCase(); });
+          i2.addEventListener('input', function () { nilai[k][1] = i2.value.trim().toUpperCase(); });
+          return el('tr', null, el('td', { text: k }), el('td', null, i1), el('td', null, i2));
+        });
+        var bins = {}; Bn.rows.forEach(function (r) { if (r.bin && !r.damage) bins[r.bin] = 1; });
+        var simpanTpl = function (data) {
+          return api('putawayTplSave', { rows: data }).then(function () { toast('Template disimpan'); tplBox.__isi = 0; isi.remove(); gambarTpl(); }).catch(function (e) { toast(e.message, true); });
+        };
+        var unggah = dropZone({ kecil: true, judul: 'Unggah template Excel', ket: 'Kolom: Kategori · Bin Selling · Bin Gudang', onFiles: function (fs) {
+          bacaXlsx(fs[0]).then(function (aoa) {
+            var data = aoa.slice(1).filter(function (r) { return r && String(r[0] || '').trim(); }).map(function (r) { return [r[0], r[1], r[2]]; });
+            if (!data.length) throw new Error('Template kosong');
+            if (confirm('Ganti template dengan ' + data.length + ' kategori dari file ini?')) simpanTpl(data);
+          }).catch(function (e) { toast(e.message, true); });
+        } });
+        isi.replaceChildren(
+          el('p', { class: 'note', style: 'margin-top:8px', text: 'Kosong = pakai bin yang paling sering dipakai kategori itu di By Bin (tampil samar). Isi untuk menetapkan bin tetap. Template berlaku untuk artikel baru; artikel yang SKU/warna/generic-nya sudah punya bin tetap mengikuti bin itu.' }),
+          el('datalist', { id: 'pa-bins-tpl' }, Object.keys(bins).sort().map(function (b) { return el('option', { value: b }); })),
+          el('div', { class: 'tbl-wrap' }, el('table', { class: 'pa-tpl-t' }, el('thead', null, el('tr', null, el('th', { text: 'Kategori (MC Lv4)' }), el('th', { text: 'Bin selling area' }), el('th', { text: 'Bin gudang' }))), el('tbody', null, rows))),
+          el('div', { class: 'row-btns', style: 'margin-top:10px' },
+            isAdmin() ? el('button', { type: 'button', class: 'btn btn-primary btn-sm', onclick: function () { simpanTpl(kat.map(function (k) { return [k, nilai[k][0], nilai[k][1]]; })); } }, icon('check'), 'Simpan template') : null,
+            dlBtn(function () { xlsxDownload('template-putaway-2299', [{ name: 'Template', rows: [['Kategori', 'Bin Selling', 'Bin Gudang', 'Kebiasaan selling (By Bin)', 'Kebiasaan gudang (By Bin)']].concat(kat.map(function (k) { var d = kebiasaan[k] || { sell: {}, wh: {} }; return [k, nilai[k][0], nilai[k][1], top(d.sell), top(d.wh)]; })) }]); }, 'Unduh template')),
+          isAdmin() ? unggah : el('p', { class: 'muted', text: 'Hanya admin yang bisa mengubah template.' }));
+      }).catch(function (e) { isi.replaceChildren(errBox(e)); });
+    }
     var B = null;
     loadBin().then(function (b) {
       B = b;
