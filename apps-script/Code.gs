@@ -11,7 +11,7 @@
 /** Versi kode. WAJIB dinaikkan setiap kali Code.gs diubah (format yyyy-MM-dd.n),
  *  lalu simpan ke GitHub (alishobrun/hub-toko-2299) SEBELUM dipasang. Halaman Kesehatan Data
  *  membandingkan angka ini dengan GitHub supaya kode yang dipasang di luar GitHub ketahuan. */
-const KODE_VERSI = '2026-11-01.2';
+const KODE_VERSI = '2026-11-01.3';
 
 const CFG = {
   STORE: '2299',
@@ -2122,9 +2122,10 @@ Object.assign(API, {
     };
     const out = {};
     // 1. indeks SKU master
-    read_('master_sku').forEach(function (r) {
-      const k = String(r.sku);
-      if (minta[k]) out[k] = { varian: String(r.varian), ukuran: String(r.ukuran), nama: String(r.nama || ''), lv: r.lv4 ? { lv2: String(r.lv2), lv3: String(r.lv3), lv4: String(r.lv4) } : null, sumber: 'master' };
+    const IX = skuIndex_();
+    skus.forEach(function (k) {
+      const r = IX[k]; if (!r) return;
+      out[k] = { varian: r[0], ukuran: r[1], nama: r[2], lv: r[5] ? { lv2: r[3], lv3: r[4], lv4: r[5] } : null, sumber: 'master' };
     });
     // 2. cadangan: nama SKU di By Bin, DSR, list New Arrival
     const isi = function (k, nama, sumber) {
@@ -2144,18 +2145,9 @@ Object.assign(API, {
     const M = {}, MG = {};
     read_('master').forEach(function (m) { M[String(m.varian)] = m; if (!MG[String(m.generic)]) MG[String(m.generic)] = m; });
     // penjualan per ukuran (golden size): per generic & per Lv4, 12 bulan terakhir
-    const gens = {}, dari = addDays_(today_(), -365), golden = {}, kat = {};
-    skus.forEach(function (k) { gens[k.slice(0, 9)] = 1; });
-    read_('dsr').forEach(function (r) {
-      if (!isSalesLine_(r) || String(r.tanggal) < dari) return;
-      const k = String(r.sku), q = Number(r.qty) || 0;
-      isi(k, r.nama_sku, 'dsr');
-      const u = sp(r.nama_sku).ukuran; if (!u || !q) return;
-      const g = k.slice(0, 9);
-      if (gens[g]) { const o = golden[g] || (golden[g] = {}); o[u] = (o[u] || 0) + q; }
-      const k4 = String(r.kat4 || '').trim().toUpperCase();
-      if (k4) { const o2 = kat[k4] || (kat[k4] = {}); o2[u] = (o2[u] || 0) + q; }
-    });
+    const DA = dsrUkuran_(), golden = {};
+    skus.forEach(function (k) { const g = k.slice(0, 9); if (DA.golden[g]) golden[g] = DA.golden[g]; if (DA.nama[k]) isi(k, DA.nama[k], 'dsr'); });
+    const kat = DA.kat;
     const hasil = {};
     skus.forEach(function (k) {
       const o = out[k], g = k.slice(0, 9);
@@ -2174,6 +2166,36 @@ Object.assign(API, {
     return { info: hasil, golden: golden, kat: kat, master: ml ? { nama: ml.nama, waktu: ml.waktu, sku: ml.sku || 0 } : null };
   }
 });
+
+/** Indeks SKU master {sku: [varian, ukuran, nama, lv2, lv3, lv4]} — disimpan di cache (dibaca ulang tiap master berganti). */
+function skuIndex_() {
+  const ml = prop_('master_loaded'), k = 'msku_' + String((ml && ml.sig) || '').replace(/\W/g, '').slice(-24);
+  const hit = cacheAmbilBesar_(k);
+  if (hit) return hit;
+  const IX = {};
+  read_('master_sku').forEach(function (r) { IX[String(r.sku)] = [String(r.varian), String(r.ukuran), String(r.nama || ''), String(r.lv2 || ''), String(r.lv3 || ''), String(r.lv4 || '')]; });
+  cacheSimpanBesar_(k, IX, 21600);
+  return IX;
+}
+/** Penjualan per ukuran 12 bulan (per generic & per Lv4) + nama SKU yang pernah terjual — untuk golden size putaway. */
+function dsrUkuran_() {
+  const ver = PropertiesService.getScriptProperties().getProperty('ver') || '0', k = 'padsr_' + today_() + '_' + ver;
+  const hit = cacheAmbilBesar_(k);
+  if (hit) return hit;
+  const dari = addDays_(today_(), -365), golden = {}, kat = {}, nama = {};
+  read_('dsr').forEach(function (r) {
+    if (!isSalesLine_(r) || String(r.tanggal) < dari) return;
+    const sku = String(r.sku), q = Number(r.qty) || 0, p = String(r.nama_sku || '').split(',');
+    nama[sku] = String(r.nama_sku || '');
+    const u = p.length >= 3 ? p[p.length - 1].trim() : ''; if (!u || !q) return;
+    const g = sku.slice(0, 9), o = golden[g] || (golden[g] = {}); o[u] = (o[u] || 0) + q;
+    const k4 = String(r.kat4 || '').trim().toUpperCase();
+    if (k4) { const o2 = kat[k4] || (kat[k4] = {}); o2[u] = (o2[u] || 0) + q; }
+  });
+  const D = { golden: golden, kat: kat, nama: nama };
+  cacheSimpanBesar_(k, D, 21600);
+  return D;
+}
 
 /** Cari file master artikel terbaru di folder MASTER ARTIKEL (subfolder bulan dengan nomor terbesar). */
 function masterLatest_() {
