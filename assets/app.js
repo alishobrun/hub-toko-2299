@@ -266,6 +266,7 @@
       { icon: 'eye', id: 'display', label: 'Cek Display', desc: 'Barang belum terdisplay & display double' },
       { icon: 'search', id: 'cari', label: 'Cari Barang', desc: 'Lokasi bin per SKU, scan barcode' },
       { icon: 'tag', id: 'newarrival', label: 'New Arrival & Promo', desc: 'List promo bulanan: tag NEW ARRIVAL, Store Selected, lokasi bin' },
+      { icon: 'inbox', id: 'putaway', label: 'Putaway', desc: 'Bin tujuan barang datang + file import CARE' },
       { icon: 'inbox', id: 'saranreq', label: 'Saran Request', desc: 'Laris tapi stok tipis/habis' }] },
     { id: 'kasg', label: 'Kas', icon: 'cash', color: '#22C55E', items: [
       { icon: 'cash', id: 'kas', label: 'BAP Kas', desc: 'Hitung semua pos kas saat closing' },
@@ -5359,6 +5360,201 @@
     loadHist(); loadMasterCard();
   }
 
+  /* ---------- Putaway barang datang ---------- */
+  var PA_SKU = ['skucode', 'sku', 'sku code', 'article', 'article code', 'kode sku', 'barcode', 'material', 'item code'];
+  var PA_QTY = ['qty', 'quantity', 'jumlah', 'qty received', 'received qty', 'qty terima', 'pcs', 'qty do', 'qty to'];
+  /** Baca daftar barang datang dari tabel (Excel/tempel): kolom SKU & qty, baris SKU yang sama dijumlah. */
+  function paBaca(aoa) {
+    var norm = function (x) { return String(x == null ? '' : x).trim().toLowerCase().replace(/\s+/g, ' '); };
+    var iS = -1, iQ = -1, mulai = 0;
+    for (var i = 0; i < Math.min(aoa.length, 20) && iS < 0; i++) {
+      var h = (aoa[i] || []).map(norm);
+      for (var c = 0; c < h.length; c++) { if (iS < 0 && PA_SKU.indexOf(h[c]) >= 0) iS = c; if (iQ < 0 && PA_QTY.indexOf(h[c]) >= 0) iQ = c; }
+      if (iS >= 0) mulai = i + 1;
+    }
+    var out = {}, urut = [];
+    aoa.slice(mulai).forEach(function (r) {
+      r = r || [];
+      var sku = '', q = null;
+      if (iS >= 0) { sku = String(r[iS] == null ? '' : r[iS]).trim(); if (iQ >= 0) q = Number(String(r[iQ]).replace(/[^\d.-]/g, '')); }
+      else { // tanpa judul kolom: sel angka 9–13 digit = SKU, angka kecil sesudahnya = qty
+        for (var k = 0; k < r.length; k++) {
+          var v = String(r[k] == null ? '' : r[k]).trim();
+          if (!sku && /^\d{9,13}$/.test(v)) sku = v;
+          else if (sku && q == null && /^\d{1,5}$/.test(v)) q = Number(v);
+        }
+      }
+      sku = sku.replace(/\.0+$/, '');
+      if (!/^\d{9,13}$/.test(sku)) return;
+      q = q == null || isNaN(q) ? 1 : Math.round(q);
+      if (q <= 0) return;
+      if (!out[sku]) { out[sku] = 0; urut.push(sku); }
+      out[sku] += q;
+    });
+    return urut.map(function (k) { return { sku: k, qty: out[k] }; });
+  }
+  /** Susun bin tujuan. Aturan: warna sudah di selling area → semua ke gudang (WA); belum → 1 pcs display
+   *  (ukuran terlaris generic/kategori), sisanya ke WA. Bin mengikuti SKU → warna → generic → MC Lv4 → Lv3 → Lv2. */
+  function paSusun(items, B, D) {
+    var I = D.info || {}, idx = { sell: {}, wh: {} };
+    var tambah = function (jenis, lv, key, bin, q) {
+      if (!key) return;
+      var a = idx[jenis][lv] || (idx[jenis][lv] = {}), o = a[key] || (a[key] = {});
+      o[bin] = (o[bin] || 0) + q;
+    };
+    B.rows.forEach(function (r) {
+      if (r.total <= 0 || r.damage || r.nonjual || !r.bin) return;
+      var j = r.sell ? 'sell' : r.wh ? 'wh' : null; if (!j) return;
+      tambah(j, 'sku', r.sku, r.bin, r.total); tambah(j, 'var', r.varian, r.bin, r.total); tambah(j, 'gen', r.generic, r.bin, r.total);
+      tambah(j, 'lv4', String(r.lv4 || '').toUpperCase(), r.bin, r.total); tambah(j, 'lv3', String(r.lv3 || '').toUpperCase(), r.bin, r.total); tambah(j, 'lv2', String(r.lv2 || '').toUpperCase(), r.bin, r.total);
+    });
+    var terbanyak = function (o) { var b = null, n = -1; Object.keys(o || {}).forEach(function (k) { if (o[k] > n) { n = o[k]; b = k; } }); return b; };
+    var LABEL = { sku: 'SKU ini sudah di bin ini', 'var': 'warna yang sama', gen: 'artikel (generic) yang sama', lv4: 'kategori MC Lv4', lv3: 'kategori MC Lv3', lv2: 'kategori MC Lv2' };
+    function cariBin(jenis, a, levels) {
+      for (var i = 0; i < levels.length; i++) {
+        var lv = levels[i], key = lv === 'sku' ? a.sku : lv === 'var' ? a.varian : lv === 'gen' ? a.generic : String(a[lv] || '').toUpperCase();
+        var b = key && terbanyak((idx[jenis][lv] || {})[key]);
+        if (b) return { bin: b, dasar: LABEL[lv] + (lv.charAt(0) === 'l' ? ' (' + key + ')' : '') };
+      }
+      return null;
+    }
+    // data per SKU
+    var A = items.map(function (it) {
+      var inf = I[it.sku], br = B.rows.filter(function (r) { return r.sku === it.sku; })[0];
+      var a = { sku: it.sku, qty: it.qty, generic: it.sku.slice(0, 9), dikenal: !!(inf || br) };
+      if (inf) { a.sumber = inf.sumber; a.varian = inf.varian; a.nama = inf.nama; a.warna = inf.warna; a.ukuran = inf.ukuran; a.lv2 = inf.lv2; a.lv3 = inf.lv3; a.lv4 = inf.lv4; }
+      if (br) { a.varian = a.varian || br.varian; a.nama = a.nama || br.namaG; a.warna = a.warna || br.warna; a.ukuran = a.ukuran || br.ukuran; a.lv2 = a.lv2 || br.lv2; a.lv3 = a.lv3 || br.lv3; a.lv4 = a.lv4 || br.lv4; }
+      a.varian = a.varian || a.generic;
+      return a;
+    });
+    // kelompok display: 1 per warna (artikel tanpa warna: 1 per generic)
+    var G = {};
+    A.forEach(function (a) { if (a.dikenal) (G[a.varian] || (G[a.varian] = [])).push(a); });
+    Object.keys(G).forEach(function (vk) {
+      var grp = G[vk], a0 = grp[0];
+      var sudah = !!terbanyak((idx.sell['var'] || {})[vk]) || (!a0.warna && !!terbanyak((idx.sell.gen || {})[a0.generic]));
+      grp.forEach(function (a) { a.sudahDisplay = sudah; });
+      if (sudah) return;
+      var gol = (D.golden || {})[a0.generic], kat = (D.kat || {})[String(a0.lv4 || '').toUpperCase()];
+      var top = function (o) { return o ? Object.keys(o).sort(function (x, y) { return o[y] - o[x]; }) : []; };
+      var rank = top(gol).concat(top(kat)), sumber = top(gol).length ? 'ukuran terlaris artikel ini' : top(kat).length ? 'ukuran terlaris kategori ' + a0.lv4 : 'ukuran tengah';
+      var ada = grp.slice().sort(function (x, y) { return sizeCmp(x.ukuran, y.ukuran); });
+      var pilih = null;
+      for (var i = 0; i < rank.length && !pilih; i++) pilih = ada.filter(function (a) { return String(a.ukuran).toUpperCase() === String(rank[i]).toUpperCase(); })[0] || null;
+      if (!pilih && rank.length) { // ukuran terlaris tidak ikut datang: ambil yang terdekat
+        var semua = ada.map(function (a) { return a.ukuran; }).concat([rank[0]]).sort(sizeCmp), p = semua.indexOf(rank[0]);
+        var dekat = semua[p + 1] != null && semua[p + 1] !== rank[0] ? semua[p + 1] : semua[p - 1];
+        pilih = ada.filter(function (a) { return a.ukuran === dekat; })[0] || null;
+        if (pilih) sumber = 'terdekat dengan ukuran terlaris (' + rank[0] + ')';
+      }
+      if (!pilih) { pilih = ada[Math.floor((ada.length - 1) / 2)]; sumber = 'ukuran tengah'; }
+      pilih.display = true; pilih.dasarUkuran = grp.length > 1 || rank.length ? sumber : '';
+    });
+    // baris putaway
+    var L = [];
+    A.forEach(function (a) {
+      var base = { sku: a.sku, nama: a.nama || '', warna: a.warna || '', ukuran: a.ukuran || '' };
+      var catatanG = a.dikenal && !a.warna && a.sumber === 'generic' ? ' (warna/ukuran SKU ini belum ada di master, dibaca per artikel)' : '';
+      if (!a.dikenal) { L.push(Object.assign(base, { bin: '', qty: a.qty, peran: 'gudang', alasan: 'SKU tidak dikenal (belum ada di master / By Bin) — isi bin manual' })); return; }
+      var sisa = a.qty;
+      if (a.display) {
+        var s = cariBin('sell', a, ['gen', 'lv4', 'lv3', 'lv2']);
+        L.push(Object.assign({}, base, { bin: s ? s.bin : '', qty: 1, peran: 'display', alasan: (a.warna ? 'Warna belum dipajang' : 'Artikel belum dipajang') + ' → 1 pcs display' + (a.dasarUkuran ? ', ' + a.dasarUkuran : '') + (s ? ' · bin ' + s.dasar : ' · belum ada bin selling area untuk kategori ini, isi manual') + catatanG }));
+        sisa -= 1;
+      }
+      if (sisa > 0) {
+        var w = cariBin('wh', a, ['sku', 'var', 'gen', 'lv4', 'lv3', 'lv2']);
+        L.push(Object.assign({}, base, { bin: w ? w.bin : '', qty: sisa, peran: 'gudang', alasan: (a.sudahDisplay ? (a.warna ? 'Warna' : 'Artikel') + ' sudah dipajang → gudang' : 'Sisa setelah display → gudang') + (w ? ' · bin ' + w.dasar : ' · belum ada bin gudang untuk kategori ini, isi manual') + catatanG }));
+      }
+    });
+    return L;
+  }
+  function viewPutaway(v) {
+    pageHead(v, 'Putaway', 'Unggah daftar barang datang. Bin tujuan disusun otomatis dari By Bin & master artikel, lalu unduh file import untuk CARE.');
+    var kunci = 'putaway.' + (S.user ? S.user.username : '');
+    var st; try { st = JSON.parse(store.get(kunci) || 'null'); } catch (e) { st = null; }
+    var simpan = function () { store.set(kunci, st ? JSON.stringify(st) : null); };
+    var info = el('div', { class: 'card section' }, skel(1));
+    var hasil = el('div');
+    var ta = el('textarea', { rows: 3, placeholder: 'Atau tempel / scan SKU di sini, satu per baris: "910011828002 3" (tanpa qty = 1)' });
+    var dz = dropZone({ accept: '.xlsx,.xls,.xlsb,.csv', judul: 'Unggah daftar barang datang', ket: 'Excel berisi kolom SKU & qty · ketuk atau seret & lepas', onFiles: function (fs) {
+      bacaXlsx(fs[0]).then(function (aoa) { var it = paBaca(aoa); if (!it.length) throw new Error('Tidak ada SKU & qty yang terbaca di file ini'); proses(it, fs[0].name); })
+        .catch(function (e) { hasil.replaceChildren(errBox(e)); });
+    } });
+    var btnTempel = el('button', { type: 'button', class: 'btn btn-primary btn-sm', onclick: function () {
+      var aoa = ta.value.split(/\n+/).map(function (l) { return l.trim().split(/[\s,;\t]+/); });
+      var it = paBaca(aoa); if (!it.length) { toast('Belum ada SKU yang terbaca', true); return; }
+      proses(it, 'tempel'); ta.value = '';
+    } }, icon('check'), 'Proses');
+    v.append(info, el('div', { class: 'card section' }, dz, el('div', { class: 'field', style: 'margin-top:12px' }, ta), el('div', { class: 'row-btns' }, btnTempel)), hasil);
+    var B = null;
+    loadBin().then(function (b) {
+      B = b;
+      var u = b.upload, umur = u ? daysAgo(String(u.waktu).slice(0, 10), todayJkt()) : null;
+      info.replaceChildren(el('h3', { text: 'Data acuan' }),
+        el('div', { class: 'kv-row' }, el('span', { text: 'By Bin' }), el('b', { class: umur > 0 ? 'c-warn' : '', text: u ? fTime(u.waktu) + ' · ' + fNum(u.sku) + ' SKU' + (umur > 0 ? ' · unggah By Bin terbaru dulu supaya status display akurat' : '') : 'belum ada' })),
+        el('p', { class: 'note', style: 'margin:8px 0 0', text: 'Aturan: warna yang sudah ada di selling area → semua qty ke gudang (WA). Warna baru → 1 pcs ke selling area (ukuran terlaris), sisanya ke WA. Bin mengikuti SKU/warna/generic yang sama, kalau belum ada mengikuti kategori MC (Lv4 → Lv3 → Lv2).' }),
+        el('a', { class: 'btn btn-ghost btn-sm', href: '#/unggahdata', style: 'margin-top:8px' }, icon('upload'), 'Unggah By Bin terbaru'));
+      if (st && st.L) gambar();
+    }).catch(function (e) { info.replaceChildren(errBox(e)); });
+
+    function proses(items, sumber) {
+      if (!B) { toast('Data By Bin belum termuat', true); return; }
+      hasil.replaceChildren(el('div', { class: 'card section' }, el('p', { class: 'muted', text: 'Menyusun bin untuk ' + items.length + ' SKU…' }), skel(2)));
+      api('putawayInfo', { skus: items.map(function (x) { return x.sku; }) }).then(function (D) {
+        st = { sumber: sumber, waktu: new Date(Date.now() + 7 * 3600e3).toISOString().slice(0, 19).replace('T', ' '), L: paSusun(items, B, D), master: D.master };
+        simpan(); gambar();
+      }).catch(function (e) { hasil.replaceChildren(errBox(e)); });
+    }
+    function gambar() {
+      var L = st.L, bins = {};
+      B.rows.forEach(function (r) { if (r.bin && !r.damage) bins[r.bin] = 1; });
+      var dl = el('datalist', { id: 'pa-bins' }, Object.keys(bins).sort().map(function (b) { return el('option', { value: b }); }));
+      var tanpa = L.filter(function (x) { return !x.bin; }).length;
+      var pcs = L.reduce(function (s, x) { return s + x.qty; }, 0), disp = L.filter(function (x) { return x.peran === 'display'; }).reduce(function (s, x) { return s + x.qty; }, 0);
+      var sku = {}; L.forEach(function (x) { sku[x.sku] = 1; });
+      var grup = {};
+      L.forEach(function (x, i) { (grup[x.bin || ''] || (grup[x.bin || ''] = [])).push(i); });
+      var urut = Object.keys(grup).sort(function (a, b) { var ra = !a ? 0 : /^S/.test(a) ? 1 : 2, rb = !b ? 0 : /^S/.test(b) ? 1 : 2; return ra - rb || a.localeCompare(b); });
+      var unduhCare = function () {
+        if (tanpa && !confirm(tanpa + ' baris belum punya bin dan tidak ikut di file import. Lanjut unduh?')) return;
+        xlsxDownload('putaway-import-' + todayJkt(), [{ name: 'Worksheet', rows: [['skucode', 'to_bin_code', 'qty']].concat(L.filter(function (x) { return x.bin && x.qty > 0; }).map(function (x) { return [x.sku, x.bin, x.qty]; })) }]);
+      };
+      var unduhKerja = function () {
+        xlsxDownload('putaway-daftar-kerja-' + todayJkt(), [{ name: 'Putaway', rows: [['Bin', 'SKU', 'Nama', 'Warna', 'Ukuran', 'Qty', 'Tujuan', 'Alasan']].concat(urut.reduce(function (rs, b) {
+          return rs.concat(grup[b].map(function (i) { var x = L[i]; return [x.bin || '(isi manual)', x.sku, x.nama, x.warna, x.ukuran, x.qty, x.peran === 'display' ? 'Display' : 'Gudang', x.alasan]; }));
+        }, [])) }]);
+      };
+      hasil.replaceChildren(dl,
+        el('div', { class: 'card section' },
+          el('div', { class: 'card-head' }, el('div', null, el('h3', { text: 'Hasil putaway' }), el('p', { class: 'sub', text: (st.sumber === 'tempel' ? 'Dari tempel/scan' : st.sumber) + ' · ' + fTime(st.waktu) })),
+            el('div', { class: 'row-btns' },
+              el('button', { type: 'button', class: 'btn btn-orange btn-sm', onclick: unduhCare }, icon('download'), 'Unduh import CARE'),
+              dlBtn(unduhKerja, 'Daftar kerja'),
+              el('button', { type: 'button', class: 'btn btn-ghost btn-sm', text: 'Mulai baru', onclick: function () { if (confirm('Hapus hasil putaway ini?')) { st = null; simpan(); hasil.replaceChildren(); } } }))),
+          el('div', { class: 'tags' }, el('span', { class: 'tag', text: fNum(Object.keys(sku).length) + ' SKU' }), el('span', { class: 'tag', text: fNum(pcs) + ' pcs' }),
+            el('span', { class: 'tag tag-good', text: fNum(disp) + ' pcs ke display' }), el('span', { class: 'tag', text: fNum(pcs - disp) + ' pcs ke gudang' }),
+            tanpa ? el('span', { class: 'tag tag-bad', text: tanpa + ' baris belum ada bin' }) : null),
+          st.master && !st.master.sku ? el('p', { class: 'note warn', text: '⚠ Indeks SKU master artikel belum dimuat, jadi warna/ukuran artikel baru bisa tidak dikenal. Admin: buka Data → Unggah By Bin di komputer lalu tekan "Muat master sekarang".' }) : null),
+        urut.map(function (b) {
+          var ids = grup[b], q = ids.reduce(function (s, i) { return s + L[i].qty; }, 0);
+          return el('div', { class: 'card section pa-bin' + (b ? '' : ' pa-kosong') },
+            el('div', { class: 'card-head' }, el('h3', { text: b || 'Belum ada bin — isi manual' }), el('span', { class: 'tag' + (/^S/.test(b) ? ' tag-good' : ''), text: (b ? (/^S/.test(b) ? 'Selling area · ' : 'Gudang · ') : '') + q + ' pcs' })),
+            el('div', { class: 'pa-list' }, ids.map(function (i) {
+              var x = L[i];
+              var qIn = el('input', { type: 'number', min: 0, step: 1, value: x.qty, class: 'pa-q', 'aria-label': 'Qty ' + x.sku });
+              qIn.addEventListener('change', function () { x.qty = Math.max(0, Math.floor(Number(qIn.value) || 0)); simpan(); gambar(); });
+              var bIn = el('input', { value: x.bin, list: 'pa-bins', class: 'pa-b', placeholder: 'Bin', 'aria-label': 'Bin ' + x.sku });
+              bIn.addEventListener('change', function () { x.bin = bIn.value.trim().toUpperCase(); simpan(); gambar(); });
+              return el('div', { class: 'pa-row' },
+                el('div', { class: 'pa-info' }, el('b', { text: x.sku }), el('span', { text: [x.nama, x.warna, x.ukuran].filter(Boolean).join(' · ') || '—' }),
+                  el('small', { class: 'muted' }, x.peran === 'display' ? el('span', { class: 'na-tag na-new', text: 'DISPLAY' }) : null, ' ' + x.alasan)),
+                el('div', { class: 'pa-edit' }, qIn, bIn));
+            })));
+        }));
+    }
+  }
+
   /* ---------- Sinkron master artikel di latar (admin, komputer) ---------- */
   var masterBusy = false;
   function masterProgress(txt, pct) {
@@ -5401,12 +5597,18 @@
       });
     }).then(function (res) {
       var rows = res.rows, size = 2500, parts = Math.max(1, Math.ceil(rows.length / size)), k = 0;
+      var sk = res.skus || [], sSize = 8000, sParts = Math.ceil(sk.length / sSize), j = 0;
+      function sendSku() { // indeks SKU dulu, lalu master varian (masterSave terakhir menandai selesai)
+        if (j >= sParts) return Promise.resolve();
+        masterProgress('Master artikel: indeks SKU ' + (j + 1) + '/' + sParts + '…', 0.85 + 0.05 * j / sParts);
+        return api('masterSkuSave', { id: file.id, part: j, rows: sk.slice(j * sSize, (j + 1) * sSize) }).then(function () { j++; return sendSku(); });
+      }
       function send() {
         if (k >= parts) return Promise.resolve();
         masterProgress('Master artikel: menyimpan ' + (k + 1) + '/' + parts + '…', 0.85 + 0.15 * k / parts);
-        return api('masterSave', { id: file.id, part: k, rows: rows.slice(k * size, (k + 1) * size), selesai: k === parts - 1, artikel: res.artikel }).then(function () { k++; return send(); });
+        return api('masterSave', { id: file.id, part: k, rows: rows.slice(k * size, (k + 1) * size), selesai: k === parts - 1, artikel: res.artikel, sku: sk.length }).then(function () { k++; return send(); });
       }
-      return send().then(function () {
+      return sendSku().then(send).then(function () {
         masterProgress(null); masterBusy = false;
         S.master = null; S.bin = null; S.lap = {};
         toast('Master artikel diperbarui · ' + fNum(rows.length) + ' varian');
@@ -5856,7 +6058,7 @@
 
   Object.assign(VIEWS, {
     beranda: viewBeranda, briefing: viewBriefing, mingguan: viewMingguan, omni: viewOmni, kesehatan: viewKesehatan, pengumuman: viewPengumuman, handover: viewHandover, feedback: viewFeedback, apresiasi: viewApresiasi, dokumentasi: viewDokumentasi, monitoring: viewMonitoring, trend: viewTrend, ra: viewRA, produk: viewProduk, customer: viewCustomer,
-    stok: viewStok, stokart: viewStokArt, saranreq: viewSaranReq, display: viewDisplay, cari: viewCari, unggahbin: viewUnggahBin, unggahdata: viewUnggahData, newarrival: viewNewArrival, kas: viewKas, 'kas-rekap': viewKasRekap, 'kas-setor': viewKasSetor, 'kas-petty': viewKasPetty, unggah: viewUnggah,
+    stok: viewStok, stokart: viewStokArt, saranreq: viewSaranReq, display: viewDisplay, cari: viewCari, unggahbin: viewUnggahBin, unggahdata: viewUnggahData, newarrival: viewNewArrival, putaway: viewPutaway, kas: viewKas, 'kas-rekap': viewKasRekap, 'kas-setor': viewKasSetor, 'kas-petty': viewKasPetty, unggah: viewUnggah,
     jadwal: viewJadwal, jadwaldraf: viewJadwalDraf, persetujuan: viewPersetujuan, targetadm: viewTargetAdm, pengaturan: viewPengaturan, request: viewRequest, tukar: viewTukar, simpanan: viewSimpanan,
     akun: viewAkun, admin: viewAdmin, aktivitas: viewAktivitas, pica: viewPica
   });

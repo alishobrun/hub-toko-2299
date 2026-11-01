@@ -11,7 +11,7 @@
 /** Versi kode. WAJIB dinaikkan setiap kali Code.gs diubah (format yyyy-MM-dd.n),
  *  lalu simpan ke GitHub (alishobrun/hub-toko-2299) SEBELUM dipasang. Halaman Kesehatan Data
  *  membandingkan angka ini dengan GitHub supaya kode yang dipasang di luar GitHub ketahuan. */
-const KODE_VERSI = '2026-10-29.1';
+const KODE_VERSI = '2026-11-01.1';
 
 const CFG = {
   STORE: '2299',
@@ -89,6 +89,7 @@ const TABS = {
   // buku petty cash dari CARE (laporan PettyCash.xlsx diunggah manual)
   petty_care: ['id', 'kode', 'waktu', 'debit', 'kredit', 'saldo', 'akun', 'status', 'ket', 'oleh', 'diubah'],
   // buku Store Safe (brankas) dari CARE: uang masuk saat closing (POS Desktop) & setoran ke bank
+  master_sku: ['sku', 'varian', 'ukuran'],
   tag_na: ['sku', 'bulan', 'username', 'nama', 'waktu'],
   safe_care: ['kode', 'waktu', 'debit', 'kredit', 'saldo', 'dari', 'akun', 'status', 'jenis', 'mesin', 'alamat', 'ket', 'tgl_jual', 'oleh', 'diubah']
 };
@@ -2072,13 +2073,25 @@ Object.assign(API, {
       if (Number(req.part) === 0) writeAll_('master', objs); else appendRows_('master', objs);
       if (!req.selesai) return { ok: true };
       const n = sh_('master').getLastRow() - 1;
-      prop_('master_loaded', { id: pend.id, nama: pend.nama, folder: pend.folder, modified: pend.modified, waktu: now_(), oleh: u.nama, varian: n, sig: pend.sig, artikel: Number(req.artikel) || 0 });
+      prop_('master_loaded', { id: pend.id, nama: pend.nama, folder: pend.folder, modified: pend.modified, waktu: now_(), oleh: u.nama, varian: n, sig: pend.sig, artikel: Number(req.artikel) || 0, sku: Number(req.sku) || 0 });
       prop_('master_pending', null); prop_('master_proc', null); prop_('master_error', null);
       hapusCacheMaster_();
       bumpVersion_();
       log_(u.username, 'muat master artikel', pend.nama + ' · ' + n + ' varian');
       notif_('admin', 'info', 'master', 'Master artikel diperbarui', pend.nama + ' · ' + rupiah_(n) + ' varian dimuat', '#/stokart');
       return { varian: n };
+    }, 120000);
+  },
+
+  /** Indeks SKU master (sku → varian & ukuran) untuk putaway. Dikirim sebelum masterSave terakhir. */
+  masterSkuSave: function (req) {
+    auth_(req, true);
+    const pend = prop_('master_pending');
+    if (!pend || pend.id !== req.id) throw new Error('File master sudah berganti, muat ulang halaman');
+    const objs = (req.rows || []).filter(function (r) { return Array.isArray(r) && r[0]; }).map(function (r) { return { sku: String(r[0]), varian: String(r[1] || ''), ukuran: String(r[2] || '') }; });
+    return withLock_(function () {
+      if (Number(req.part) === 0) writeAll_('master_sku', objs); else appendRows_('master_sku', objs);
+      return { ok: true };
     }, 120000);
   },
 
@@ -2090,6 +2103,75 @@ Object.assign(API, {
     notif_('admin', 'cek', 'master', 'Master artikel gagal dimuat', msg, '#/unggahbin');
     log_(u.username, 'gagal muat master', msg);
     return true;
+  }
+});
+
+/* ===================== Putaway barang datang ===================== */
+Object.assign(API, {
+  /** Data untuk menentukan bin putaway: varian, warna, ukuran & MC level per SKU, plus penjualan per ukuran (golden size). */
+  putawayInfo: function (req) {
+    auth_(req);
+    const minta = {};
+    (req.skus || []).forEach(function (k) { k = String(k).trim(); if (/^\d{6,13}$/.test(k)) minta[k] = 1; });
+    const skus = Object.keys(minta);
+    if (!skus.length) throw new Error('Tidak ada SKU');
+    if (skus.length > 3000) throw new Error('Maksimal 3.000 SKU sekali proses');
+    const sp = function (nama) {
+      const p = String(nama || '').split(',');
+      return p.length >= 3 ? { nama: p.slice(0, p.length - 2).join(',').trim(), warna: p[p.length - 2].trim().toUpperCase(), ukuran: p[p.length - 1].trim() } : { nama: String(nama || '').trim(), warna: '', ukuran: '' };
+    };
+    const out = {};
+    // 1. indeks SKU master
+    read_('master_sku').forEach(function (r) {
+      const k = String(r.sku);
+      if (minta[k]) out[k] = { varian: String(r.varian), ukuran: String(r.ukuran), sumber: 'master' };
+    });
+    // 2. cadangan: nama SKU di By Bin, DSR, list New Arrival
+    const isi = function (k, nama, sumber) {
+      if (!minta[k] || (out[k] && out[k].nama)) return;
+      const x = sp(nama), g = k.length > 9 ? k.slice(0, 9) : k;
+      const o = out[k] || (out[k] = { varian: g + (x.warna ? '.' + x.warna : ''), ukuran: x.ukuran, sumber: sumber });
+      o.nama = x.nama; if (!o.ukuran) o.ukuran = x.ukuran;
+    };
+    const BL = {}; // MC level dari By Bin per generic (cadangan bila master tidak punya)
+    read_('bin').forEach(function (r) {
+      isi(String(r.sku), r.nama, 'bybin');
+      const g = String(r.sku).slice(0, 9); if (!BL[g] && r.lv4) BL[g] = { lv2: String(r.lv2), lv3: String(r.lv3), lv4: String(r.lv4) };
+    });
+    const P = promoBaca_();
+    if (P && P.na) P.na.forEach(function (r) { isi(String(r[0]), r[2], 'listpromo'); });
+    // 3. atribut varian dari master (MC level)
+    const M = {}, MG = {};
+    read_('master').forEach(function (m) { M[String(m.varian)] = m; if (!MG[String(m.generic)]) MG[String(m.generic)] = m; });
+    // penjualan per ukuran (golden size): per generic & per Lv4, 12 bulan terakhir
+    const gens = {}, dari = addDays_(today_(), -365), golden = {}, kat = {};
+    skus.forEach(function (k) { gens[k.slice(0, 9)] = 1; });
+    read_('dsr').forEach(function (r) {
+      if (!isSalesLine_(r) || String(r.tanggal) < dari) return;
+      const k = String(r.sku), q = Number(r.qty) || 0;
+      isi(k, r.nama_sku, 'dsr');
+      const u = sp(r.nama_sku).ukuran; if (!u || !q) return;
+      const g = k.slice(0, 9);
+      if (gens[g]) { const o = golden[g] || (golden[g] = {}); o[u] = (o[u] || 0) + q; }
+      const k4 = String(r.kat4 || '').trim().toUpperCase();
+      if (k4) { const o2 = kat[k4] || (kat[k4] = {}); o2[u] = (o2[u] || 0) + q; }
+    });
+    const hasil = {};
+    skus.forEach(function (k) {
+      const o = out[k], g = k.slice(0, 9);
+      if (!o) { // SKU tidak ada di indeks: pakai data generic (warna & ukuran tidak diketahui)
+        const mg = MG[g] || BL[g];
+        hasil[k] = mg ? { varian: g, generic: g, ukuran: '', warna: '', nama: mg.nama || '', lv2: String(mg.lv2), lv3: String(mg.lv3), lv4: String(mg.lv4), sumber: 'generic' } : null;
+        return;
+      }
+      const m = M[o.varian] || MG[g] || BL[g];
+      hasil[k] = {
+        varian: o.varian, generic: g, ukuran: o.ukuran, warna: o.varian.indexOf('.') > 0 ? o.varian.split('.').slice(1).join('.') : '',
+        nama: (m && m.nama) || o.nama || '', lv2: m ? String(m.lv2) : '', lv3: m ? String(m.lv3) : '', lv4: m ? String(m.lv4) : '', sumber: o.sumber
+      };
+    });
+    const ml = prop_('master_loaded');
+    return { info: hasil, golden: golden, kat: kat, master: ml ? { nama: ml.nama, waktu: ml.waktu, sku: ml.sku || 0 } : null };
   }
 });
 
@@ -2128,7 +2210,7 @@ function cekMaster() {
   const f = masterLatest_();
   if (!f) return null;
   const loaded = prop_('master_loaded');
-  if (loaded && loaded.sig === f.sig) { prop_('master_pending', null); return f; }
+  if (loaded && loaded.sig === f.sig && loaded.sku) { prop_('master_pending', null); return f; } // master lama tanpa indeks SKU dimuat ulang
   const pend = prop_('master_pending');
   if (!pend || pend.sig !== f.sig) {
     f.ready = false;
@@ -2174,7 +2256,7 @@ function folderCacheMaster_() { return folderSistem_(); }
 function hapusCacheMaster_() {
   try {
     const it = folderCacheMaster_().getFiles();
-    while (it.hasNext()) it.next().setTrashed(true);
+    while (it.hasNext()) { const f = it.next(); if (/^master_\d+\.txt$/.test(f.getName())) f.setTrashed(true); } // file lain di folder Sistem (mis. list promo) jangan ikut terhapus
   } catch (e) { Logger.log('cache master: ' + e); }
 }
 function pasangCekMaster_() {

@@ -158,6 +158,7 @@
   function num(v) { if (typeof v === 'number') return v; var n = Number(String(v || '').replace(/[^0-9.]/g, '')); return isNaN(n) ? 0 : n; }
   function txt(v) { return v == null ? '' : String(v).trim(); }
   function colorOf(desc) { var p = String(desc || '').split(','); return p.length >= 3 ? p[p.length - 2].trim().toUpperCase() : ''; }
+  function sizeOf(desc) { var p = String(desc || '').split(','); return p.length >= 3 ? p[p.length - 1].trim() : ''; }
   function nameOf(desc) { var p = String(desc || '').split(','); return (p.length >= 3 ? p.slice(0, p.length - 2).join(',') : p[0]).trim(); }
 
   /**
@@ -167,7 +168,7 @@
    */
   function processMaster(u8, opts) {
     opts = opts || {};
-    var idx = null, V = {}, artikel = 0;
+    var idx = null, V = {}, artikel = 0, SK = [];
     return readFirstSheet(u8, function (cells) {
       if (!idx) {
         var h = cells.map(function (x) { return txt(x).toLowerCase(); });
@@ -185,6 +186,7 @@
       var cross = idx.cross >= 0 ? txt(cells[idx.cross]) : '';
       var w = cross.indexOf('.') > 0 ? cross.split('.').slice(1).join('.').toUpperCase() : colorOf(desc);
       var key = gen + (w ? '.' + w : '');
+      SK.push([art, key, sizeOf(desc)]);
       var d = toIso(cells[idx.created]);
       var o = V[key];
       if (!o) {
@@ -206,7 +208,9 @@
       if (!idx) throw new Error('Kolom "Article" dan "Generic Code" tidak ditemukan. Pastikan file master artikel.');
       var rows = Object.keys(V).map(function (k) { return V[k]; });
       if (opts.keep) rows = rows.filter(function (r) { return opts.keep(r[1], r[5]); });
-      return { rows: rows, artikel: artikel, varianTotal: Object.keys(V).length };
+      var simpan = {}; rows.forEach(function (r) { simpan[r[0]] = 1; });
+      // indeks SKU (sku → varian & ukuran) hanya untuk varian yang disimpan
+      return { rows: rows, artikel: artikel, varianTotal: Object.keys(V).length, skus: SK.filter(function (x) { return simpan[x[1]]; }) };
     });
   }
 
