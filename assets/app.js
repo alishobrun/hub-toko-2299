@@ -3792,7 +3792,7 @@
     B._var = list;
     return list;
   }
-  var SIZE_ORD = ['XXS', 'XS', 'S', 'M', 'L', 'XL', 'XXL', '2XL', 'XXXL', '3XL', '4XL', 'M/L', 'L/XL', 'NOS'];
+  var SIZE_ORD = ['XXS', 'XS', 'S', 'M', 'L', 'XL', 'XXL', '2XL', 'XXXL', '3XL', '4XL', 'XS/S', 'S/M', 'M/L', 'L/XL', 'NOS'];
   function sizeCmp(a, b) {
     var na = parseFloat(a), nb = parseFloat(b);
     if (!isNaN(na) && !isNaN(nb)) return na - nb;
@@ -5597,7 +5597,7 @@
       });
     }).then(function (res) {
       var rows = res.rows, size = 2500, parts = Math.max(1, Math.ceil(rows.length / size)), k = 0;
-      var sk = res.skus || [], sSize = 8000, sParts = Math.ceil(sk.length / sSize), j = 0;
+      var sk = res.skus || [], sSize = 6000, sParts = Math.ceil(sk.length / sSize), j = 0;
       function sendSku() { // indeks SKU dulu, lalu master varian (masterSave terakhir menandai selesai)
         if (j >= sParts) return Promise.resolve();
         masterProgress('Master artikel: indeks SKU ' + (j + 1) + '/' + sParts + '…', 0.85 + 0.05 * j / sParts);

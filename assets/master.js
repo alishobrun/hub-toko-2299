@@ -186,7 +186,7 @@
       var cross = idx.cross >= 0 ? txt(cells[idx.cross]) : '';
       var w = cross.indexOf('.') > 0 ? cross.split('.').slice(1).join('.').toUpperCase() : colorOf(desc);
       var key = gen + (w ? '.' + w : '');
-      SK.push([art, key, sizeOf(desc)]);
+      SK.push([art, key, sizeOf(desc), txt(cells[idx.descGen]) || nameOf(desc), txt(cells[idx.lv2]), txt(cells[idx.lv3]), txt(cells[idx.lv4])]);
       var d = toIso(cells[idx.created]);
       var o = V[key];
       if (!o) {
@@ -208,9 +208,8 @@
       if (!idx) throw new Error('Kolom "Article" dan "Generic Code" tidak ditemukan. Pastikan file master artikel.');
       var rows = Object.keys(V).map(function (k) { return V[k]; });
       if (opts.keep) rows = rows.filter(function (r) { return opts.keep(r[1], r[5]); });
-      var simpan = {}; rows.forEach(function (r) { simpan[r[0]] = 1; });
-      // indeks SKU (sku → varian & ukuran) hanya untuk varian yang disimpan
-      return { rows: rows, artikel: artikel, varianTotal: Object.keys(V).length, skus: SK.filter(function (x) { return simpan[x[1]]; }) };
+      // indeks SKU lengkap (sku → varian, ukuran, nama, MC level) untuk putaway barang yang belum pernah ada di toko
+      return { rows: rows, artikel: artikel, varianTotal: Object.keys(V).length, skus: SK };
     });
   }
 

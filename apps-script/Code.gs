@@ -11,7 +11,7 @@
 /** Versi kode. WAJIB dinaikkan setiap kali Code.gs diubah (format yyyy-MM-dd.n),
  *  lalu simpan ke GitHub (alishobrun/hub-toko-2299) SEBELUM dipasang. Halaman Kesehatan Data
  *  membandingkan angka ini dengan GitHub supaya kode yang dipasang di luar GitHub ketahuan. */
-const KODE_VERSI = '2026-11-01.1';
+const KODE_VERSI = '2026-11-01.2';
 
 const CFG = {
   STORE: '2299',
@@ -89,7 +89,7 @@ const TABS = {
   // buku petty cash dari CARE (laporan PettyCash.xlsx diunggah manual)
   petty_care: ['id', 'kode', 'waktu', 'debit', 'kredit', 'saldo', 'akun', 'status', 'ket', 'oleh', 'diubah'],
   // buku Store Safe (brankas) dari CARE: uang masuk saat closing (POS Desktop) & setoran ke bank
-  master_sku: ['sku', 'varian', 'ukuran'],
+  master_sku: ['sku', 'varian', 'ukuran', 'nama', 'lv2', 'lv3', 'lv4'],
   tag_na: ['sku', 'bulan', 'username', 'nama', 'waktu'],
   safe_care: ['kode', 'waktu', 'debit', 'kredit', 'saldo', 'dari', 'akun', 'status', 'jenis', 'mesin', 'alamat', 'ket', 'tgl_jual', 'oleh', 'diubah']
 };
@@ -2073,7 +2073,7 @@ Object.assign(API, {
       if (Number(req.part) === 0) writeAll_('master', objs); else appendRows_('master', objs);
       if (!req.selesai) return { ok: true };
       const n = sh_('master').getLastRow() - 1;
-      prop_('master_loaded', { id: pend.id, nama: pend.nama, folder: pend.folder, modified: pend.modified, waktu: now_(), oleh: u.nama, varian: n, sig: pend.sig, artikel: Number(req.artikel) || 0, sku: Number(req.sku) || 0 });
+      prop_('master_loaded', { id: pend.id, nama: pend.nama, folder: pend.folder, modified: pend.modified, waktu: now_(), oleh: u.nama, varian: n, sig: pend.sig, artikel: Number(req.artikel) || 0, sku: Number(req.sku) || 0, skuV: 2 });
       prop_('master_pending', null); prop_('master_proc', null); prop_('master_error', null);
       hapusCacheMaster_();
       bumpVersion_();
@@ -2088,9 +2088,9 @@ Object.assign(API, {
     auth_(req, true);
     const pend = prop_('master_pending');
     if (!pend || pend.id !== req.id) throw new Error('File master sudah berganti, muat ulang halaman');
-    const objs = (req.rows || []).filter(function (r) { return Array.isArray(r) && r[0]; }).map(function (r) { return { sku: String(r[0]), varian: String(r[1] || ''), ukuran: String(r[2] || '') }; });
+    const objs = (req.rows || []).filter(function (r) { return Array.isArray(r) && r[0]; }).map(function (r) { return { sku: String(r[0]), varian: String(r[1] || ''), ukuran: String(r[2] || ''), nama: String(r[3] || '').slice(0, 80), lv2: String(r[4] || ''), lv3: String(r[5] || ''), lv4: String(r[6] || '') }; });
     return withLock_(function () {
-      if (Number(req.part) === 0) writeAll_('master_sku', objs); else appendRows_('master_sku', objs);
+      if (Number(req.part) === 0) { sh_('master_sku').getRange(1, 1, 1, TABS.master_sku.length).setValues([TABS.master_sku]); writeAll_('master_sku', objs); } else appendRows_('master_sku', objs);
       return { ok: true };
     }, 120000);
   },
@@ -2124,7 +2124,7 @@ Object.assign(API, {
     // 1. indeks SKU master
     read_('master_sku').forEach(function (r) {
       const k = String(r.sku);
-      if (minta[k]) out[k] = { varian: String(r.varian), ukuran: String(r.ukuran), sumber: 'master' };
+      if (minta[k]) out[k] = { varian: String(r.varian), ukuran: String(r.ukuran), nama: String(r.nama || ''), lv: r.lv4 ? { lv2: String(r.lv2), lv3: String(r.lv3), lv4: String(r.lv4) } : null, sumber: 'master' };
     });
     // 2. cadangan: nama SKU di By Bin, DSR, list New Arrival
     const isi = function (k, nama, sumber) {
@@ -2139,7 +2139,7 @@ Object.assign(API, {
       const g = String(r.sku).slice(0, 9); if (!BL[g] && r.lv4) BL[g] = { lv2: String(r.lv2), lv3: String(r.lv3), lv4: String(r.lv4) };
     });
     const P = promoBaca_();
-    if (P && P.na) P.na.forEach(function (r) { isi(String(r[0]), r[2], 'listpromo'); });
+    if (P && P.na) P.na.forEach(function (r) { isi(String(r[0]), r[2], 'listpromo'); const o = out[String(r[0])]; if (o && !o.lv && r[5]) o.lv = { lv2: String(r[3]), lv3: String(r[4]), lv4: String(r[5]) }; });
     // 3. atribut varian dari master (MC level)
     const M = {}, MG = {};
     read_('master').forEach(function (m) { M[String(m.varian)] = m; if (!MG[String(m.generic)]) MG[String(m.generic)] = m; });
@@ -2164,7 +2164,7 @@ Object.assign(API, {
         hasil[k] = mg ? { varian: g, generic: g, ukuran: '', warna: '', nama: mg.nama || '', lv2: String(mg.lv2), lv3: String(mg.lv3), lv4: String(mg.lv4), sumber: 'generic' } : null;
         return;
       }
-      const m = M[o.varian] || MG[g] || BL[g];
+      const m = M[o.varian] || o.lv || MG[g] || BL[g];
       hasil[k] = {
         varian: o.varian, generic: g, ukuran: o.ukuran, warna: o.varian.indexOf('.') > 0 ? o.varian.split('.').slice(1).join('.') : '',
         nama: (m && m.nama) || o.nama || '', lv2: m ? String(m.lv2) : '', lv3: m ? String(m.lv3) : '', lv4: m ? String(m.lv4) : '', sumber: o.sumber
@@ -2210,7 +2210,7 @@ function cekMaster() {
   const f = masterLatest_();
   if (!f) return null;
   const loaded = prop_('master_loaded');
-  if (loaded && loaded.sig === f.sig && loaded.sku) { prop_('master_pending', null); return f; } // master lama tanpa indeks SKU dimuat ulang
+  if (loaded && loaded.sig === f.sig && loaded.sku && loaded.skuV === 2) { prop_('master_pending', null); return f; } // master lama tanpa indeks SKU dimuat ulang
   const pend = prop_('master_pending');
   if (!pend || pend.sig !== f.sig) {
     f.ready = false;
