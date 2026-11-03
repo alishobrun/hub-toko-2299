@@ -5590,8 +5590,10 @@
         xlsxDownload('putaway-import-' + todayJkt(), [{ name: 'Worksheet', rows: [['skucode', 'to_bin_code', 'qty']].concat(L.filter(function (x) { return x.bin && x.qty > 0; }).map(function (x) { return [x.sku, x.bin, x.qty]; })) }]);
       };
       var unduhKerja = function () {
-        xlsxDownload('putaway-daftar-kerja-' + todayJkt(), [{ name: 'Putaway', rows: [['Bin', 'SKU', 'Nama', 'Warna', 'Ukuran', 'Qty', 'Tujuan', 'Alasan']].concat(urut.reduce(function (rs, b) {
-          return rs.concat(grup[b].map(function (i) { var x = L[i]; return [x.bin || '(isi manual)', x.sku, x.nama, x.warna, x.ukuran, x.qty, x.peran === 'display' ? 'Display' : 'Gudang', x.alasan]; }));
+        var no = 0; // checklist: urut per bin, nama artikel, ukuran; kolom ✓ untuk dicentang saat barang masuk bin
+        xlsxDownload('checklist-putaway-' + todayJkt(), [{ name: 'Checklist', rows: [['No', 'Bin', 'SKU', 'Nama Artikel', 'Warna', 'Ukuran', 'Qty', 'Tujuan', '✓', 'Catatan', 'Alasan']].concat(urut.reduce(function (rs, b) {
+          var ids = grup[b].slice().sort(function (i, j) { var x = L[i], y = L[j]; return String(x.nama).localeCompare(String(y.nama)) || String(x.warna).localeCompare(String(y.warna)) || sizeCmp(x.ukuran, y.ukuran); });
+          return rs.concat(ids.map(function (i) { var x = L[i]; return [++no, x.bin || '(isi manual)', x.sku, x.nama, x.warna, x.ukuran, x.qty, x.peran === 'display' ? 'DISPLAY' : 'Gudang', '☐', '', x.alasan]; }));
         }, [])) }]);
       };
       hasil.replaceChildren(dl,
@@ -5599,7 +5601,7 @@
           el('div', { class: 'card-head' }, el('div', null, el('h3', { text: 'Hasil putaway' }), el('p', { class: 'sub', text: (st.sumber === 'tempel' ? 'Dari tempel/scan' : st.sumber) + ' · ' + fTime(st.waktu) })),
             el('div', { class: 'row-btns' },
               el('button', { type: 'button', class: 'btn btn-orange btn-sm', onclick: unduhCare }, icon('download'), 'Unduh import CARE'),
-              dlBtn(unduhKerja, 'Daftar kerja'),
+              dlBtn(unduhKerja, 'Checklist (SKU & nama)'),
               el('button', { type: 'button', class: 'btn btn-ghost btn-sm', text: 'Mulai baru', onclick: function () { if (confirm('Hapus hasil putaway ini?')) { st = null; simpan(); hasil.replaceChildren(); } } }))),
           el('div', { class: 'tags' }, el('span', { class: 'tag', text: fNum(Object.keys(sku).length) + ' SKU' }), el('span', { class: 'tag', text: fNum(pcs) + ' pcs' }),
             el('span', { class: 'tag tag-good', text: fNum(disp) + ' pcs ke display' }), el('span', { class: 'tag', text: fNum(pcs - disp) + ' pcs ke gudang' }),
