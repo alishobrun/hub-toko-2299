@@ -1983,7 +1983,7 @@
   }
 
   /* ---------- Unggah Data: satu tempat untuk semua file ---------- */
-  var JENIS_FILE = { promo: ['List Promo bulanan (New Arrival & Store Selected)', 'tag'], dsr: ['DSR (Item DSR Report)', 'chart'], bin: ['Stok By Bin', 'box'], pos: ['Laporan POS Receivable', 'cash'], petty: ['Petty Cash CARE', 'wallet'], safe: ['Store Safe CARE', 'bank'] };
+  var JENIS_FILE = { sto: ['Barang datang (STO) → Putaway', 'inbox'], promo: ['List Promo bulanan (New Arrival & Store Selected)', 'tag'], dsr: ['DSR (Item DSR Report)', 'chart'], bin: ['Stok By Bin', 'box'], pos: ['Laporan POS Receivable', 'cash'], petty: ['Petty Cash CARE', 'wallet'], safe: ['Store Safe CARE', 'bank'] };
   function kenaliFile(file) {
     if (!window.XLSX) return Promise.reject(new Error('Pembaca Excel belum termuat. Periksa koneksi lalu muat ulang halaman.'));
     return file.arrayBuffer().then(function (buf) {
@@ -1994,6 +1994,7 @@
       for (var i = 0; i < aoa.length; i++) {
         var r = (aoa[i] || []).map(function (x) { return String(x).trim().toLowerCase().replace(/\s+/g, ' '); });
         var has = function (k) { return r.indexOf(k) >= 0; };
+        if (has('sku code') && (has('requested qty') || has('received qty'))) return 'sto';
         if (has('invoice no') && has('order date')) return 'dsr';
         if (has('sku code') && has('bin code')) return 'bin';
         if (has('site code') && has('description')) return 'pos';
@@ -2027,6 +2028,12 @@
         k.set(JENIS_FILE[j][0] + ' · memproses…');
         if (j === 'dsr') { k.set(JENIS_FILE[j][0]); dsrProses(file, k.area, null); return; }
         if (j === 'bin') { k.set(JENIS_FILE[j][0]); binProses(file, k.area, null); return; }
+        if (j === 'sto') return bacaXlsx(file).then(function (aoa) {
+          var it = paBaca(aoa); if (!it.length) throw new Error('Tidak ada SKU di file STO ini');
+          S.paMasuk = { items: it, nama: file.name };
+          k.set('✓ ' + JENIS_FILE[j][0] + ': ' + it.length + ' SKU · membuka Putaway…', 'c-good');
+          setTimeout(function () { location.hash = '#/putaway'; }, 600);
+        });
         var p = j === 'pos' ? kirimPos(file) : j === 'promo' ? kirimPromo(file) : kirimCare(j, file);
         return p.then(function (r) { k.set('✓ ' + (j === 'pos' ? pesanPos(r) : j === 'promo' ? pesanPromo(r) : pesanCare(j, r)), 'c-good'); });
       }).catch(function (e) { k.ic.className = 'file-ic'; k.set('✗ ' + (e.message || e), 'c-bad'); });
@@ -5362,21 +5369,28 @@
 
   /* ---------- Putaway barang datang ---------- */
   var PA_SKU = ['skucode', 'sku', 'sku code', 'article', 'article code', 'kode sku', 'barcode', 'material', 'item code'];
-  var PA_QTY = ['qty', 'quantity', 'jumlah', 'qty received', 'received qty', 'qty terima', 'pcs', 'qty do', 'qty to'];
+  var PA_QTY = ['qty', 'quantity', 'jumlah', 'qty received', 'received qty', 'qty terima', 'pcs', 'qty do', 'qty to', 'shipped qty', 'requested qty'];
   /** Baca daftar barang datang dari tabel (Excel/tempel): kolom SKU & qty, baris SKU yang sama dijumlah. */
   function paBaca(aoa) {
     var norm = function (x) { return String(x == null ? '' : x).trim().toLowerCase().replace(/\s+/g, ' '); };
-    var iS = -1, iQ = -1, mulai = 0;
-    for (var i = 0; i < Math.min(aoa.length, 20) && iS < 0; i++) {
+    var iS = -1, iQ = -1, mulai = 0, iRcv = -1, iShp = -1, iReq = -1;
+    for (var i = 0; i < Math.min(aoa.length, 30) && iS < 0; i++) {
       var h = (aoa[i] || []).map(norm);
       for (var c = 0; c < h.length; c++) { if (iS < 0 && PA_SKU.indexOf(h[c]) >= 0) iS = c; if (iQ < 0 && PA_QTY.indexOf(h[c]) >= 0) iQ = c; }
-      if (iS >= 0) mulai = i + 1;
+      if (iS >= 0) { mulai = i + 1; iRcv = h.indexOf('received qty'); iShp = h.indexOf('shipped qty'); iReq = h.indexOf('requested qty'); }
     }
-    var out = {}, urut = [];
+    var angka = function (x) { var n = Number(String(x == null ? '' : x).replace(/[^\d.-]/g, '')); return isNaN(n) ? 0 : n; };
+    var out = {}, urut = [], desc = {};
     aoa.slice(mulai).forEach(function (r) {
       r = r || [];
       var sku = '', q = null;
-      if (iS >= 0) { sku = String(r[iS] == null ? '' : r[iS]).trim(); if (iQ >= 0) q = Number(String(r[iQ]).replace(/[^\d.-]/g, '')); }
+      if (iS >= 0) {
+        sku = String(r[iS] == null ? '' : r[iS]).trim();
+        var m = sku.match(/^(\d{9,13})\s*-\s*(.+)$/); // STO: "910010333002 - KINKAJOU PINCH 4.0, GRY, 39"
+        if (m) { sku = m[1]; desc[sku] = m[2].trim(); }
+        if (iRcv >= 0 || iShp >= 0 || iReq >= 0) q = (iRcv >= 0 && angka(r[iRcv])) || (iShp >= 0 && angka(r[iShp])) || (iReq >= 0 && angka(r[iReq])) || 0; // STO: diterima → dikirim → diminta
+        else if (iQ >= 0) q = Number(String(r[iQ]).replace(/[^\d.-]/g, ''));
+      }
       else { // tanpa judul kolom: sel angka 9–13 digit = SKU, angka kecil sesudahnya = qty
         for (var k = 0; k < r.length; k++) {
           var v = String(r[k] == null ? '' : r[k]).trim();
@@ -5391,7 +5405,7 @@
       if (!out[sku]) { out[sku] = 0; urut.push(sku); }
       out[sku] += q;
     });
-    return urut.map(function (k) { return { sku: k, qty: out[k] }; });
+    return urut.map(function (k) { return { sku: k, qty: out[k], desc: desc[k] || '' }; });
   }
   /** Susun bin tujuan. Aturan: warna sudah di selling area → semua ke gudang (WA); belum → 1 pcs display
    *  (ukuran terlaris generic/kategori), sisanya ke WA. Bin mengikuti SKU → warna → generic → MC Lv4 → Lv3 → Lv2. */
@@ -5429,6 +5443,11 @@
       var a = { sku: it.sku, qty: it.qty, generic: it.sku.slice(0, 9), dikenal: !!(inf || br) };
       if (inf) { a.sumber = inf.sumber; a.varian = inf.varian; a.nama = inf.nama; a.warna = inf.warna; a.ukuran = inf.ukuran; a.lv2 = inf.lv2; a.lv3 = inf.lv3; a.lv4 = inf.lv4; }
       if (br) { a.varian = a.varian || br.varian; a.nama = a.nama || br.namaG; a.warna = a.warna || br.warna; a.ukuran = a.ukuran || br.ukuran; a.lv2 = a.lv2 || br.lv2; a.lv3 = a.lv3 || br.lv3; a.lv4 = a.lv4 || br.lv4; }
+      if (it.desc) { // deskripsi dari file STO: cadangan nama/warna/ukuran
+        var sp = splitName(it.desc);
+        if (!a.dikenal || !a.warna) { a.nama = a.nama || sp.nama; a.warna = a.warna || sp.warna; a.ukuran = a.ukuran || sp.ukuran; if (sp.warna && (!a.varian || a.varian === a.generic)) a.varian = a.generic + '.' + sp.warna; }
+        if (!a.dikenal && sp.warna) a.dikenal = true;
+      }
       a.varian = a.varian || a.generic;
       return a;
     });
@@ -5482,7 +5501,7 @@
     var info = el('div', { class: 'card section' }, skel(1));
     var hasil = el('div');
     var ta = el('textarea', { rows: 3, placeholder: 'Atau tempel / scan SKU di sini, satu per baris: "910011828002 3" (tanpa qty = 1)' });
-    var dz = dropZone({ accept: '.xlsx,.xls,.xlsb,.csv', judul: 'Unggah daftar barang datang', ket: 'Excel berisi kolom SKU & qty · ketuk atau seret & lepas', onFiles: function (fs) {
+    var dz = dropZone({ accept: '.xlsx,.xls,.xlsb,.csv', judul: 'Unggah daftar barang datang', ket: 'File STO (STO Enquiry Specific Detail) atau Excel berisi SKU & qty · ketuk atau seret & lepas', onFiles: function (fs) {
       bacaXlsx(fs[0]).then(function (aoa) { var it = paBaca(aoa); if (!it.length) throw new Error('Tidak ada SKU & qty yang terbaca di file ini'); proses(it, fs[0].name); })
         .catch(function (e) { hasil.replaceChildren(errBox(e)); });
     } });
@@ -5544,7 +5563,8 @@
         el('div', { class: 'kv-row' }, el('span', { text: 'By Bin' }), el('b', { class: umur > 0 ? 'c-warn' : '', text: u ? fTime(u.waktu) + ' · ' + fNum(u.sku) + ' SKU' + (umur > 0 ? ' · unggah By Bin terbaru dulu supaya status display akurat' : '') : 'belum ada' })),
         el('p', { class: 'note', style: 'margin:8px 0 0', text: 'Aturan: warna yang sudah ada di selling area → semua qty ke gudang (WA). Warna baru → 1 pcs ke selling area (ukuran terlaris), sisanya ke WA. Bin mengikuti SKU/warna/generic yang sama, kalau belum ada mengikuti kategori MC (Lv4 → Lv3 → Lv2).' }),
         el('a', { class: 'btn btn-ghost btn-sm', href: '#/unggahdata', style: 'margin-top:8px' }, icon('upload'), 'Unggah By Bin terbaru'));
-      if (st && st.L) gambar();
+      if (S.paMasuk) { var pm = S.paMasuk; S.paMasuk = null; proses(pm.items, pm.nama); }
+      else if (st && st.L) gambar();
     }).catch(function (e) { info.replaceChildren(errBox(e)); });
 
     function proses(items, sumber) {
