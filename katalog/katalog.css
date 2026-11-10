@@ -297,7 +297,7 @@ svg { flex: none; }
 /* ---------- banner kampanye eigeradventure ---------- */
 .banner.ada-foto .banner-rel { aspect-ratio: 1.8; }
 .banner.ada-foto .slide { min-height: 0; height: 100%; }
-@media (min-width: 700px) { .banner.ada-foto .banner-rel { aspect-ratio: 2.6; max-height: 440px; } }
+@media (min-width: 700px) { .banner.ada-foto .banner-rel { aspect-ratio: 2.6; width: 100%; } }
 .slide.s-foto { padding: 0; background: #E9E9E9; }
 .slide.s-foto::after { display: none; }
 .slide.s-foto picture, .slide.s-foto img { position: absolute; inset: 0; width: 100%; height: 100%; }
