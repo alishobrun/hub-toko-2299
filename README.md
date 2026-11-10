@@ -35,6 +35,16 @@ Login per orang: anggota tim mendaftar sendiri, lalu admin menyetujui. Akun pert
 - Cadangan otomatis setiap Senin dini hari ke folder Drive **Cadangan Hub 2299** (8 cadangan terakhir disimpan).
 - Semua aksi penting tercatat di tab `aktivitas`.
 
+## Katalog pelanggan
+
+Halaman publik untuk pelanggan di `katalog/` (alamatnya: `<alamat GitHub Pages>/katalog/`), tanpa login.
+
+- Isi: artikel yang tersedia di toko per kategori (Tas, Pakaian, Sepatu & sandal, Perlengkapan outdoor, Topi, Aksesoris) dan sub-kategori, pencarian, filter Pria/Wanita, urutan harga. Tombol **Tanya di WhatsApp** ke nomor toko (`KATALOG.WA` di `Code.gs`) dengan pesan berisi nama, kode, warna dan ukuran.
+- **Tidak ada jumlah stok.** Per warna hanya ukuran *tersedia* atau *kosong* (dicoret). Data sales, pelanggan dan lokasi bin tidak dikirim.
+- Data dari aksi `katalog` (tanpa token): stok tab `bin` (available > 0, barang jual, bukan Damage), nama/gender/harga (Loc Amount) dari `master`, ukuran lengkap dari `master_sku`. Label **Baru** = Created On ≤ batas New Arrival. Disimpan di cache dan dihitung ulang otomatis saat By Bin atau master diunggah.
+- **Foto:** pemicu `cariFotoKatalog` (tiap hari 03.00, dilanjutkan otomatis bila belum selesai) membuka `eigeradventure.com/d/<nama-artikel>` dan hanya memakai fotonya bila kode generic tercantum di halaman itu. Hasil di tab `katalog_foto`. Artikel yang tidak ketemu dicoba lagi setelah 14 hari.
+- Menu admin **Katalog Pelanggan**: link untuk dibagikan, status foto, jalankan pencarian, dan isi link foto manual (eigeradventure atau Google Drive). Isian manual tidak pernah ditimpa pencarian otomatis.
+
 ## Rumus sales
 
 - **Baris yang dihitung:** brand EIGER, selain paper bag. Jasa (reparasi) dan packing WAB/ECOM tidak dihitung.

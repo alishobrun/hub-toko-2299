@@ -295,6 +295,7 @@
       { icon: 'users', id: 'admin', label: 'Akun Tim', desc: 'Akun, nama di jadwal & reset password', admin: true },
       { icon: 'award', id: 'targetadm', label: 'Target', desc: 'Target RA, UPT & basket', admin: true },
       { icon: 'shield', id: 'pengaturan', label: 'Pengaturan', desc: 'Kas, video dokumentasi & mesin upload', admin: true },
+      { icon: 'store', id: 'katalog', label: 'Katalog Pelanggan', desc: 'Link katalog untuk pelanggan & foto artikel', admin: true },
       { icon: 'gauge', id: 'kesehatan', label: 'Kesehatan Data', desc: 'Data, otomatisasi, cadangan & versi kode', admin: true },
       { icon: 'list', id: 'aktivitas', label: 'Aktivitas', desc: 'Catatan siapa melakukan apa', admin: true }] }
   ];
@@ -6162,11 +6163,90 @@
     load();
   }
 
+
+  /* ---------- Katalog pelanggan: link & foto artikel (admin) ---------- */
+  function viewKatalog(v) {
+    pageHead(v, 'Katalog Pelanggan', 'Halaman katalog untuk pelanggan: barang yang tersedia di toko, tanpa jumlah stok. Foto dicari otomatis dari eigeradventure.com; yang tidak ketemu bisa diisi di sini.');
+    var url = location.href.split('#')[0].replace(/index\.html$/, '').replace(/\/?$/, '/') + 'katalog/';
+    v.append(el('div', { class: 'card' }, el('h3', { text: 'Link untuk pelanggan' }),
+      el('p', { class: 'sub', text: 'Bagikan link ini di WhatsApp, Instagram atau QR code di toko. Stok ikut berubah setiap By Bin diunggah.' }),
+      el('div', { class: 'kt-link' }, el('code', { text: url }),
+        el('div', { class: 'tags' },
+          el('button', { class: 'btn btn-primary btn-sm', type: 'button', text: 'Salin link', onclick: function () { copyText(url).then(function () { toast('Link katalog disalin'); }, function () { toast('Gagal menyalin', true); }); } }),
+          el('a', { class: 'btn btn-ghost btn-sm', href: url, target: '_blank', rel: 'noopener', text: 'Buka katalog' })))));
+    var stat = el('div', { class: 'card section' }, skel(1));
+    var list = el('div', { class: 'card section' }, skel(3));
+    v.append(stat, list);
+    var D = null, saring = 'belum', q = '', tampil = 60;
+
+    function load() {
+      api('katalogFotoList').then(function (d) { D = d; drawStat(); drawList(); })
+        .catch(function (e) { stat.replaceChildren(errBox(e)); list.replaceChildren(); });
+    }
+    function drawStat() {
+      var ada = D.items.filter(function (x) { return x.f.length; }).length, n = D.items.length;
+      var t = D.total || {}, c = D.cari || {};
+      var jalan = c.jalan && Date.now() - Number(c.at || 0) < 6 * 60e3;
+      var btn = el('button', { class: 'btn btn-primary btn-sm', type: 'button', disabled: jalan, text: jalan ? 'Sedang mencari…' : 'Cari foto sekarang', onclick: function () {
+        btn.disabled = true;
+        api('katalogCariFoto').then(function (r) { toast(r.sudah ? 'Pencarian masih berjalan' : 'Pencarian foto dimulai. Muat ulang halaman ini beberapa menit lagi.'); })
+          .catch(function (e) { btn.disabled = false; toast(e.message, true); });
+      } });
+      stat.replaceChildren(el('div', { class: 'card-head' }, el('div', null, el('h3', { text: 'Foto artikel' }),
+          el('p', { class: 'sub', text: ada + ' dari ' + n + ' artikel di katalog sudah punya foto (' + (n ? Math.round(ada / n * 100) : 0) + '%).' })), btn),
+        el('div', { class: 'kt-bar' }, el('i', { style: 'width:' + (n ? ada / n * 100 : 0) + '%' })),
+        el('p', { class: 'sub', style: 'margin-top:10px' },
+          t.selesai ? 'Pencarian otomatis terakhir ' + fTime(t.selesai) + ': ' + t.cek + ' artikel dicek, ' + t.ketemu + ' foto ketemu' + (t.sisa ? ', ' + t.sisa + ' sedang dilanjutkan.' : '.') : 'Pencarian otomatis berjalan tiap hari pukul 03.00 untuk artikel yang belum punya foto.',
+          t.galat ? el('b', { class: 'kt-galat', text: ' ' + t.galat }) : null));
+    }
+    function drawList() {
+      var F = { belum: function (x) { return !x.f.length; }, otomatis: function (x) { return x.f.length && x.sumber === 'otomatis'; }, manual: function (x) { return x.sumber === 'manual'; }, semua: function () { return true; } };
+      var seg = el('div', { class: 'seg', role: 'group', 'aria-label': 'Saring foto' }, [['belum', 'Belum ada foto'], ['otomatis', 'Otomatis'], ['manual', 'Diisi manual'], ['semua', 'Semua']].map(function (p) {
+        var n = D.items.filter(F[p[0]]).length;
+        return el('button', { type: 'button', 'aria-pressed': String(saring === p[0]), text: p[1] + ' (' + n + ')', onclick: function () { saring = p[0]; tampil = 60; drawList(); } });
+      }));
+      var cari = el('input', { class: 'hb-search', type: 'search', placeholder: 'Cari nama atau kode generic…', value: q });
+      cari.addEventListener('input', function () { q = cari.value; tampil = 60; drawRows(); });
+      var rows = el('div', { class: 'kt-rows' }), more = el('div');
+      function drawRows() {
+        var qq = q.trim().toLowerCase();
+        var xs = D.items.filter(F[saring]).filter(function (x) { return !qq || (x.n + ' ' + x.g).toLowerCase().indexOf(qq) >= 0; });
+        rows.replaceChildren(xs.length ? xs.slice(0, tampil).map(row) : el('div', { class: 'empty', text: saring === 'belum' && !qq ? 'Semua artikel sudah punya foto' : 'Tidak ada artikel' }));
+        more.replaceChildren(xs.length > tampil ? el('button', { class: 'btn btn-ghost btn-sm', type: 'button', text: 'Tampilkan lagi (' + (xs.length - tampil) + ')', onclick: function () { tampil += 60; drawRows(); } }) : null);
+      }
+      list.replaceChildren(el('h3', { text: 'Daftar artikel' }),
+        el('p', { class: 'sub', text: 'Tempel link foto per artikel: dari eigeradventure.com (klik kanan foto → Salin alamat gambar) atau link Google Drive yang dibagikan "Siapa saja yang memiliki link". Boleh lebih dari satu link, pisahkan dengan spasi. Isian manual tidak ditimpa pencarian otomatis.' }),
+        seg, cari, rows, more);
+      drawRows();
+    }
+    function row(x) {
+      var inp = el('input', { class: 'hb-search', type: 'url', placeholder: 'https://…', value: x.sumber === 'manual' ? x.f.join(' ') : '' });
+      var simpan = function (val) {
+        api('katalogFotoSimpan', { generic: x.g, foto: val }).then(function (r) {
+          x.f = r.f; x.sumber = r.f.length ? 'manual' : ''; x.status = r.f.length ? 'manual' : 'belum dicek';
+          toast(r.f.length ? 'Foto disimpan' : 'Foto dihapus'); drawStat(); drawList();
+        }).catch(function (e) { toast(e.message, true); });
+      };
+      var cariWeb = 'https://www.google.com/search?q=' + encodeURIComponent('site:eigeradventure.com ' + x.n);
+      return el('div', { class: 'kt-row' },
+        el('div', { class: 'kt-thumb' }, x.f[0] ? el('img', { src: x.f[0], alt: '', loading: 'lazy', referrerpolicy: 'no-referrer' }) : icon('box')),
+        el('div', { class: 'kt-main' },
+          el('b', { text: x.n }),
+          el('small', null, x.g + ' · ' + titleCase(x.k3) + ' / ' + titleCase(x.k4) + ' · ',
+            x.sumber === 'manual' ? 'diisi manual' : x.f.length ? 'otomatis' : x.status === 'tidak ketemu' ? 'tidak ketemu di web (dicek ' + fTime(x.dicek) + ')' : 'belum dicek',
+            x.url ? [' · ', el('a', { href: x.url, target: '_blank', rel: 'noopener', text: 'halaman web' })] : [' · ', el('a', { href: cariWeb, target: '_blank', rel: 'noopener', text: 'cari di eigeradventure' })]),
+          el('div', { class: 'inline' }, inp,
+            el('button', { class: 'btn btn-primary btn-sm', type: 'button', text: 'Simpan', onclick: function () { simpan(inp.value); } }),
+            x.sumber === 'manual' ? el('button', { class: 'btn btn-ghost btn-sm', type: 'button', text: 'Hapus', onclick: function () { simpan(''); } }) : null)));
+    }
+    load();
+  }
+
   Object.assign(VIEWS, {
     beranda: viewBeranda, briefing: viewBriefing, mingguan: viewMingguan, omni: viewOmni, kesehatan: viewKesehatan, pengumuman: viewPengumuman, handover: viewHandover, feedback: viewFeedback, apresiasi: viewApresiasi, dokumentasi: viewDokumentasi, monitoring: viewMonitoring, trend: viewTrend, ra: viewRA, produk: viewProduk, customer: viewCustomer,
     stok: viewStok, stokart: viewStokArt, saranreq: viewSaranReq, display: viewDisplay, cari: viewCari, unggahbin: viewUnggahBin, unggahdata: viewUnggahData, newarrival: viewNewArrival, putaway: viewPutaway, kas: viewKas, 'kas-rekap': viewKasRekap, 'kas-setor': viewKasSetor, 'kas-petty': viewKasPetty, unggah: viewUnggah,
     jadwal: viewJadwal, jadwaldraf: viewJadwalDraf, persetujuan: viewPersetujuan, targetadm: viewTargetAdm, pengaturan: viewPengaturan, request: viewRequest, tukar: viewTukar, simpanan: viewSimpanan,
-    akun: viewAkun, admin: viewAdmin, aktivitas: viewAktivitas, pica: viewPica
+    akun: viewAkun, admin: viewAdmin, aktivitas: viewAktivitas, pica: viewPica, katalog: viewKatalog
   });
   render();
 })();

@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#1D3A2E">
+  <title>Katalog EIGER Kartasura</title>
+  <meta name="description" content="Cek barang yang tersedia di EIGER Store A. Yani Kartasura, Sukoharjo, lalu tanya langsung lewat WhatsApp.">
+  <meta property="og:title" content="Katalog EIGER Kartasura">
+  <meta property="og:description" content="Tas, pakaian, sepatu dan perlengkapan outdoor yang tersedia di toko. Tanya langsung lewat WhatsApp.">
+  <meta property="og:image" content="../assets/icon-512.png">
+  <link rel="icon" type="image/png" sizes="64x64" href="../assets/favicon-64.png">
+  <link rel="apple-touch-icon" href="../assets/icon-180.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="katalog.css?v=202611110010">
+</head>
+<body>
+  <header class="hero">
+    <svg class="kontur" viewBox="0 0 800 260" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+      <g fill="none" stroke="currentColor" stroke-width="1.2">
+        <path d="M-20 210c90-40 160-10 240-46s120-92 210-88 150 70 230 64 120-30 160-26"/>
+        <path d="M-20 232c96-36 170-6 254-40s128-84 214-80 146 62 226 58 124-24 146-20"/>
+        <path d="M-20 188c84-44 150-14 226-52s112-100 206-96 154 78 234 70 116-36 174-32"/>
+        <path d="M60 170c50-34 90-24 136-50s70-74 130-74 106 50 160 54 90-14 130-30"/>
+        <path d="M140 150c34-22 64-20 96-38s52-56 96-58 82 34 118 38 66-6 92-18"/>
+        <path d="M220 128c22-14 44-16 66-28s36-38 66-40 58 22 84 26 44 0 62-8"/>
+        <path d="M300 104c14-8 28-12 42-20s24-22 44-24 38 12 54 16"/>
+        <path d="M-20 254c100-30 180 0 268-30s136-76 218-72 140 56 220 52 126-18 134-16"/>
+      </g>
+    </svg>
+    <div class="hero-in">
+      <p class="toko">EIGER Store A. Yani Kartasura, Sukoharjo</p>
+      <h1>Siap jalan dari Kartasura</h1>
+      <p class="lead">Lihat tas, pakaian, sepatu, dan perlengkapan yang sedang tersedia di toko. Tanya ukuran atau warna langsung lewat WhatsApp.</p>
+      <label class="cari">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.6-3.6"/></svg>
+        <input id="q" type="search" placeholder="Cari nama barang, misalnya carrier atau sandal" autocomplete="off" enterkeyhint="search">
+      </label>
+      <p class="update" id="update"></p>
+    </div>
+  </header>
+
+  <nav class="kategori" id="kategori" aria-label="Kategori"></nav>
+
+  <main>
+    <div class="alat" id="alat">
+      <div class="sub" id="sub" role="group" aria-label="Jenis barang"></div>
+      <div class="pilih">
+        <label><span>Untuk</span>
+          <select id="gender"><option value="">Semua</option></select>
+        </label>
+        <label><span>Urutkan</span>
+          <select id="urut">
+            <option value="baru">Terbaru dulu</option>
+            <option value="murah">Harga terendah</option>
+            <option value="mahal">Harga tertinggi</option>
+            <option value="nama">Nama A–Z</option>
+          </select>
+        </label>
+      </div>
+    </div>
+    <p class="hitung" id="hitung" aria-live="polite"></p>
+    <section class="grid" id="grid"></section>
+    <div class="lagi" id="lagi"></div>
+  </main>
+
+  <footer class="kaki">
+    <div>
+      <b>EIGER Store A. Yani Kartasura</b>
+      <p>Ketersediaan mengikuti stok terakhir di toko dan bisa berubah. Pastikan lewat WhatsApp sebelum datang.</p>
+    </div>
+    <a class="wa-kaki" id="waKaki" href="#" target="_blank" rel="noopener">Chat toko di WhatsApp</a>
+  </footer>
+
+  <a class="wa-mengambang" id="waFab" href="#" target="_blank" rel="noopener" aria-label="Chat toko di WhatsApp">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a9 9 0 0 0-7.8 13.5L3 21l4.6-1.2A9 9 0 1 0 12 3Z"/><path d="M8.8 8.6c.2-.5.5-.5.8-.5h.5c.2 0 .4 0 .6.5l.7 1.7c.1.2 0 .4-.1.6l-.5.6c-.1.2-.2.3 0 .6.5.9 1.6 2 2.6 2.4.3.1.4.1.6-.1l.6-.7c.2-.2.4-.2.6-.1l1.7.8c.3.1.4.3.4.5 0 .6-.3 1.4-1 1.7-.6.3-1.5.4-3.3-.4a9.4 9.4 0 0 1-4.2-4c-.6-1.2-.6-2.3-.2-3Z" fill="currentColor" stroke="none"/></svg>
+    <span>Chat toko</span>
+  </a>
+
+  <dialog class="lembar" id="lembar" aria-labelledby="dNama">
+    <div class="lembar-in" id="lembarIsi"></div>
+  </dialog>
+
+  <script src="../assets/config.js?v=202611110010"></script>
+  <script src="katalog.js?v=202611110010"></script>
+</body>
+</html>

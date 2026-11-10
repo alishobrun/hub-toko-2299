@@ -1471,3 +1471,19 @@ html[data-theme=dark] .promo-tag{background:var(--orange-50);color:#FDBA74}
 .dok-belum{margin-top:10px;display:flex;flex-direction:column;gap:6px}
 .dok-belum-row{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:6px 0;border-top:1px solid var(--line);font-size:13.5px}
 .dok-belum-row:first-child{border-top:0}
+
+/* Katalog pelanggan (admin) */
+.kt-link{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between}
+.kt-link code{flex:1 1 260px;min-width:0;overflow-wrap:anywhere;padding:10px 12px;border:1px solid var(--line-2);border-radius:10px;font-size:13px}
+.kt-bar{height:8px;border-radius:99px;background:var(--line);overflow:hidden}
+.kt-bar i{display:block;height:100%;background:var(--good)}
+.kt-galat{color:var(--bad)}
+.kt-rows{display:flex;flex-direction:column;margin-top:12px}
+.kt-row{display:flex;gap:12px;padding:12px 0;border-top:1px solid var(--line)}
+.kt-thumb{flex:none;width:64px;height:64px;border-radius:10px;overflow:hidden;background:var(--line);display:grid;place-items:center;color:var(--muted)}
+.kt-thumb img{width:100%;height:100%;object-fit:cover}
+.kt-thumb .ic svg{width:26px;height:26px}
+.kt-main{flex:1;min-width:0;display:flex;flex-direction:column;gap:4px}
+.kt-main small{color:var(--muted);font-size:12.5px}
+.kt-main .inline{margin-top:4px}
+.kt-main .hb-search{margin:0;flex:1;min-width:0;padding:8px 12px;font-size:14px}
