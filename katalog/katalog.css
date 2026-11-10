@@ -1,10 +1,13 @@
-/* Katalog EIGER Kartasura — tampilan gaya marketplace (Shopee) dengan warna Eigerindo. */
+/* Katalog EIGER Kartasura — tampilan marketplace dengan palet Navy Eigerindo; merah bata khusus harga & promo.
+ * Nama variabel --oranye* dipertahankan agar diff kecil: isinya sekarang navy (warna utama). */
 :root {
-  --oranye: #F26B3A;
-  --oranye-tua: #E5532A;
-  --harga: #E8501F;
-  --oranye-50: #FFF1EB;
-  --kuning: #FFD424;
+  --oranye: #1D3A8A;
+  --oranye-tua: #0A1A4F;
+  --harga: #C0392B;
+  --oranye-50: #EEF2FB;
+  --kuning: #C0392B;
+  --promo-tua: #A93226;
+  --promo-50: #FDECEA;
   --navy: #0F2A7A;
   --navy-50: #EEF2FB;
   --latar: #F5F5F5;
@@ -29,7 +32,7 @@ button { cursor: pointer; }
 :focus-visible { outline: 2px solid var(--navy); outline-offset: 2px; }
 svg { flex: none; }
 
-/* ---------- bilah atas oranye ---------- */
+/* ---------- bilah atas ---------- */
 .atas { position: sticky; top: 0; z-index: 20; background: linear-gradient(-180deg, var(--oranye-tua), var(--oranye)); color: #fff; padding-top: env(safe-area-inset-top); }
 .atas-in { max-width: var(--lebar); margin: 0 auto; padding: 10px 16px; display: flex; align-items: center; gap: 14px; }
 .merek { display: flex; align-items: center; gap: 8px; flex: none; }
@@ -56,7 +59,7 @@ svg { flex: none; }
   background: linear-gradient(120deg, var(--navy) 0%, #16379A 60%, #2B4CB0 100%);
 }
 @media (min-width: 900px) { .slide { min-height: 230px; padding: 32px 48px; } }
-.slide.s-oranye { background: linear-gradient(120deg, #E5532A 0%, #F26B3A 55%, #FF8F5C 100%); }
+.slide.s-oranye { background: linear-gradient(120deg, #A93226 0%, #C0392B 55%, #D9534F 100%); }
 .slide.s-hijau { background: linear-gradient(120deg, #0E6B54 0%, #12876A 60%, #2AA884 100%); }
 .slide.s-ungu { background: linear-gradient(120deg, #3E2A8A 0%, #5B3FC4 60%, #7C63E0 100%); }
 .slide::after { /* siluet gunung */
@@ -92,14 +95,14 @@ svg { flex: none; }
 .kat-ikon { width: 52px; height: 52px; border-radius: 16px; overflow: hidden; display: grid; place-items: center; background: var(--latar); }
 .kat-ikon img { width: 100%; height: 100%; object-fit: contain; padding: 4px; background: #fff; }
 .kat-ikon svg { width: 26px; height: 26px; fill: none; stroke: var(--oranye-tua); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
-.kat-ikon.promo { background: linear-gradient(135deg, #FF8F5C, var(--oranye-tua)); color: #fff; font-weight: 800; font-size: 14px; line-height: 1; }
+.kat-ikon.promo { background: linear-gradient(135deg, #D9534F, var(--promo-tua)); color: #fff; font-weight: 800; font-size: 14px; line-height: 1; }
 .kat-ikon.semua { background: var(--oranye-50); }
 .kat span:last-child { font-size: 12px; line-height: 1.25; color: var(--tinta); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .kat[aria-pressed="true"] .kat-ikon { box-shadow: 0 0 0 2px var(--oranye); }
 .kat[aria-pressed="true"] span:last-child { color: var(--oranye-tua); font-weight: 700; }
 
 /* ---------- strip PROMO TOKO (gaya flash sale) ---------- */
-.strip-kepala h2 { color: var(--oranye-tua); font-weight: 800; font-size: 17px; font-style: italic; letter-spacing: .01em; display: flex; align-items: center; gap: 2px; }
+.strip-kepala h2 { color: var(--harga); font-weight: 800; font-size: 17px; font-style: italic; letter-spacing: .01em; display: flex; align-items: center; gap: 2px; }
 .petir { font-style: normal; }
 .hitung-mundur { display: flex; align-items: center; gap: 3px; font-size: 12px; font-weight: 700; color: var(--tinta); }
 .hitung-mundur b { background: var(--tinta); color: #fff; border-radius: 3px; padding: 2px 5px; min-width: 22px; text-align: center; font-variant-numeric: tabular-nums; }
@@ -111,7 +114,7 @@ svg { flex: none; }
 .mini .gb img { width: 100%; height: 100%; object-fit: contain; }
 .mini .harga { color: var(--harga); font-size: 15px; font-weight: 700; }
 .mini .harga small { font-size: 11px; font-weight: 600; margin-right: 1px; }
-.mini .label-hemat { align-self: center; font-size: 11px; font-weight: 700; color: #fff; background: linear-gradient(90deg, var(--oranye-tua), #FF8F5C); border-radius: 99px; padding: 2px 10px; }
+.mini .label-hemat { align-self: center; font-size: 11px; font-weight: 700; color: #fff; background: linear-gradient(90deg, var(--promo-tua), #D9534F); border-radius: 99px; padding: 2px 10px; }
 
 /* ---------- daftar produk ---------- */
 .daftar { margin-top: 8px; background: transparent; box-shadow: none; }
@@ -145,12 +148,12 @@ svg { flex: none; }
 .gb { position: relative; aspect-ratio: 1; background: #fff; overflow: hidden; }
 .gb img { width: 100%; height: 100%; object-fit: contain; }
 .label-diskon { /* label kuning pojok kanan atas */
-  position: absolute; top: 0; right: 0; z-index: 1; width: 40px; padding: 3px 0 6px; text-align: center; background: var(--kuning); color: var(--harga);
-  font-size: 12px; font-weight: 800; line-height: 1.1; clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 82%, 0 100%);
+  position: absolute; top: 0; right: 0; z-index: 1; width: 40px; padding: 3px 0 6px; text-align: center; background: var(--kuning); color: #fff; border-radius: 0 0 0 8px;
+  font-size: 12px; font-weight: 800; line-height: 1.1;
 }
 .label-diskon small { display: block; color: #fff; font-size: 10px; font-weight: 800; text-shadow: 0 0 1px rgba(0, 0, 0, .15); }
 .label-baru { position: absolute; top: 6px; left: 0; z-index: 1; background: var(--navy); color: #fff; font-size: 10.5px; font-weight: 700; padding: 1px 6px 1px 5px; border-radius: 0 2px 2px 0; }
-.tanpa-foto { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 12px; text-align: center; background: linear-gradient(160deg, #FFF6F1, #FFE7DB); color: var(--oranye-tua); }
+.tanpa-foto { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 12px; text-align: center; background: linear-gradient(160deg, #F3F6FC, #E3E9F6); color: var(--oranye-tua); }
 .tanpa-foto svg { width: 34px; height: 34px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
 .tanpa-foto b { font-size: 13px; line-height: 1.25; color: #8A3A1C; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 .isi { padding: 8px 8px 10px; display: flex; flex-direction: column; gap: 4px; flex: 1; }
@@ -228,9 +231,9 @@ svg { flex: none; }
 .harga-besar .harga { font-size: 26px; font-weight: 600; }
 .harga-besar .coret { font-size: 14px; }
 .harga-besar .persen { background: var(--harga); color: #fff; font-size: 12px; font-weight: 700; padding: 1px 5px; border-radius: 2px; }
-.pita-promo { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 10px -12px -12px; padding: 8px 12px; background: linear-gradient(90deg, var(--oranye-tua), #FF8F5C); color: #fff; font-size: 12.5px; font-weight: 600; }
+.pita-promo { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 10px -12px -12px; padding: 8px 12px; background: linear-gradient(90deg, var(--promo-tua), #D9534F); color: #fff; font-size: 12.5px; font-weight: 600; }
 .pita-promo .hm { display: flex; flex: none; white-space: nowrap; gap: 3px; align-items: center; }
-.pita-promo .hm b { background: #fff; color: var(--oranye-tua); border-radius: 2px; padding: 0 4px; font-variant-numeric: tabular-nums; }
+.pita-promo .hm b { background: #fff; color: var(--promo-tua); border-radius: 2px; padding: 0 4px; font-variant-numeric: tabular-nums; }
 @media (min-width: 900px) { .blok-harga { background: #FAFAFA; padding: 14px 18px; } .pita-promo { margin: 12px -18px -14px; } }
 .blok h3 { margin: 0 0 10px; font-size: 14px; font-weight: 600; color: var(--abu); }
 .blok h3 span { color: var(--tinta); font-weight: 600; }
@@ -249,7 +252,7 @@ svg { flex: none; }
 .detail-baris dd { margin: 0; }
 .promo-berlaku { display: flex; flex-direction: column; gap: 6px; }
 .voucher-kecil { display: flex; align-items: center; gap: 8px; font-size: 12.5px; }
-.voucher-kecil b { flex: none; border: 1px solid var(--harga); color: var(--harga); border-radius: 2px; padding: 1px 6px; font-size: 11px; background: var(--oranye-50); }
+.voucher-kecil b { flex: none; border: 1px solid var(--harga); color: var(--harga); border-radius: 2px; padding: 1px 6px; font-size: 11px; background: var(--promo-50); }
 .bar-beli { position: fixed; left: 0; right: 0; bottom: 0; z-index: 4; display: flex; background: #fff; border-top: 1px solid var(--garis); padding-bottom: env(safe-area-inset-bottom); }
 .bar-beli > * { display: flex; align-items: center; justify-content: center; gap: 6px; font-weight: 700; font-size: 14px; border: 0; }
 .bar-beli .bagikan { flex: 0 0 25%; flex-direction: column; gap: 1px; font-size: 10.5px; font-weight: 500; color: var(--abu); background: #fff; }
@@ -281,7 +284,7 @@ svg { flex: none; }
 .status.akhir { color: var(--harga); }
 .status.nanti { color: var(--navy); }
 .sk { border: 0; background: none; color: #0055AA; font-size: 12px; padding: 2px 0; }
-.voucher-ket { grid-column: 1 / -1; margin: 0; padding: 8px 12px 10px 28px; border-top: 1px dashed var(--garis); font-size: 12px; color: var(--tinta); background: #FFFBF8; }
+.voucher-ket { grid-column: 1 / -1; margin: 0; padding: 8px 12px 10px 28px; border-top: 1px dashed var(--garis); font-size: 12px; color: var(--tinta); background: #F7F9FD; }
 .voucher-ket li { margin: 2px 0; }
 
 /* lembar kategori */
@@ -324,8 +327,8 @@ svg { flex: none; }
     --foto-navy: url('https://images.unsplash.com/photo-1724076150462-8fcb67d8abb3?w=800&q=65&auto=format&fit=crop');
   }
 }
-/* header: Merbabu keemasan, ditimpa oranye supaya tetap terasa Eigerindo */
-.atas { background: linear-gradient(90deg, rgba(200, 62, 22, .82) 0%, rgba(229, 83, 42, .5) 50%, rgba(10, 26, 79, .35) 100%), var(--foto-atas) center 62% / cover no-repeat, var(--oranye); }
+/* header: Merbabu keemasan, ditimpa navy Eigerindo */
+.atas { background: linear-gradient(90deg, rgba(10, 26, 79, .9) 0%, rgba(15, 42, 122, .62) 50%, rgba(10, 26, 79, .4) 100%), var(--foto-atas) center 62% / cover no-repeat, var(--oranye); }
 /* panggung di belakang banner: lautan awan, memudar ke abu latar */
 .beranda { position: relative; isolation: isolate; padding-top: 12px; }
 .beranda::before {
@@ -337,7 +340,7 @@ svg { flex: none; }
 @media (min-width: 900px) { .banner { margin: 0; } }
 /* slide promo toko memakai foto alam + lapisan warna dari kiri agar tulisan terbaca */
 .slide { background: linear-gradient(100deg, rgba(10, 26, 79, .92) 0%, rgba(15, 42, 122, .7) 45%, rgba(15, 42, 122, .15) 100%), var(--foto-navy) center / cover no-repeat, var(--navy); }
-.slide.s-oranye { background: linear-gradient(100deg, rgba(200, 62, 22, .94) 0%, rgba(242, 107, 58, .72) 45%, rgba(242, 107, 58, .1) 100%), var(--foto-oranye) center 60% / cover no-repeat, var(--oranye); }
+.slide.s-oranye { background: linear-gradient(100deg, rgba(120, 28, 20, .94) 0%, rgba(192, 57, 43, .72) 45%, rgba(192, 57, 43, .1) 100%), var(--foto-oranye) center 60% / cover no-repeat, var(--oranye); }
 .slide.s-hijau { background: linear-gradient(100deg, rgba(8, 72, 56, .94) 0%, rgba(14, 107, 84, .72) 45%, rgba(14, 107, 84, .12) 100%), var(--foto-hijau) center / cover no-repeat, #0E6B54; }
 .slide.s-ungu { background: linear-gradient(100deg, rgba(46, 30, 104, .94) 0%, rgba(62, 42, 138, .72) 45%, rgba(62, 42, 138, .12) 100%), var(--foto-ungu) center 45% / cover no-repeat, #3E2A8A; }
 .slide:not(.s-foto)::after { display: none; }
