@@ -438,13 +438,17 @@
   }
   /** Titik warna + ukuran yang tersedia (gabungan semua warna) untuk kartu produk. */
   function ringkasVarian(it) {
-    var titik = it.w.slice(0, 5).map(function (w) { var x = warnaInfo(w[0]); return el('i', { style: 'background:' + x[1], title: x[0] }); });
-    if (it.w.length > 5) titik.push(el('em', { text: '+' + (it.w.length - 5) }));
+    var titik = it.w.slice(0, 3).map(function (w) { var x = warnaInfo(w[0]); return el('i', { style: 'background:' + x[1], title: x[0] }); });
+    if (it.w.length > 3) titik.push(el('em', { text: '+' + (it.w.length - 3) }));
     var uk = [];
     it.w.forEach(function (w) { w[1].forEach(function (u) { if (u[1] && u[0] !== 'NOS' && uk.indexOf(u[0]) < 0) uk.push(u[0]); }); });
     uk.sort(urutUk);
-    var teksUk = uk.length ? uk.slice(0, 4).join(' · ') + (uk.length > 4 ? ' +' + (uk.length - 4) : '') : '';
-    return el('div', { class: 'ringkas' }, el('span', { class: 'titik-warna', 'aria-label': it.w.length + ' warna' }, titik), teksUk ? el('span', { class: 'ukuran-ada', text: teksUk }) : null);
+    var maks = uk.some(function (u) { return u.length > 3; }) ? 2 : 4;
+    var chipUk = uk.slice(0, maks).map(function (u) { return el('b', { text: u }); });
+    if (uk.length > maks) chipUk.push(el('em', { text: '+' + (uk.length - maks) }));
+    return el('div', { class: 'ringkas' },
+      chipUk.length ? el('span', { class: 'ukuran-ada', 'aria-label': 'Ukuran tersedia: ' + uk.join(', ') }, chipUk) : el('span'),
+      el('span', { class: 'titik-warna', 'aria-label': it.w.length + ' warna' }, titik));
   }
   var URUT_UK = ['XXS', 'XS', 'S', 'M', 'L', 'XL', '2XL', 'XXL', '3XL', 'XXXL', '4XL'];
   function urutUk(a, b) {
@@ -545,12 +549,13 @@
                 } }, el('i', { style: 'background:' + warnaInfo(x[0])[1] }), warnaInfo(x[0])[0], prWarna(x) ? el('em', { text: '-' + prWarna(x)[0] + '%' }) : null);
               }))),
             satuUkuran ? null : el('div', { class: 'blok' }, el('div', { class: 'blok-kepala' }, el('h3', null, 'Ukuran: ', el('span', { text: uk ? uk + (kosong ? ' (kosong)' : '') : 'pilih ukuran' })),
-                it.sg != null && D.panduan && D.panduan[it.sg] ? el('button', { class: 'sk', type: 'button', text: 'Panduan ukuran ›', onclick: function () { bukaPanduan(it); } }) : null),
-              el('div', { class: 'pilihan' }, w[1].map(function (u) {
-                return el('button', { type: 'button', class: u[1] ? '' : 'kosong', 'aria-pressed': String(uk === u[0]), 'aria-label': u[0] + (u[1] ? '' : ', kosong'),
+                it.sg != null && D.panduan && D.panduan[it.sg] ? el('button', { class: 'tautan-panduan', type: 'button', onclick: function () { bukaPanduan(it); } }, svg('<path d="M3 17 17 3l4 4L7 21Z"/><path d="m7 13 2 2M10 10l2 2M13 7l2 2"/>'), 'Panduan ukuran') : null),
+              el('div', { class: 'pilihan pilihan-ukuran' }, w[1].map(function (u) {
+                return el('button', { type: 'button', class: u[1] ? '' : 'uk-kosong', 'aria-pressed': String(uk === u[0]), 'aria-label': u[0] + (u[1] ? '' : ', kosong'),
                   text: u[0] === 'NOS' ? 'All size' : u[0], onclick: function () { uk = u[0]; gambar(); } });
               })),
-              kosong ? formKabari(it, w[0], uk) : el('p', { class: 'ket', text: 'Ukuran bergaris putus-putus sedang kosong di toko. Pilih untuk minta dikabari saat tersedia.' })),
+              el('div', { class: 'legenda-ukuran' }, el('span', null, el('i', { class: 'ada' }), 'Tersedia di toko'), el('span', null, el('i', { class: 'habis' }), 'Kosong · ketuk untuk dikabari')),
+              kosong ? formKabari(it, w[0], uk) : null),
             !pw && promoUmum.length ? el('div', { class: 'blok' }, el('h3', { text: 'Promo yang bisa dipakai' }),
               el('div', { class: 'promo-berlaku' }, promoUmum.slice(0, 4).map(function (p) {
                 return el('div', { class: 'voucher-kecil' }, el('b', { text: p.jenis || 'Promo' }), el('span', { text: p.judul }));

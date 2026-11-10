@@ -379,8 +379,8 @@ html, body { overflow-x: clip; }
 .blok-kepala { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .blok-kepala h3 { margin-bottom: 0; }
 .blok-kepala + .pilihan { margin-top: 10px; }
-.pilihan button.kosong { color: #A0A0A0; background: #FAFAFA; border-style: dashed; text-decoration: line-through; }
-.pilihan button.kosong[aria-pressed="true"] { color: var(--harga); border-color: var(--harga); background: var(--promo-50); text-decoration: line-through; }
+.pilihan button.uk-kosong { color: #A0A0A0; background: #FAFAFA; border-style: dashed; text-decoration: line-through; }
+.pilihan button.uk-kosong[aria-pressed="true"] { color: var(--harga); border-color: var(--harga); background: var(--promo-50); text-decoration: line-through; }
 .form-kabari { margin-top: 12px; padding: 12px; border: 1px solid #E3E9F6; background: #F5F8FD; border-radius: 8px; display: flex; flex-direction: column; gap: 8px; font-size: 13px; }
 .form-kabari > span { color: var(--abu); }
 .kabari-baris { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
@@ -519,3 +519,32 @@ button.tanya { cursor: pointer; }
 .status-stok i { width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
 .status-stok.ada { color: #0E6B54; background: #EAF6F1; }
 .status-stok.habis { color: #8A5A00; background: #FFF4DB; }
+
+/* ================= ukuran lebih rapi ================= */
+/* pilihan ukuran di halaman produk: kotak sama besar, yang kosong diberi garis miring */
+.pilihan-ukuran { display: grid; grid-template-columns: repeat(auto-fill, minmax(62px, 1fr)); gap: 8px; }
+.pilihan-ukuran button { min-width: 0; height: 46px; padding: 0 6px; border: 1.5px solid #D5DCE8; border-radius: 10px; background: #fff; font-size: 15px; font-weight: 600; color: var(--tinta); text-decoration: none; transition: border-color .15s, background .15s; }
+.pilihan-ukuran button:hover { border-color: var(--oranye); }
+.pilihan-ukuran button[aria-pressed="true"] { background: var(--oranye-tua); border-color: var(--oranye-tua); color: #fff; }
+.pilihan-ukuran button[aria-pressed="true"]::after { display: none; }
+.pilihan-ukuran button.uk-kosong { color: #A3A9B4; background: #F4F5F7 linear-gradient(to top right, transparent calc(50% - 1px), #CDD2DA calc(50% - .5px), #CDD2DA calc(50% + .5px), transparent calc(50% + 1px)); border: 1.5px dashed #D5D9E0; text-decoration: none; font-weight: 500; }
+.pilihan-ukuran button.uk-kosong[aria-pressed="true"] { color: var(--harga); border: 1.5px solid var(--harga); background: var(--promo-50) linear-gradient(to top right, transparent calc(50% - 1px), #EDB8B2 calc(50% - .5px), #EDB8B2 calc(50% + .5px), transparent calc(50% + 1px)); }
+.legenda-ukuran { display: flex; flex-wrap: wrap; gap: 4px 16px; margin-top: 10px; font-size: 12.5px; color: var(--abu); }
+.legenda-ukuran span { display: inline-flex; align-items: center; gap: 6px; }
+.legenda-ukuran i { width: 16px; height: 12px; border-radius: 3px; border: 1.5px solid #D5DCE8; background: #fff; }
+.legenda-ukuran i.habis { border-style: dashed; background: #F4F5F7 linear-gradient(to top right, transparent 45%, #CDD2DA 46%, #CDD2DA 54%, transparent 55%); }
+.tautan-panduan { display: inline-flex; align-items: center; gap: 5px; border: 0; background: none; padding: 4px 0; color: var(--oranye-tua); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
+.tautan-panduan svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linejoin: round; }
+
+/* kartu produk: ukuran tersedia sebagai kotak kecil, warna di kanan */
+.ringkas { gap: 8px; }
+.ukuran-ada { display: inline-flex; align-items: center; gap: 3px; min-width: 0; overflow: hidden; white-space: nowrap; }
+.ukuran-ada b { font-size: 11px; font-weight: 600; color: var(--oranye-tua); border: 1px solid #D5DCE8; background: #F7F9FD; border-radius: 4px; padding: 1px 5px; line-height: 1.35; }
+.ukuran-ada em { font-style: normal; font-size: 11px; color: var(--abu); }
+.titik-warna { flex: none; }
+/* pilihan warna senada dengan ukuran */
+.pilihan:not(.pilihan-ukuran) button { min-height: 46px; border: 1.5px solid #D5DCE8; border-radius: 10px; padding: 6px 14px 6px 8px; font-size: 14px; font-weight: 500; }
+.pilihan:not(.pilihan-ukuran) button i { width: 26px; height: 26px; border-radius: 50%; }
+.pilihan:not(.pilihan-ukuran) button[aria-pressed="true"] { border: 2px solid var(--oranye-tua); background: var(--oranye-50); color: var(--oranye-tua); font-weight: 700; }
+.pilihan:not(.pilihan-ukuran) button[aria-pressed="true"]::after { display: none; }
+.pilihan:not(.pilihan-ukuran) button em { top: -9px; right: -6px; border-radius: 4px; padding: 1px 4px; }
