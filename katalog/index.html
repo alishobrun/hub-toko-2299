@@ -15,19 +15,23 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="katalog.css?v=202611111100">
+  <link rel="stylesheet" href="katalog.css?v=202611111300">
 </head>
 <body>
   <header class="atas" id="atas">
     <div class="atas-in">
       <a class="merek" href="./" aria-label="Katalog EIGER Kartasura, halaman awal">
-        <svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="22" cy="10" r="4.5" fill="#F2C9C2"/><path d="M2 27 12.5 9l5 8.5 3-4.5L30 27Z" fill="#fff"/></svg>
+        <img class="logo-eiger" src="https://d1yutv2xslo29o.cloudfront.net/8a4bf8a3-1d4b-4a86-9d5e-dfd5935a38e5.png" alt="" width="40" height="40" referrerpolicy="no-referrer" onerror="this.remove()">
         <span><b>EIGER</b><small>Kartasura</small></span>
       </a>
       <label class="cari">
         <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.6-3.6"/></svg>
         <input id="q" type="search" placeholder="Cari di EIGER Kartasura" autocomplete="off" enterkeyhint="search" aria-label="Cari barang">
       </label>
+      <button class="atas-ikon" type="button" id="daftarAtas" aria-label="Daftar tanya">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6h11M9 12h11M9 18h11"/><circle cx="4.5" cy="6" r="1"/><circle cx="4.5" cy="12" r="1"/><circle cx="4.5" cy="18" r="1"/></svg>
+        <i class="lencana-daftar" hidden>0</i>
+      </button>
       <a class="atas-wa" id="waAtas" href="#" target="_blank" rel="noopener" aria-label="Chat toko di WhatsApp">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a9 9 0 0 0-7.8 13.5L3 21l4.6-1.2A9 9 0 1 0 12 3Z"/></svg>
       </a>
@@ -41,8 +45,8 @@
         <div class="banner-rel" id="bannerRel"></div>
         <div class="banner-titik" id="bannerTitik"></div>
       </div>
-      <div class="info-toko">
-        <span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21Z"/><circle cx="12" cy="9.5" r="2.5"/></svg>EIGER Store A. Yani Kartasura, Sukoharjo</span>
+      <div class="info-toko" id="infoToko">
+        <span>EIGER Store A. Yani Kartasura, Sukoharjo</span>
         <span id="update"></span>
       </div>
 
@@ -79,6 +83,7 @@
     <footer class="kaki">
       <b>EIGER Store A. Yani Kartasura</b>
       <p>Ketersediaan dan harga promo mengikuti data terakhir di toko dan bisa berubah. Pastikan lewat WhatsApp sebelum datang.</p>
+      <p class="aman-kaki">Katalog resmi hanya di <b>eigerkartasura.github.io</b>. Pembayaran hanya di kasir toko; kami tidak pernah meminta transfer ke rekening pribadi.</p>
       <p class="kredit">Foto alam Merbabu &amp; Merapi dari <a href="https://unsplash.com/?utm_source=katalog_eiger_kartasura&amp;utm_medium=referral" target="_blank" rel="noopener">Unsplash</a>: Dan Gilmour, Fajruddin Mudzakkir, Irfan Bayuaji, Bayu Syaits, Kukuh Himawan Samudro, Fahrul Razi.</p>
     </footer>
   </div>
@@ -88,6 +93,7 @@
     <button type="button" data-m="beranda" aria-current="page"><svg viewBox="0 0 24 24"><path d="M3 11 12 3l9 8v9a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1Z"/></svg>Beranda</button>
     <button type="button" data-m="kategori"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><rect x="14" y="14" width="7" height="7" rx="2"/></svg>Kategori</button>
     <button type="button" data-m="promo"><svg viewBox="0 0 24 24"><path d="M3 12V4h8l10 10-8 8Z"/><circle cx="7.5" cy="8.5" r="1.5"/></svg>Promo</button>
+    <button type="button" data-m="daftar"><span class="ikon-lencana"><svg viewBox="0 0 24 24"><path d="M9 6h11M9 12h11M9 18h11"/><circle cx="4.5" cy="6" r="1"/><circle cx="4.5" cy="12" r="1"/><circle cx="4.5" cy="18" r="1"/></svg><i class="lencana-daftar" hidden>0</i></span>Daftar</button>
     <a id="waBawah" href="#" target="_blank" rel="noopener"><svg viewBox="0 0 24 24"><path d="M12 3a9 9 0 0 0-7.8 13.5L3 21l4.6-1.2A9 9 0 1 0 12 3Z"/></svg>Chat</a>
   </nav>
 
@@ -95,8 +101,12 @@
   <dialog class="lembar" id="lembar">
     <div class="lembar-in" id="lembarIsi"></div>
   </dialog>
+  <!-- lembar kedua di atas detail produk: panduan ukuran -->
+  <dialog class="lembar sempit" id="lembar2">
+    <div class="lembar-in" id="lembar2Isi"></div>
+  </dialog>
 
-  <script src="../assets/config.js?v=202611111100"></script>
-  <script src="katalog.js?v=202611111100"></script>
+  <script src="../assets/config.js?v=202611111300"></script>
+  <script src="katalog.js?v=202611111300"></script>
 </body>
 </html>

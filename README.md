@@ -37,6 +37,9 @@ Login per orang: anggota tim mendaftar sendiri, lalu admin menyetujui. Akun pert
 
 ## Katalog pelanggan
 
+- **Fitur pelanggan (Nov 2026):** daftar tanya (beberapa barang dalam satu pesan WA, tersimpan di HP pelanggan), "Kabari saya" untuk ukuran kosong (tab `katalog_tunggu`, staf menindaklanjuti di menu **Kabari Pelanggan**), panduan ukuran resmi dari eigeradventure (`katalog_foto.panduan`, dicari bertahap tiap malam), barang serupa, info toko (jam buka & peta di `KATALOG.INFO`), dan peringatan anti-penipuan (alamat resmi, WA resmi, pembayaran hanya di kasir; halaman yang dibuka di alamat lain menampilkan peringatan merah).
+- **Statistik & QR:** katalog mengirim jejak anonim (artikel dibuka / tanya stok / scan QR) ke tab `katalog_log` (disimpan 90 hari, dibatasi per menit). Basecamp → Katalog Pelanggan menampilkan statistik dan QR (cetak poster A5 / unduh PNG) yang mengarah ke `https://eigerkartasura.github.io/?dari=qr`.
+
 - **Banner kampanye** diambil otomatis dari beranda eigeradventure.com (`bannerEiger_`, sekali sehari, ikut pemicu 03.00). Banner cara bayar/diskon online dilewati; kalau situs gagal dibaca, daftar terakhir tetap dipakai. Status terlihat di Basecamp → Katalog Pelanggan. Ketuk banner = cari barang serupa di katalog toko.
 
 Halaman publik untuk pelanggan di `katalog/`, tanpa login. Alamat yang dibagikan: **https://eigerkartasura.github.io/** (repo organisasi `eigerkartasura/eigerkartasura.github.io`). Situs itu menyalin `katalog/` + `assets/config.js` dan ikon dari repo ini lewat workflow `salin-katalog.yml` tiap jam (menit ke-7); jangan edit file di repo situs, edit di sini saja. Link lama `…/hub-toko-2299/katalog/` dialihkan otomatis ke alamat baru.

@@ -11,7 +11,7 @@
 /** Versi kode. WAJIB dinaikkan setiap kali Code.gs diubah (format yyyy-MM-dd.n),
  *  lalu simpan ke GitHub (alishobrun/hub-toko-2299) SEBELUM dipasang. Halaman Kesehatan Data
  *  membandingkan angka ini dengan GitHub supaya kode yang dipasang di luar GitHub ketahuan. */
-const KODE_VERSI = '2026-11-11.6';
+const KODE_VERSI = '2026-11-11.7';
 
 const CFG = {
   STORE: '2299',
@@ -96,7 +96,11 @@ const TABS = {
   tag_na: ['sku', 'bulan', 'username', 'nama', 'waktu'],
   safe_care: ['kode', 'waktu', 'debit', 'kredit', 'saldo', 'dari', 'akun', 'status', 'jenis', 'mesin', 'alamat', 'ket', 'tgl_jual', 'oleh', 'diubah'],
   // foto katalog pelanggan per generic: otomatis dari eigeradventure.com atau diisi admin
-  katalog_foto: ['generic', 'foto', 'sumber', 'url', 'status', 'dicek', 'oleh'],
+  katalog_foto: ['generic', 'foto', 'sumber', 'url', 'status', 'dicek', 'oleh', 'panduan'],
+  // jejak anonim katalog pelanggan: artikel dibuka (lihat) / tombol tanya stok (tanya). Tanpa data pribadi.
+  katalog_log: ['waktu', 'generic', 'jenis'],
+  // pelanggan minta dikabari saat ukuran kosong tersedia lagi (diisi pelanggan lewat katalog)
+  katalog_tunggu: ['id', 'waktu', 'nama', 'wa', 'generic', 'artikel', 'warna', 'ukuran', 'status', 'diubah', 'oleh'],
   // promo umum toko untuk katalog pelanggan (dari juknis promo / web Integrated Hub), diisi admin
   katalog_promo: ['id', 'judul', 'jenis', 'mulai', 'selesai', 'syarat', 'produk', 'aktif', 'diubah', 'oleh', 'sumber', 'ket']
 };
@@ -5512,7 +5516,13 @@ const KATALOG = {
   BATCH: 8,                      // permintaan bersamaan (dibuat kecil supaya sopan ke situs eigeradventure)
   WAKTU_MS: 4.5 * 60e3,          // batas satu putaran (Apps Script maks 6 menit)
   CACHE_DETIK: 21600,
-  METODE: 'otomatis2'             // dinaikkan bila cara pencarian berubah → artikel yang belum ketemu dicoba lagi
+  METODE: 'otomatis2',            // dinaikkan bila cara pencarian berubah → artikel yang belum ketemu dicoba lagi
+  LOG_HARI: 90,                  // jejak lihat/tanya disimpan 90 hari
+  LOG_MAKS_MENIT: 400,           // batas kiriman jejak per menit (cegah spam)
+  TUNGGU_MAKS_JAM: 40,           // batas permintaan "kabari saya" per jam (cegah spam)
+  // info toko di beranda katalog (jam buka dari Google Maps, Nov 2026 — ubah di sini bila berubah)
+  INFO: { alamat: 'Jl. A. Yani Km 7, Banaran, Pabelan, Kartasura, Sukoharjo', jam: 'Setiap hari 08.30–21.45',
+    maps: 'https://www.google.com/maps/search/?api=1&query=EIGER%20STORE%20A.YANI%20KARTASURA%20SUKOHARJO&query_place_id=ChIJ6bf1AHkVei4RSA6CwOUUCqA' }
 };
 const KAT3_OK_ = { ACCESSORIES: 1, APPAREL: 1, BAGS: 1, EQUIPMENT: 1, FOOTWEAR: 1, HEADWEAR: 1 };
 
@@ -5596,7 +5606,11 @@ function katalogSusun_(fotoIkut) {
     (run[r[0]] || (run[r[0]] = {}))[String(r[1]).trim().toUpperCase()] = 1;
   });
   const F = {};
-  if (fotoIkut) read_('katalog_foto').forEach(function (f) { if (f.foto) F[String(f.generic)] = String(f.foto).split(/\s+/).filter(String); });
+  const PG = {}; // panduan ukuran per generic (gambar resmi eigeradventure)
+  if (fotoIkut) read_('katalog_foto').forEach(function (f) {
+    if (f.foto) F[String(f.generic)] = String(f.foto).split(/\s+/).filter(String);
+    if (/^https:\/\//.test(String(f.panduan || ''))) PG[String(f.generic)] = String(f.panduan);
+  });
   const naHari = Number(settings_().na_hari) || CFG.NA_HARI, batasBaru = addDays_(today_(), -naHari);
   // "Baru" juga untuk artikel yang pertama kali ada stok di toko ≤ BARU_TOKO_HARI (bukan stok awal/baseline)
   const batasToko = addDays_(today_(), -CFG.BARU_TOKO_HARI), masukToko = {};
@@ -5621,6 +5635,7 @@ function katalogSusun_(fotoIkut) {
     w.sort(function (p, q) { return p[0] < q[0] ? -1 : 1; });
     const it = { g: g, n: a.n, k3: a.k3, k4: a.k4, gd: a.gd, ac: a.ac, h: a.h, hm: a.hMin && a.hMin < a.h ? a.hMin : 0, b: (a.baru && a.baru >= batasBaru) || masukToko[g] ? 1 : 0, w: w };
     if (fotoIkut && F[g]) it.f = F[g];
+    if (fotoIkut && PG[g]) it.sg = PG[g];
     const pw = w.filter(function (r) { return r[3]; });
     if (pw.length) {
       const murah = pw.reduce(function (m, r) { return !m || r[3][1] < m[3][1] ? r : m; }, null);
@@ -5629,9 +5644,25 @@ function katalogSusun_(fotoIkut) {
     items.push(it);
   });
   items.sort(function (p, q) { return (q.b - p.b) || (p.n < q.n ? -1 : 1); });
+  // panduan ukuran: kirim sebagai kamus (indeks) supaya data ringan; artikel tanpa panduan sendiri
+  // memakai panduan yang paling sering dipakai sub-kategori yang sama (ditandai "umum")
+  const panduan = [];
+  if (fotoIkut) {
+    const idx = {}, perK4 = {};
+    const no = function (u) { if (idx[u] == null) { idx[u] = panduan.length; panduan.push(u); } return idx[u]; };
+    items.forEach(function (it) { if (it.sg) { const c = perK4[it.k3 + '|' + it.k4] || (perK4[it.k3 + '|' + it.k4] = {}); c[it.sg] = (c[it.sg] || 0) + 1; } });
+    items.forEach(function (it) {
+      if (it.sg) { it.sg = no(it.sg); return; }
+      const c = perK4[it.k3 + '|' + it.k4];
+      if (!c) return;
+      const top = Object.keys(c).sort(function (x, y) { return c[y] - c[x]; })[0];
+      it.sg = no(top); it.sgu = 1;
+    });
+  }
   const ups = read_('bin_upload'), last = ups.length ? ups[ups.length - 1] : null;
   return { toko: CFG.STORE_NAME, wa: KATALOG.WA, diperbarui: last ? String(last.waktu) : '', items: items,
-    promoSampai: promoSampai, promoToko: fotoIkut ? promoTokoAktif_() : [], banner: fotoIkut ? bannerEiger_() : [] };
+    promoSampai: promoSampai, promoToko: fotoIkut ? promoTokoAktif_() : [], banner: fotoIkut ? bannerEiger_() : [], panduan: panduan,
+    infoToko: KATALOG.INFO };
 }
 
 function katalogData_() {
@@ -5821,6 +5852,10 @@ function cariFotoKatalog() {
       if (blokir >= KATALOG.BATCH * 2) { st.galat = 'eigeradventure.com menolak akses otomatis (403/429). Isi foto manual.'; break; }
     }
     st.sisa = Math.max(0, antre.length - i);
+    if (!st.sisa && !st.galat) {
+      try { st.panduanSisa = cariPanduanKatalog_(mulai); } catch (e) { Logger.log('panduan ukuran: ' + e); }
+      try { rapikanLogKatalog_(); } catch (e) { Logger.log('rapikan log katalog: ' + e); }
+    }
     if (Object.keys(hasil).length) withLock_(function () {
       const rows = read_('katalog_foto').filter(function (f) {
         const h = hasil[String(f.generic)];
@@ -5830,7 +5865,7 @@ function cariFotoKatalog() {
       writeAll_('katalog_foto', rows);
       katalogBaru_();
     }, 60000);
-    if (st.sisa && !st.galat) ScriptApp.newTrigger('cariFotoKatalogLanjut').timeBased().after(60 * 1000).create();
+    if ((st.sisa || st.panduanSisa) && !st.galat) ScriptApp.newTrigger('cariFotoKatalogLanjut').timeBased().after(60 * 1000).create();
   } catch (e) {
     st.galat = String(e.message || e).slice(0, 200);
   }
@@ -5850,6 +5885,66 @@ function pasangCariFoto_() {
   ScriptApp.newTrigger('cariFotoKatalog').timeBased().everyDays(1).atHour(3).create();
 }
 
+
+/** Panduan ukuran resmi (gambar "sizeGuide") dari halaman produk eigeradventure untuk artikel yang sudah ketemu
+ *  alamatnya. Dicek sekali per artikel ('-' = tidak ada). Mengembalikan jumlah artikel yang belum sempat dicek. */
+function cariPanduanKatalog_(mulai) {
+  const rows = read_('katalog_foto');
+  const antre = rows.filter(function (f) { return !f.panduan && String(f.url || '').indexOf(KATALOG.WEB) === 0; });
+  if (!antre.length) return 0;
+  const bid = buildIdEiger_();
+  const isi = {};
+  let i = 0;
+  while (i < antre.length && Date.now() - mulai < KATALOG.WAKTU_MS) {
+    const batch = antre.slice(i, i + KATALOG.BATCH);
+    i += batch.length;
+    const res = UrlFetchApp.fetchAll(batch.map(function (f) {
+      const slug = String(f.url).slice(KATALOG.WEB.length).split(/[?#]/)[0];
+      return { url: 'https://www.eigeradventure.com/_next/data/' + bid + '/id/d/' + encodeURIComponent(slug) + '.json', muteHttpExceptions: true, headers: { 'User-Agent': 'Mozilla/5.0 (Basecamp 2299 katalog toko)' } };
+    }));
+    let tolak = 0;
+    res.forEach(function (r, k) {
+      const code = r.getResponseCode();
+      if (code === 403 || code === 429) { tolak++; return; }
+      if (code !== 200) { isi[String(batch[k].generic)] = '-'; return; }
+      const m = r.getContentText().match(/"sizeGuide":"(https:\/\/d1yutv2xslo29o\.cloudfront\.net\/[^"?]+\.(?:jpe?g|png|webp))"/i);
+      isi[String(batch[k].generic)] = m ? m[1] : '-';
+    });
+    if (tolak) break;
+  }
+  if (Object.keys(isi).length) withLock_(function () {
+    const semua = read_('katalog_foto');
+    semua.forEach(function (f) { const v = isi[String(f.generic)]; if (v && !f.panduan) f.panduan = v; });
+    writeAll_('katalog_foto', semua);
+    katalogBaru_();
+  }, 60000);
+  return Math.max(0, antre.length - i);
+}
+
+/** Hapus jejak lihat/tanya yang lebih tua dari LOG_HARI. */
+function rapikanLogKatalog_() {
+  const batas = addDays_(today_(), -KATALOG.LOG_HARI);
+  const rows = read_('katalog_log');
+  const sisa = rows.filter(function (r) { return String(r.waktu).slice(0, 10) >= batas; });
+  if (sisa.length < rows.length) withLock_(function () { writeAll_('katalog_log', sisa); });
+}
+
+/** Penghitung sederhana per jendela waktu (cache) untuk membatasi kiriman publik. true = masih boleh. */
+function kuotaPublik_(kunci, maks, detik, tambah) {
+  const c = CacheService.getScriptCache();
+  const k = 'kuota_' + kunci + '_' + Math.floor(Date.now() / (detik * 1000));
+  const n = Number(c.get(k)) || 0;
+  if (n + (tambah || 1) > maks) return false;
+  c.put(k, String(n + (tambah || 1)), detik + 30);
+  return true;
+}
+
+/** Artikel katalog saat ini per generic (dari cache katalog publik). */
+function katalogPerGeneric_() {
+  const d = katalogData_(), G = {};
+  d.items.forEach(function (it) { G[it.g] = it; });
+  return G;
+}
 
 /* ---------- promo umum toko (tab katalog_promo) ---------- */
 function promoTokoOut_(r) {
@@ -5923,6 +6018,93 @@ Object.assign(API, {
 
   /** PUBLIK (tanpa login): data katalog untuk pelanggan. Tanpa jumlah stok. */
   katalog: function () { return katalogData_(); },
+
+  /** PUBLIK: jejak anonim dari katalog. e = [[generic, 'l'|'t'], ...] (maks 25 per kiriman). Tanpa data pribadi. */
+  katalogCatat: function (req) {
+    const e = Array.isArray(req.e) ? req.e.slice(0, 25) : [];
+    const ok = e.filter(function (x) { return Array.isArray(x) && ((/^9\d{8}$/.test(String(x[0])) && (x[1] === 'l' || x[1] === 't')) || (x[0] === 'qr' && x[1] === 's')); });
+    if (!ok.length) return 0;
+    if (!kuotaPublik_('catat', KATALOG.LOG_MAKS_MENIT, 60, ok.length)) return 0; // diam-diam diabaikan bila banjir
+    const w = now_();
+    withLock_(function () { appendRows_('katalog_log', ok.map(function (x) { return { waktu: w, generic: String(x[0]), jenis: x[1] === 't' ? 'tanya' : x[1] === 's' ? 'scan qr' : 'lihat' }; })); }, 10000);
+    return ok.length;
+  },
+
+  /** PUBLIK: pelanggan minta dikabari saat ukuran yang kosong tersedia lagi. */
+  katalogTunggu: function (req) {
+    if (req.situs) throw new Error('Permintaan ditolak'); // kolom jebakan bot (disembunyikan di halaman)
+    const nama = String(req.nama || '').replace(/[<>\n\r\t]/g, ' ').trim().slice(0, 40);
+    let wa = String(req.wa || '').replace(/[^\d+]/g, '');
+    if (/^\+?62/.test(wa)) wa = '0' + wa.replace(/^\+?62/, '');
+    if (nama.length < 2) throw new Error('Isi nama Anda.');
+    if (!/^08\d{8,12}$/.test(wa)) throw new Error('Nomor WhatsApp tidak valid. Contoh: 0812xxxxxxx');
+    const g = String(req.g || ''), warna = String(req.warna || '').slice(0, 30), ukuran = String(req.ukuran || '').slice(0, 10);
+    const it = katalogPerGeneric_()[g];
+    if (!it) throw new Error('Artikel tidak ditemukan.');
+    const w = it.w.filter(function (x) { return x[0] === warna; })[0];
+    const u = w && w[1].filter(function (x) { return x[0] === ukuran; })[0];
+    if (!u) throw new Error('Pilihan warna/ukuran tidak ditemukan.');
+    if (u[1]) throw new Error('Ukuran ini sedang tersedia. Silakan tanya langsung lewat WhatsApp.');
+    const batas = addDays_(today_(), -30);
+    const dobel = read_('katalog_tunggu').some(function (r) {
+      return String(r.wa) === wa && String(r.generic) === g && String(r.warna) === warna && String(r.ukuran) === ukuran && String(r.status) === 'menunggu' && String(r.waktu).slice(0, 10) >= batas;
+    });
+    if (dobel) return { sudah: true };
+    if (!kuotaPublik_('tunggu', KATALOG.TUNGGU_MAKS_JAM, 3600)) throw new Error('Sedang banyak permintaan. Coba lagi nanti atau hubungi toko lewat WhatsApp.');
+    withLock_(function () {
+      appendRows_('katalog_tunggu', [{ id: 'tg' + Date.now().toString(36), waktu: now_(), nama: nama, wa: "'" + wa, generic: g, artikel: it.n, warna: warna, ukuran: ukuran, status: 'menunggu', diubah: '', oleh: '' }]);
+    });
+    return { ok: true };
+  },
+
+  /** Staf: daftar pelanggan yang menunggu ukuran, ditandai bila ukurannya sudah tersedia lagi. */
+  katalogTungguList: function (req) {
+    auth_(req);
+    const G = katalogPerGeneric_();
+    const rows = read_('katalog_tunggu').filter(function (r) { return String(r.status) === 'menunggu'; }).map(function (r) {
+      const it = G[String(r.generic)];
+      const w = it && it.w.filter(function (x) { return x[0] === String(r.warna); })[0];
+      const u = w && w[1].filter(function (x) { return x[0] === String(r.ukuran); })[0];
+      return { id: String(r.id), waktu: String(r.waktu), nama: String(r.nama), wa: String(r.wa).replace(/^'/, ''), generic: String(r.generic), artikel: String(r.artikel),
+        warna: String(r.warna), ukuran: String(r.ukuran), tersedia: !!(u && u[1]) };
+    });
+    rows.sort(function (a, b) { return (b.tersedia - a.tersedia) || (a.waktu < b.waktu ? -1 : 1); });
+    return rows;
+  },
+
+  /** Staf: tandai permintaan sudah dihubungi / dibatalkan. */
+  katalogTungguSelesai: function (req) {
+    const u = auth_(req), id = String(req.id || ''), st = req.status === 'batal' ? 'batal' : 'dihubungi';
+    withLock_(function () {
+      const rows = read_('katalog_tunggu');
+      rows.forEach(function (r) { if (String(r.id) === id) { r.status = st; r.diubah = now_(); r.oleh = u.username; } });
+      writeAll_('katalog_tunggu', rows);
+    });
+    log_(u.username, 'katalog kabari pelanggan', id + ' ' + st);
+    return true;
+  },
+
+  /** Admin: artikel paling sering dilihat dan ditanya di katalog (hari = 7/30/90). */
+  katalogStatistik: function (req) {
+    auth_(req, true);
+    const hari = [7, 30, 90].indexOf(Number(req.hari)) >= 0 ? Number(req.hari) : 30;
+    const batas = addDays_(today_(), -hari + 1);
+    const H = {}, perHari = {};
+    let lihat = 0, tanya = 0, scan = 0;
+    read_('katalog_log').forEach(function (r) {
+      const t = String(r.waktu).slice(0, 10);
+      if (t < batas) return;
+      if (String(r.jenis) === 'scan qr') { scan++; return; }
+      const x = H[r.generic] || (H[r.generic] = { l: 0, t: 0 });
+      const ph = perHari[t] || (perHari[t] = { l: 0, t: 0 });
+      if (String(r.jenis) === 'tanya') { x.t++; tanya++; ph.t++; } else { x.l++; lihat++; ph.l++; }
+    });
+    const G = katalogPerGeneric_();
+    const daftar = Object.keys(H).map(function (g) { const it = G[g] || {}; return { g: g, n: it.n || '(tidak ada di toko)', k4: it.k4 || '', lihat: H[g].l, tanya: H[g].t, ada: !!G[g] }; });
+    const top = function (k) { return daftar.filter(function (x) { return x[k]; }).sort(function (a, b) { return b[k] - a[k]; }).slice(0, 20); };
+    return { hari: hari, lihat: lihat, tanya: tanya, scan: scan, artikel: daftar.length, topLihat: top('lihat'), topTanya: top('tanya'),
+      perHari: Object.keys(perHari).sort().map(function (t) { return [t, perHari[t].l, perHari[t].t]; }) };
+  },
 
   /** Admin: daftar artikel katalog + status foto. */
   katalogFotoList: function (req) {

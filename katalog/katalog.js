@@ -178,6 +178,8 @@
   /* ---------- beranda ---------- */
   function mulai() {
     $('#update').textContent = D.diperbarui ? 'Stok per ' + tglUpdate(D.diperbarui) : '';
+    gambarInfoToko();
+    hitungDaftar();
     gambarBanner();
     gambarKategori();
     gambarStrip();
@@ -403,11 +405,12 @@
 
   /* ---------- lembar: detail produk ---------- */
   var dlg = $('#lembar');
-  function bukaLembar(isi, sempit) {
+  function bukaLembar(isi, sempit, tetapGulir) {
+    var y = $('#lembarIsi').scrollTop;
     dlg.className = 'lembar' + (sempit ? ' sempit' : '');
     isiUlang($('#lembarIsi'), isi);
     if (!dlg.open) { if (dlg.showModal) dlg.showModal(); else dlg.setAttribute('open', ''); }
-    $('#lembarIsi').scrollTop = 0;
+    $('#lembarIsi').scrollTop = tetapGulir ? y : 0;
   }
   function kepalaLembar(teks) {
     return el('div', { class: 'lembar-atas' }, el('button', { class: 'kembali', type: 'button', 'aria-label': 'Kembali', onclick: tutup }, svg(IKON_KEMBALI)), el('b', { text: teks }));
@@ -418,9 +421,13 @@
     var tersedia = function (w) { return w[1].filter(function (u) { return u[1]; }); };
     var t0 = tersedia(it.w[wi]); if (t0.length === 1) uk = t0[0][0];
     var fotos = fotoBersih(it);
+    var sudah = false;
     function gambar() {
+      var ulang = sudah; sudah = true;
       var w = it.w[wi], wi2 = warnaInfo(w[0]), pw = prWarna(w);
       var satuUkuran = w[1].length === 1 && w[1][0][0] === 'NOS';
+      var pilihU = w[1].filter(function (u) { return u[0] === uk; })[0];
+      var kosong = !!(pilihU && !pilihU[1]);
       var hargaNormal = w[2] || it.h;
       var teks = 'Halo EIGER Kartasura, saya mau tanya ' + namaTampil(it.n) + ' (kode ' + it.g + '), warna ' + wi2[0].toLowerCase() +
         (uk && uk !== 'NOS' ? ', ukuran ' + uk : '') + (pw ? ', harga promo ' + rp(pw[1]) : '') + '. Apakah masih tersedia di toko?';
@@ -451,12 +458,13 @@
                   wi = i; var t = tersedia(it.w[i]); uk = t.length === 1 ? t[0][0] : (t.some(function (u) { return u[0] === uk; }) ? uk : ''); gambar();
                 } }, el('i', { style: 'background:' + warnaInfo(x[0])[1] }), warnaInfo(x[0])[0], prWarna(x) ? el('em', { text: '-' + prWarna(x)[0] + '%' }) : null);
               }))),
-            satuUkuran ? null : el('div', { class: 'blok' }, el('h3', null, 'Ukuran: ', el('span', { text: uk || 'pilih ukuran' })),
+            satuUkuran ? null : el('div', { class: 'blok' }, el('div', { class: 'blok-kepala' }, el('h3', null, 'Ukuran: ', el('span', { text: uk ? uk + (kosong ? ' (kosong)' : '') : 'pilih ukuran' })),
+                it.sg != null && D.panduan && D.panduan[it.sg] ? el('button', { class: 'sk', type: 'button', text: 'Panduan ukuran ›', onclick: function () { bukaPanduan(it); } }) : null),
               el('div', { class: 'pilihan' }, w[1].map(function (u) {
-                return el('button', { type: 'button', disabled: !u[1], 'aria-pressed': String(uk === u[0]), 'aria-label': u[0] + (u[1] ? '' : ', kosong'),
+                return el('button', { type: 'button', class: u[1] ? '' : 'kosong', 'aria-pressed': String(uk === u[0]), 'aria-label': u[0] + (u[1] ? '' : ', kosong'),
                   text: u[0] === 'NOS' ? 'All size' : u[0], onclick: function () { uk = u[0]; gambar(); } });
               })),
-              el('p', { class: 'ket', text: 'Ukuran bergaris putus-putus sedang kosong di toko.' })),
+              kosong ? formKabari(it, w[0], uk) : el('p', { class: 'ket', text: 'Ukuran bergaris putus-putus sedang kosong di toko. Pilih untuk minta dikabari saat tersedia.' })),
             !pw && promoUmum.length ? el('div', { class: 'blok' }, el('h3', { text: 'Promo yang bisa dipakai' }),
               el('div', { class: 'promo-berlaku' }, promoUmum.slice(0, 4).map(function (p) {
                 return el('div', { class: 'voucher-kecil' }, el('b', { text: p.jenis || 'Promo' }), el('span', { text: p.judul }));
@@ -467,15 +475,21 @@
                 genderNama(it.gd) ? [el('dt', { text: 'Untuk' }), el('dd', { text: genderNama(it.gd) })] : null,
                 el('dt', { text: 'Kode artikel' }), el('dd', { text: it.g }),
                 el('dt', { text: 'Lokasi' }), el('dd', { text: 'EIGER Store A. Yani Kartasura' }))),
+            blokSerupa(it),
+            el('p', { class: 'aman-kecil' }, svg(IKON_PERISAI), 'Pembayaran hanya di kasir toko. Kami tidak pernah meminta transfer ke rekening pribadi.'),
             el('div', { class: 'bar-beli' },
               el('button', { class: 'bagikan', type: 'button', onclick: function () {
                 var url = location.href.split('#')[0] + '#artikel-' + it.g;
                 if (navigator.share) navigator.share({ title: namaTampil(it.n), url: url }).catch(function () {});
                 else if (navigator.clipboard) navigator.clipboard.writeText(url).then(function () { toast('Link disalin'); }, function () { toast(url); });
               } }, svg('<circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.6 13.5 6.8 4M15.4 6.5l-6.8 4"/>'), 'Bagikan'),
-              el('a', { class: 'chat', href: waLink('Halo EIGER Kartasura, saya mau tanya tentang ' + namaTampil(it.n) + ' (kode ' + it.g + ').'), target: '_blank', rel: 'noopener' }, svg(IKON_WA), 'Chat'),
-              el('a', { class: 'tanya', href: waLink(teks), target: '_blank', rel: 'noopener', text: uk || satuUkuran ? 'Tanya Stok via WhatsApp' : 'Tanya Ketersediaan' }))))
-      ]);
+              el('button', { class: 'chat tambah', type: 'button', onclick: function () {
+                if (!satuUkuran && !uk) { toast('Pilih ukuran dulu'); return; }
+                tambahDaftar(it, w[0], satuUkuran ? 'NOS' : uk);
+              } }, svg(IKON_DAFTAR_TAMBAH), 'Daftar'),
+              kosong ? el('button', { class: 'tanya', type: 'button', text: 'Kabari saya saat tersedia', onclick: function () { var f = $('.form-kabari input'); if (f) { f.scrollIntoView({ behavior: 'smooth', block: 'center' }); f.focus(); } } })
+                : el('a', { class: 'tanya', href: waLink(teks), target: '_blank', rel: 'noopener', text: uk || satuUkuran ? 'Tanya Stok via WhatsApp' : 'Tanya Ketersediaan', onclick: function () { catat(it.g, 't'); } }))))
+      ], false, ulang);
       var g = $('.galeri-utama');
       if (g) {
         if (fi) g.scrollLeft = fi * g.clientWidth;
@@ -489,6 +503,7 @@
       if (pw) { var jalan = function () { var s = sisa(D.promoSampai); isiUlang(hm, 'Sisa ', s[0] ? [el('b', { text: s[0] + 'h' })] : null, el('b', { text: dua(s[1]) }), ':', el('b', { text: dua(s[2]) }), ':', el('b', { text: dua(s[3]) })); }; jalan(); detailTimer = setInterval(jalan, 1000); }
     }
     gambar();
+    catat(it.g, 'l');
     if (!dariHash && location.hash !== '#artikel-' + it.g) history.pushState(null, '', '#artikel-' + it.g);
   }
 
@@ -541,7 +556,7 @@
   function tutup() { if (dlg.open) dlg.close(); }
   dlg.addEventListener('close', function () {
     clearInterval(detailTimer);
-    if (/^#(artikel-|promo|kategori)/.test(location.hash)) history.pushState(null, '', location.pathname + location.search);
+    if (/^#(artikel-|promo|kategori|daftar)/.test(location.hash)) history.pushState(null, '', location.pathname + location.search);
     tandaiMenu('beranda');
   });
   dlg.addEventListener('click', function (e) { if (e.target === dlg) tutup(); });
@@ -551,9 +566,202 @@
     if (m) { var it = D.items.filter(function (x) { return x.g === m[1]; })[0]; if (it) buka(it, true); else toast('Barang ini sedang tidak tersedia di toko'); return; }
     if (h === '#promo') { bukaDaftarPromo(); return; }
     if (h === '#kategori') { bukaKategori(); return; }
+    if (h === '#daftar') { bukaDaftar(); return; }
     if (dlg.open) dlg.close();
   }
   window.addEventListener('popstate', bukaDariHash);
+
+
+  /* ================= fitur tambahan ================= */
+  var IKON_PERISAI = '<path d="M12 3 4 6v6c0 4.5 3.4 8.3 8 9 4.6-.7 8-4.5 8-9V6Z"/><path d="m9 12 2 2 4-4"/>';
+  var IKON_DAFTAR = '<path d="M9 6h11M9 12h11M9 18h11"/><circle cx="4.5" cy="6" r="1"/><circle cx="4.5" cy="12" r="1"/><circle cx="4.5" cy="18" r="1"/>';
+  var IKON_DAFTAR_TAMBAH = '<path d="M4 6h10M4 12h10M4 18h7"/><path d="M18 14v6M15 17h6"/>';
+  var IKON_JAM = '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>';
+  var SITUS_RESMI = 'eigerkartasura.github.io';
+
+  /* ---- jejak anonim: artikel dibuka / ditanya (untuk statistik toko, tanpa data pribadi) ---- */
+  var antreCatat = [], sudahLihat = {}, catatT;
+  function catat(g, jenis) {
+    if (jenis === 'l') { if (sudahLihat[g]) return; sudahLihat[g] = 1; }
+    antreCatat.push([g, jenis]);
+    clearTimeout(catatT); catatT = setTimeout(kirimCatat, 4000);
+  }
+  function kirimCatat() {
+    if (!antreCatat.length || !CFG.API_URL) return;
+    var e = antreCatat.splice(0, 25);
+    try { fetch(CFG.API_URL, { method: 'POST', body: JSON.stringify({ action: 'katalogCatat', e: e }), keepalive: true, mode: 'no-cors' }).catch(function () {}); } catch (x) { /* abaikan */ }
+    if (antreCatat.length) catatT = setTimeout(kirimCatat, 1000);
+  }
+  addEventListener('pagehide', kirimCatat);
+  document.addEventListener('visibilitychange', function () { if (document.hidden) kirimCatat(); });
+  try { if (/[?&]dari=qr\b/.test(location.search)) { antreCatat.push(['qr', 's']); catatT = setTimeout(kirimCatat, 1500); history.replaceState(null, '', location.pathname + location.hash); } } catch (x) { /* abaikan */ }
+
+  /* ---- daftar tanya: beberapa barang sekaligus dalam satu pesan WhatsApp ---- */
+  var KUNCI_DAFTAR = 'katalog2299.daftar';
+  function bacaDaftar() { try { var x = JSON.parse(localStorage.getItem(KUNCI_DAFTAR) || '[]'); return Array.isArray(x) ? x : []; } catch (e) { return []; } }
+  function simpanDaftar(x) { try { localStorage.setItem(KUNCI_DAFTAR, JSON.stringify(x.slice(0, 30))); } catch (e) { /* penuh */ } hitungDaftar(); }
+  function hitungDaftar() {
+    var n = bacaDaftar().length;
+    [].forEach.call(document.querySelectorAll('.lencana-daftar'), function (b) { b.textContent = n > 9 ? '9+' : String(n); b.hidden = !n; });
+  }
+  function tambahDaftar(it, warna, uk) {
+    var x = bacaDaftar();
+    if (x.some(function (d) { return d.g === it.g && d.w === warna && d.u === uk; })) { toast('Sudah ada di daftar'); return; }
+    x.push({ g: it.g, w: warna, u: uk });
+    simpanDaftar(x);
+    toast('Ditambahkan ke daftar tanya (' + x.length + ')');
+  }
+  function bukaDaftar() {
+    var x = bacaDaftar(), G = {};
+    D.items.forEach(function (it) { G[it.g] = it; });
+    var baris = x.map(function (d, i) {
+      var it = G[d.g], w = it && it.w.filter(function (y) { return y[0] === d.w; })[0];
+      var u = w && w[1].filter(function (y) { return y[0] === d.u; })[0];
+      var pw = w && prWarna(w), harga = pw ? pw[1] : (w && w[2]) || (it && it.h) || 0;
+      return { d: d, i: i, it: it, ada: !!(u && u[1]), harga: harga, promo: !!pw };
+    });
+    function teks() {
+      var t = 'Halo EIGER Kartasura, saya mau tanya ketersediaan barang berikut:\n';
+      baris.forEach(function (b, k) {
+        t += '\n' + (k + 1) + '. ' + (b.it ? namaTampil(b.it.n) : 'Kode ' + b.d.g) + ' (kode ' + b.d.g + ')\n   Warna ' + warnaInfo(b.d.w)[0].toLowerCase() +
+          (b.d.u && b.d.u !== 'NOS' ? ', ukuran ' + b.d.u : '') + (b.harga ? ', ' + rp(b.harga) + (b.promo ? ' (promo)' : '') : '');
+      });
+      return t + '\n\nTerima kasih.';
+    }
+    bukaLembar([kepalaLembar('Daftar tanya'),
+      el('div', { class: 'daftar-isi' },
+        baris.length ? [
+          el('p', { class: 'ket', text: 'Kumpulkan barang yang ingin ditanyakan, lalu kirim sekaligus dalam satu pesan WhatsApp ke toko. Daftar ini hanya tersimpan di HP Anda.' }),
+          baris.map(function (b) {
+            var f = b.it && fotoBersih(b.it)[0];
+            return el('div', { class: 'baris-daftar' },
+              el('button', { class: 'gb-kecil', type: 'button', 'aria-label': 'Buka ' + (b.it ? namaTampil(b.it.n) : b.d.g), onclick: function () { if (b.it) buka(b.it); } },
+                f ? el('img', { src: f, alt: '', loading: 'lazy', referrerpolicy: 'no-referrer' }) : svg(IKON_SEMUA)),
+              el('div', { class: 'baris-daftar-isi' },
+                el('b', { text: b.it ? namaTampil(b.it.n) : 'Kode ' + b.d.g }),
+                el('span', { text: warnaInfo(b.d.w)[0] + (b.d.u && b.d.u !== 'NOS' ? ' · ' + b.d.u : '') }),
+                b.it ? el('span', { class: b.ada ? 'ok' : 'habis', text: b.ada ? (b.harga ? rp(b.harga) + (b.promo ? ' · promo' : '') : 'Tersedia') : 'Ukuran ini sedang kosong' })
+                  : el('span', { class: 'habis', text: 'Sudah tidak ada di toko' })),
+              el('button', { class: 'hapus-daftar', type: 'button', 'aria-label': 'Hapus dari daftar', text: '×', onclick: function () {
+                var y = bacaDaftar(); y.splice(b.i, 1); simpanDaftar(y); bukaDaftar();
+              } }));
+          }),
+          el('div', { class: 'daftar-aksi' },
+            el('button', { class: 'tombol garis', type: 'button', text: 'Kosongkan', onclick: function () { simpanDaftar([]); bukaDaftar(); } }),
+            el('a', { class: 'tombol', href: waLink(teks()), target: '_blank', rel: 'noopener', onclick: function () { baris.forEach(function (b) { catat(b.d.g, 't'); }); } }, svg(IKON_WA), 'Kirim ' + baris.length + ' barang ke WhatsApp'))
+        ] : el('div', { class: 'kosong' }, el('b', { text: 'Daftar tanya masih kosong' }),
+          el('p', { text: 'Buka barang, pilih warna dan ukuran, lalu ketuk "Daftar". Setelah terkumpul, kirim semuanya sekaligus ke WhatsApp toko.' }),
+          el('button', { class: 'tombol', type: 'button', text: 'Lihat barang', onclick: tutup })))], true);
+    if (location.hash !== '#daftar') history.pushState(null, '', '#daftar');
+  }
+
+  /* ---- kabari saya: ukuran kosong → pelanggan meninggalkan nama & nomor WhatsApp ---- */
+  function formKabari(it, warna, uk) {
+    var pesan = el('p', { class: 'kabari-pesan', role: 'status' });
+    var nama = el('input', { type: 'text', name: 'nama', autocomplete: 'name', maxlength: '40', placeholder: 'Nama Anda', required: true, 'aria-label': 'Nama' });
+    var wa = el('input', { type: 'tel', name: 'wa', autocomplete: 'tel', inputmode: 'tel', maxlength: '16', placeholder: '0812xxxxxxxx', required: true, 'aria-label': 'Nomor WhatsApp' });
+    var jebakan = el('input', { type: 'text', name: 'situs', tabindex: '-1', autocomplete: 'off', class: 'jebakan', 'aria-hidden': 'true' });
+    try { var lama = JSON.parse(localStorage.getItem('katalog2299.kontak') || 'null'); if (lama) { nama.value = lama.nama || ''; wa.value = lama.wa || ''; } } catch (e) { /* abaikan */ }
+    var kirim = el('button', { class: 'tombol', type: 'submit', text: 'Kabari saya' });
+    return el('form', { class: 'form-kabari', onsubmit: function (e) {
+      e.preventDefault();
+      pesan.className = 'kabari-pesan'; pesan.textContent = '';
+      if (nama.value.trim().length < 2) { pesan.className = 'kabari-pesan salah'; pesan.textContent = 'Isi nama Anda.'; nama.focus(); return; }
+      if (!/^(\+?62|0)8\d{8,12}$/.test(wa.value.replace(/[\s-]/g, ''))) { pesan.className = 'kabari-pesan salah'; pesan.textContent = 'Nomor WhatsApp tidak valid. Contoh: 0812xxxxxxxx'; wa.focus(); return; }
+      kirim.disabled = true; kirim.textContent = 'Mengirim…';
+      fetch(CFG.API_URL, { method: 'POST', body: JSON.stringify({ action: 'katalogTunggu', nama: nama.value, wa: wa.value, g: it.g, warna: warna, ukuran: uk, situs: jebakan.value }), redirect: 'follow' })
+        .then(function (r) { return r.json(); })
+        .then(function (r) {
+          if (!r.ok) throw new Error(r.error || 'Gagal mengirim');
+          try { localStorage.setItem('katalog2299.kontak', JSON.stringify({ nama: nama.value.trim(), wa: wa.value.trim() })); } catch (e) { /* abaikan */ }
+          pesan.className = 'kabari-pesan ok';
+          pesan.textContent = r.data && r.data.sudah ? 'Anda sudah terdaftar untuk ukuran ini. Kami kabari lewat WhatsApp saat tersedia.' : 'Terima kasih. Tim toko akan mengabari lewat WhatsApp saat ukuran ' + uk + ' tersedia.';
+          kirim.textContent = 'Terdaftar';
+        })
+        .catch(function (x) { pesan.className = 'kabari-pesan salah'; pesan.textContent = x.message; kirim.disabled = false; kirim.textContent = 'Kabari saya'; });
+    } },
+      el('b', { text: 'Ukuran ' + uk + ' sedang kosong' }),
+      el('span', { text: 'Tinggalkan nama dan nomor WhatsApp. Tim toko akan mengabari saat ukuran ini datang.' }),
+      el('div', { class: 'kabari-baris' }, nama, wa), jebakan, kirim, pesan,
+      el('small', { text: 'Nomor hanya dipakai toko untuk mengabari barang ini.' }));
+  }
+
+  /* ---- panduan ukuran resmi (gambar dari eigeradventure.com) ---- */
+  var dlg2 = document.getElementById('lembar2');
+  function bukaPanduan(it) {
+    var url = D.panduan[it.sg];
+    isiUlang($('#lembar2Isi'),
+      el('div', { class: 'lembar-atas' }, el('button', { class: 'kembali', type: 'button', 'aria-label': 'Tutup', onclick: function () { dlg2.close(); } }, svg(IKON_KEMBALI)), el('b', { text: 'Panduan ukuran' })),
+      el('div', { class: 'panduan' },
+        it.sgu ? el('p', { class: 'ket', text: 'Panduan umum untuk ' + subNama(it.k4).toLowerCase() + '. Ukuran tiap model bisa sedikit berbeda; tanyakan ke toko bila ragu.' }) : null,
+        el('img', { src: url, alt: 'Tabel panduan ukuran ' + namaTampil(it.n), referrerpolicy: 'no-referrer' }),
+        el('p', { class: 'ket', text: 'Sumber: eigeradventure.com' })));
+    if (dlg2.showModal) dlg2.showModal(); else dlg2.setAttribute('open', '');
+  }
+  if (dlg2) dlg2.addEventListener('click', function (e) { if (e.target === dlg2) dlg2.close(); });
+
+  /* ---- barang serupa: sub-kategori sama, harga berdekatan, ada foto ---- */
+  function blokSerupa(it) {
+    var h0 = (prItem(it) || {}).n || it.hm || it.h || 0;
+    var hargaDari = function (x) { var p = prItem(x); return p ? p.n : (x.hm || x.h || 0); };
+    var calon = D.items.filter(function (x) { return x.g !== it.g && x.k3 === it.k3 && fotoBersih(x).length; });
+    var sama = calon.filter(function (x) { return x.k4 === it.k4; });
+    var pakai = (sama.length >= 4 ? sama : calon).slice().sort(function (a, b) {
+      return ((a.k4 === it.k4 ? 0 : 1) - (b.k4 === it.k4 ? 0 : 1)) || (Math.abs(hargaDari(a) - h0) - Math.abs(hargaDari(b) - h0));
+    }).slice(0, 10);
+    if (!pakai.length) return null;
+    return el('div', { class: 'blok' }, el('h3', { text: 'Barang serupa di toko' }),
+      el('div', { class: 'strip-rel serupa' }, pakai.map(function (x) {
+        var p = prItem(x);
+        return el('button', { class: 'mini', type: 'button', onclick: function () { buka(x); } },
+          el('div', { class: 'gb' }, el('img', { src: fotoBersih(x)[0], alt: namaTampil(x.n), loading: 'lazy', referrerpolicy: 'no-referrer' }), p ? labelDiskon(p.d) : null),
+          el('span', { class: 'mini-nama', text: namaTampil(x.n) }),
+          hargaDari(x) ? hargaEl(hargaDari(x)) : el('span', { class: 'harga tanya', text: 'Tanya harga' }));
+      })));
+  }
+
+  /* ---- info toko: alamat, jam buka (status buka/tutup), peta, WhatsApp resmi ---- */
+  function gambarInfoToko() {
+    var I = D.infoToko || {}, box = $('#infoToko');
+    if (!box) return;
+    var jBuka = (I.buka || '08:30').split(':').map(Number), jTutup = (I.tutup || '21:45').split(':').map(Number);
+    var now = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Jakarta' })), m = now.getHours() * 60 + now.getMinutes();
+    var mBuka = jBuka[0] * 60 + jBuka[1], mTutup = jTutup[0] * 60 + jTutup[1], bukaSkrg = m >= mBuka && m < mTutup;
+    var jam = function (a) { return dua(a[0]) + '.' + dua(a[1]); };
+    var wa = String(D.wa || '6281120022574'), waTampil = '0' + wa.replace(/^62/, '').replace(/(\d{3})(\d{4})(\d+)/, '$1-$2-$3');
+    isiUlang(box,
+      el('div', { class: 'info-baris' },
+        el('span', { class: 'status-buka' + (bukaSkrg ? '' : ' tutup'), text: bukaSkrg ? 'Buka sekarang' : 'Tutup' }),
+        el('span', null, svg(IKON_JAM), bukaSkrg ? 'Tutup pukul ' + jam(jTutup) : 'Buka pukul ' + jam(jBuka) + (m >= mTutup ? ' besok' : '')),
+        el('span', { class: 'info-update', id: 'update', text: D.diperbarui ? 'Stok per ' + tglUpdate(D.diperbarui) : '' })),
+      el('div', { class: 'info-baris' }, el('span', null, svg(IKON_LOKASI), I.alamat || 'EIGER Store A. Yani Kartasura, Sukoharjo')),
+      el('div', { class: 'info-aksi' },
+        I.maps ? el('a', { class: 'tombol garis kecil', href: I.maps, target: '_blank', rel: 'noopener' }, svg(IKON_LOKASI), 'Petunjuk arah') : null,
+        el('a', { class: 'tombol kecil', href: waLink('Halo EIGER Kartasura, saya mau tanya.'), target: '_blank', rel: 'noopener' }, svg(IKON_WA), 'WhatsApp toko'),
+        el('button', { class: 'tombol garis kecil', type: 'button', onclick: bukaAman }, svg(IKON_PERISAI), 'Cek katalog resmi')),
+      el('p', { class: 'info-jam', text: (I.jam || '') + ' · WhatsApp resmi ' + waTampil }));
+  }
+  function bukaAman() {
+    var wa = String(D.wa || '6281120022574'), waTampil = '0' + wa.replace(/^62/, '').replace(/(\d{3})(\d{4})(\d+)/, '$1-$2-$3');
+    bukaLembar([kepalaLembar('Katalog resmi'), el('div', { class: 'aman' },
+      el('div', { class: 'aman-kepala' }, svg(IKON_PERISAI), el('b', { text: 'Pastikan Anda di katalog resmi EIGER Store A. Yani Kartasura' })),
+      el('ul', null,
+        el('li', null, 'Alamat resmi katalog hanya ', el('b', { text: SITUS_RESMI }), '. Periksa di kolom alamat browser.'),
+        el('li', null, 'WhatsApp resmi toko hanya ', el('b', { text: waTampil }), '.'),
+        el('li', { text: 'Pembayaran hanya di kasir toko. Kami tidak pernah meminta transfer ke rekening pribadi, pulsa, atau kode OTP.' }),
+        el('li', { text: 'Harga promo yang sah adalah yang tertera di katalog ini dan di kasir. Waspadai tawaran harga jauh lebih murah di luar katalog.' }),
+        el('li', { text: 'Ragu? Datang atau telepon langsung ke toko di Jl. A. Yani Km 7 Kartasura.' })),
+      location.hostname === SITUS_RESMI ? el('p', { class: 'aman-ok' }, svg(IKON_PERISAI), 'Halaman ini adalah katalog resmi.') : null)], true);
+  }
+  // halaman dibuka di alamat lain (salinan / bingkai) → peringatan jelas, dan tidak boleh dibingkai situs lain
+  (function jagaSitus() {
+    try { if (window.top !== window.self) window.top.location = 'https://' + SITUS_RESMI + '/'; } catch (e) { /* abaikan */ }
+    var h = location.hostname;
+    if (h === SITUS_RESMI || h === 'localhost' || h === '127.0.0.1' || h === '') return;
+    var bar = el('div', { class: 'bukan-resmi', role: 'alert' }, svg(IKON_PERISAI),
+      el('span', null, 'Halaman ini bukan katalog resmi EIGER Kartasura. Katalog resmi hanya di ', el('a', { href: 'https://' + SITUS_RESMI + '/', text: SITUS_RESMI }), '. Jangan transfer uang dari halaman ini.'));
+    document.body.prepend(bar);
+  })();
 
   /* ---------- menu bawah & kontrol ---------- */
   function tandaiMenu(m) { [].forEach.call(document.querySelectorAll('.menu-bawah button'), function (b) { if (b.getAttribute('data-m') === m) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current'); }); }
@@ -563,12 +771,14 @@
     if (m === 'beranda') { tutup(); F = { k3: '', k4: '', q: '', gd: '', urut: 'pilihan', arah: 'naik', promo: false, baru: false }; $('#q').value = ''; tandaiTab(); gambarKategori(); saring(); scrollTo({ top: 0, behavior: 'smooth' }); }
     if (m === 'kategori') bukaKategori();
     if (m === 'promo') bukaDaftarPromo();
+    if (m === 'daftar') bukaDaftar();
   });
   var tunda;
   $('#q').addEventListener('input', function (e) { clearTimeout(tunda); tunda = setTimeout(function () { F.q = e.target.value; if (D) saring(); }, 200); });
   $('#q').addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.target.blur(); gulirKeDaftar(); } });
   function ukurAtas() { document.documentElement.style.setProperty('--atas-h', $('#atas').offsetHeight + 'px'); }
   ukurAtas(); addEventListener('resize', ukurAtas);
+  $('#daftarAtas').addEventListener('click', function () { if (D) bukaDaftar(); });
   var waUmum = 'https://wa.me/6281120022574?text=' + encodeURIComponent('Halo EIGER Kartasura, saya mau tanya barang.');
   $('#waAtas').href = waUmum; $('#waBawah').href = waUmum;
 

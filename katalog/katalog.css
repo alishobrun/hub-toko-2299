@@ -348,3 +348,98 @@ svg { flex: none; }
 .kaki .kredit { font-size: 11px; opacity: .8; }
 .kaki .kredit a { color: inherit; }
 html, body { overflow-x: clip; }
+
+/* ================= fitur tambahan ================= */
+/* logo EIGER resmi (gambar hitam → putih) */
+.logo-eiger { width: 40px; height: 40px; object-fit: contain; filter: brightness(0) invert(1); flex: none; }
+.merek span { border-left: 1px solid rgba(255, 255, 255, .45); padding-left: 8px; }
+@media (max-width: 420px) { .merek small { font-size: 10.5px; } .logo-eiger { width: 34px; height: 34px; } }
+/* tombol daftar di header + lencana jumlah */
+.atas-ikon { position: relative; width: 40px; height: 40px; display: grid; place-items: center; border: 0; background: none; color: #fff; border-radius: 50%; flex: none; }
+.atas-ikon svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; }
+.lencana-daftar { position: absolute; top: 2px; right: 0; min-width: 17px; height: 17px; padding: 0 4px; border-radius: 99px; background: var(--harga); color: #fff; font-size: 10.5px; font-weight: 700; line-height: 14px; font-style: normal; text-align: center; border: 1.5px solid #fff; }
+.ikon-lencana { position: relative; display: block; height: 22px; }
+.menu-bawah .lencana-daftar { top: -4px; right: -9px; }
+@media (max-width: 520px) { .atas-ikon { display: none; } }
+
+/* info toko */
+.info-toko { display: block; padding: 10px 12px; font-size: 12.5px; color: var(--tinta); }
+.info-baris { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; margin-bottom: 6px; }
+.info-baris > span { display: inline-flex; align-items: center; gap: 4px; }
+.info-baris svg { width: 14px; height: 14px; fill: none; stroke: var(--oranye-tua); stroke-width: 2; }
+.status-buka { font-weight: 700; color: #12876A; }
+.status-buka.tutup { color: var(--harga); }
+.info-update { margin-left: auto; color: var(--abu); }
+.info-aksi { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0 6px; }
+.tombol.kecil { padding: 7px 12px; font-size: 12.5px; border-radius: 6px; gap: 6px; }
+.tombol svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.info-jam { margin: 0; color: var(--abu); font-size: 11.5px; }
+
+/* ukuran kosong bisa dipilih untuk "kabari saya" */
+.blok-kepala { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.blok-kepala h3 { margin-bottom: 0; }
+.blok-kepala + .pilihan { margin-top: 10px; }
+.pilihan button.kosong { color: #A0A0A0; background: #FAFAFA; border-style: dashed; text-decoration: line-through; }
+.pilihan button.kosong[aria-pressed="true"] { color: var(--harga); border-color: var(--harga); background: var(--promo-50); text-decoration: line-through; }
+.form-kabari { margin-top: 12px; padding: 12px; border: 1px solid #E3E9F6; background: #F5F8FD; border-radius: 8px; display: flex; flex-direction: column; gap: 8px; font-size: 13px; }
+.form-kabari > span { color: var(--abu); }
+.kabari-baris { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+@media (max-width: 380px) { .kabari-baris { grid-template-columns: 1fr; } }
+.form-kabari input { min-width: 0; height: 40px; padding: 0 10px; border: 1px solid #CCD5E6; border-radius: 6px; font: inherit; font-size: 15px; background: #fff; }
+.form-kabari input:focus { outline: 2px solid var(--oranye); outline-offset: 0; }
+.form-kabari .tombol { align-self: flex-start; border-radius: 6px; }
+.form-kabari small { color: var(--abu); font-size: 11px; }
+.jebakan { position: absolute !important; width: 1px !important; height: 1px !important; padding: 0 !important; border: 0 !important; overflow: hidden; clip-path: inset(50%); opacity: 0; pointer-events: none; }
+.kabari-pesan { margin: 0; font-size: 12.5px; }
+.kabari-pesan:empty { display: none; }
+.kabari-pesan.ok { color: #0E6B54; font-weight: 600; }
+.kabari-pesan.salah { color: var(--harga); font-weight: 600; }
+
+/* bar bawah detail: tombol daftar */
+.bar-beli .chat.tambah { color: var(--oranye-tua); background: #fff; }
+@media (min-width: 900px) { .bar-beli .chat.tambah { border: 1px solid var(--oranye-tua); background: var(--oranye-50); } }
+button.tanya { cursor: pointer; }
+
+/* panduan ukuran */
+.panduan { padding: 12px 16px 20px; }
+.panduan img { display: block; width: 100%; height: auto; border-radius: 6px; background: #fff; }
+#lembar2 { z-index: 60; }
+
+/* barang serupa */
+.strip-rel.serupa { padding: 4px 0 0; }
+.mini-nama { font-size: 12px; color: var(--tinta); text-align: left; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; min-height: 2.8em; line-height: 1.4; }
+.serupa .mini { text-align: left; }
+.serupa .mini .harga { font-size: 14px; }
+
+/* daftar tanya */
+.daftar-isi { padding: 12px 16px 24px; display: flex; flex-direction: column; gap: 10px; }
+.baris-daftar { display: grid; grid-template-columns: 64px 1fr auto; gap: 10px; align-items: center; background: #fff; border: 1px solid var(--garis); border-radius: 8px; padding: 8px; }
+.gb-kecil { width: 64px; height: 64px; border: 0; padding: 0; background: #F3F5F9; border-radius: 6px; overflow: hidden; display: grid; place-items: center; }
+.gb-kecil img { width: 100%; height: 100%; object-fit: contain; background: #fff; }
+.gb-kecil svg { width: 28px; height: 28px; fill: none; stroke: var(--abu-2); stroke-width: 1.6; }
+.baris-daftar-isi { display: flex; flex-direction: column; gap: 2px; min-width: 0; font-size: 12.5px; }
+.baris-daftar-isi b { font-size: 13.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.baris-daftar-isi .ok { color: var(--harga); font-weight: 700; }
+.baris-daftar-isi .habis { color: var(--abu); font-style: italic; }
+.hapus-daftar { width: 32px; height: 32px; border: 0; background: none; font-size: 22px; color: var(--abu); border-radius: 50%; }
+.daftar-aksi { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 6px; }
+.daftar-aksi .tombol { border-radius: 6px; }
+.daftar-aksi a.tombol { flex: 1; background: var(--wa); }
+
+/* keamanan / anti penipuan */
+.aman-kecil { display: flex; gap: 6px; align-items: flex-start; margin: 0; padding: 10px 12px; font-size: 12px; color: #0E5A47; background: #EAF6F1; }
+.aman-kecil svg, .aman svg, .bukan-resmi svg { width: 16px; height: 16px; flex: none; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+@media (min-width: 900px) { .aman-kecil { border-radius: 6px; margin-top: 10px; } }
+.aman { padding: 14px 16px 24px; font-size: 14px; }
+.aman-kepala { display: flex; gap: 8px; align-items: flex-start; color: var(--oranye-tua); }
+.aman-kepala svg { width: 22px; height: 22px; }
+.aman ul { margin: 12px 0; padding-left: 20px; display: flex; flex-direction: column; gap: 8px; }
+.aman-ok { display: flex; gap: 6px; align-items: center; color: #0E6B54; font-weight: 700; margin: 0; }
+.aman-kaki { font-size: 12px; color: var(--tinta); }
+.bukan-resmi { position: sticky; top: 0; z-index: 30; display: flex; gap: 8px; align-items: flex-start; padding: 10px 14px; background: #B3261E; color: #fff; font-size: 13px; font-weight: 600; }
+.bukan-resmi a { color: #fff; text-decoration: underline; }
+.form-kabari { position: relative; }
+.produk { grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 900px) { .produk { grid-template-columns: 420px minmax(0, 1fr); } }
+.info, .info > * { min-width: 0; }
+@media (min-width: 900px) { .strip-rel.serupa { grid-auto-columns: 140px; } }

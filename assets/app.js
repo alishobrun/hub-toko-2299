@@ -281,6 +281,7 @@
       ] },
     { id: 'tim', label: 'Tim', icon: 'users', color: '#FB923C', items: [
       { icon: 'bell', id: 'pengumuman', label: 'Pengumuman', desc: 'Info tim + tanda sudah baca' },
+      { icon: 'store', id: 'kabari', label: 'Kabari Pelanggan', desc: 'Pelanggan katalog yang menunggu ukuran' },
       { icon: 'clip', id: 'handover', label: 'Handover', desc: 'Serah terima shift dari foto buku' },
       { icon: 'star', id: 'apresiasi', label: 'Apresiasi', desc: 'Ucapan terima kasih untuk rekan' },
       { icon: 'heart', id: 'feedback', label: 'Feedback Anonim', desc: 'Saran & apresiasi tanpa nama' },
@@ -6286,6 +6287,120 @@
   }
 
   /* ---------- Katalog pelanggan: link & foto artikel (admin) ---------- */
+
+  /* ---------- Katalog: QR untuk akses katalog (poster cetak + gambar PNG) ---------- */
+  var QR_LIB = 'https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js';
+  function qrSvg(teks, ukuran) {
+    var q = window.qrcode(0, 'M'); q.addData(teks); q.make();
+    var n = q.getModuleCount(), tepi = 2, s = ukuran / (n + tepi * 2), d = '';
+    for (var r = 0; r < n; r++) for (var c = 0; c < n; c++) if (q.isDark(r, c)) d += 'M' + ((c + tepi) * s).toFixed(2) + ' ' + ((r + tepi) * s).toFixed(2) + 'h' + s.toFixed(2) + 'v' + s.toFixed(2) + 'h-' + s.toFixed(2) + 'z';
+    return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ' + ukuran + ' ' + ukuran + '" width="' + ukuran + '" height="' + ukuran + '" shape-rendering="crispEdges"><rect width="100%" height="100%" fill="#fff"/><path d="' + d + '" fill="#0A1A4F"/></svg>';
+  }
+  function katalogQR(box, url) {
+    var target = url + '?dari=qr';
+    loadScript(QR_LIB).then(function () {
+      var gambar = el('div', { class: 'kt-qr-gb' }); gambar.innerHTML = qrSvg(target, 220); // SVG buatan sendiri dari pustaka QR
+      box.replaceChildren(el('div', { class: 'card-head' }, el('div', null, el('h3', { text: 'QR katalog' }),
+          el('p', { class: 'sub', text: 'Tempel di kasir, pintu, etalase atau fitting room. Pelanggan scan dengan kamera HP lalu langsung masuk katalog. Jumlah scan ikut tercatat di statistik.' }))),
+        el('div', { class: 'kt-qr' }, gambar,
+          el('div', { class: 'tags' },
+            el('button', { class: 'btn btn-primary btn-sm', type: 'button', text: 'Cetak poster A5', onclick: function () { cetakPosterQR(target, url); } }),
+            el('button', { class: 'btn btn-ghost btn-sm', type: 'button', text: 'Unduh PNG', onclick: function () { unduhQRPng(target); } }))));
+    }).catch(function () { box.replaceChildren(errBox(new Error('Pustaka QR tidak termuat. Periksa koneksi lalu muat ulang.'))); });
+  }
+  function unduhQRPng(teks) {
+    var img = new Image(), url = URL.createObjectURL(new Blob([qrSvg(teks, 1200)], { type: 'image/svg+xml' }));
+    img.onload = function () {
+      var c = document.createElement('canvas'); c.width = c.height = 1200; c.getContext('2d').drawImage(img, 0, 0, 1200, 1200); URL.revokeObjectURL(url);
+      var a = document.createElement('a'); a.href = c.toDataURL('image/png'); a.download = 'QR-katalog-EIGER-Kartasura.png'; document.body.appendChild(a); a.click(); a.remove();
+    };
+    img.src = url;
+  }
+  function cetakPosterQR(teks, url) {
+    var w = window.open('', '_blank');
+    if (!w) { toast('Izinkan pop-up untuk mencetak poster', true); return; }
+    var alamat = url.replace(/^https?:\/\//, '').replace(/\/$/, '');
+    w.document.write('<!doctype html><html lang="id"><head><meta charset="utf-8"><title>Poster QR Katalog EIGER Kartasura</title><style>' +
+      '@page{size:A5;margin:0}*{box-sizing:border-box}body{margin:0;font-family:"Plus Jakarta Sans",Arial,sans-serif;color:#0A1A4F;-webkit-print-color-adjust:exact;print-color-adjust:exact}' +
+      '.p{width:148mm;height:210mm;margin:0 auto;display:flex;flex-direction:column;align-items:center;justify-content:space-between;padding:12mm 12mm 10mm;text-align:center;background:#fff}' +
+      '.k{width:100%;background:#0A1A4F;color:#fff;border-radius:6mm;padding:7mm 6mm}.k small{display:block;font-size:11pt;letter-spacing:.06em;opacity:.85}.k b{display:block;font-size:24pt;line-height:1.15;margin-top:2mm}' +
+      '.q{width:92mm;height:92mm;padding:3mm;border:1.2mm solid #0A1A4F;border-radius:4mm}.q svg{width:100%;height:100%}' +
+      '.l{font-size:13pt;font-weight:700;margin:0}.u{font-size:12pt;margin:1mm 0 0;color:#C0392B;font-weight:700}' +
+      '.a{font-size:9.5pt;line-height:1.45;color:#333;border-top:.4mm solid #ccd;padding-top:4mm;width:100%}</style></head><body><div class="p">' +
+      '<div class="k"><small>EIGER STORE A. YANI KARTASURA</small><b>Cek stok, ukuran<br>&amp; promo di toko</b></div>' +
+      '<div class="q">' + qrSvg(teks, 600) + '</div>' +
+      '<div><p class="l">Scan dengan kamera HP</p><p class="u">' + alamat + '</p></div>' +
+      '<div class="a">Tanya stok lewat WhatsApp resmi toko 0811-2002-2574.<br>Pembayaran hanya di kasir toko. Kami tidak pernah meminta transfer ke rekening pribadi.</div>' +
+      '</div><script>setTimeout(function(){print()},400)<\/script></body></html>');
+    w.document.close();
+  }
+
+  /* ---------- Katalog: barang paling sering dilihat & ditanya ---------- */
+  function katalogStatistik(box) {
+    var hari = 30;
+    function muat() {
+      box.replaceChildren(skel(2));
+      api('katalogStatistik', { hari: hari }).then(gambar).catch(function (e) { box.replaceChildren(errBox(e)); });
+    }
+    function tabel(judul, xs, kunci) {
+      return el('div', { class: 'kt-stat-kol' }, el('h4', { text: judul }),
+        xs.length ? el('ol', { class: 'kt-stat-list' }, xs.map(function (x) {
+          return el('li', null, el('span', { class: 'kt-stat-nama' }, el('b', { text: x.n }), el('small', { text: x.g + (x.k4 ? ' · ' + x.k4 : '') + (x.ada ? '' : ' · sudah tidak ada stok') })),
+            el('span', { class: 'kt-stat-angka', text: String(x[kunci]) }));
+        })) : el('p', { class: 'sub', text: 'Belum ada data.' }));
+    }
+    function gambar(d) {
+      var seg = el('div', { class: 'seg', role: 'group', 'aria-label': 'Rentang waktu' }, [7, 30, 90].map(function (h) {
+        return el('button', { type: 'button', 'aria-pressed': String(h === hari), text: h + ' hari', onclick: function () { hari = h; muat(); } });
+      }));
+      box.replaceChildren(el('div', { class: 'card-head' }, el('div', null, el('h3', { text: 'Statistik katalog' }),
+          el('p', { class: 'sub', text: 'Dari pengunjung katalog, tanpa data pribadi. Pakai untuk memilih barang yang dipajang depan dan bahan usulan order.' })), seg),
+        el('div', { class: 'kt-stat-angka-besar' },
+          el('div', null, el('b', { text: String(d.lihat) }), el('span', { text: 'artikel dibuka' })),
+          el('div', null, el('b', { text: String(d.tanya) }), el('span', { text: 'tanya stok (WhatsApp)' })),
+          el('div', null, el('b', { text: String(d.scan || 0) }), el('span', { text: 'scan QR' })),
+          el('div', null, el('b', { text: String(d.artikel) }), el('span', { text: 'artikel berbeda' }))),
+        el('div', { class: 'kt-stat-grid' }, tabel('Paling sering dilihat', d.topLihat, 'lihat'), tabel('Paling sering ditanya', d.topTanya, 'tanya')));
+    }
+    muat();
+  }
+
+  /* ---------- Kabari pelanggan: daftar tunggu ukuran dari katalog ---------- */
+  function viewKabari(v) {
+    pageHead(v, 'Kabari Pelanggan', 'Pelanggan katalog yang minta dikabari saat ukuran kosong tersedia lagi. Yang ukurannya sudah datang tampil paling atas.');
+    var box = el('div', { class: 'card' }, skel(3));
+    v.append(box);
+    function muat() {
+      api('katalogTungguList').then(gambar).catch(function (e) { box.replaceChildren(errBox(e)); });
+    }
+    function selesai(r, status, tombol) {
+      tombol.disabled = true;
+      api('katalogTungguSelesai', { id: r.id, status: status }).then(function () { toast(status === 'batal' ? 'Dibatalkan' : 'Ditandai sudah dikabari'); muat(); })
+        .catch(function (e) { tombol.disabled = false; toast(e.message, true); });
+    }
+    function gambar(rows) {
+      if (!rows.length) { box.replaceChildren(el('p', { class: 'sub', text: 'Belum ada pelanggan yang menunggu. Permintaan masuk dari tombol "Kabari saya" di katalog saat pelanggan memilih ukuran yang kosong.' })); return; }
+      var siap = rows.filter(function (r) { return r.tersedia; }).length;
+      box.replaceChildren(
+        el('p', { class: 'sub', text: rows.length + ' permintaan menunggu' + (siap ? ', ' + siap + ' ukurannya sudah tersedia. Kabari sekarang.' : '. Belum ada ukuran yang datang.') }),
+        el('div', { class: 'kt-tunggu' }, rows.map(function (r) {
+          var wa = '62' + r.wa.replace(/^0/, '');
+          var pesan = 'Halo Kak ' + r.nama + ', kami dari EIGER Store A. Yani Kartasura. ' + r.artikel + ' warna ' + r.warna.toLowerCase() + ' ukuran ' + r.ukuran +
+            ' yang Kakak tanyakan sudah tersedia di toko. Mau kami simpankan? Terima kasih.';
+          var b1 = el('button', { class: 'btn btn-ghost btn-sm', type: 'button', text: 'Sudah dikabari', onclick: function () { selesai(r, 'dihubungi', b1); } });
+          var b2 = el('button', { class: 'btn btn-ghost btn-sm', type: 'button', text: 'Batal', onclick: function () { selesai(r, 'batal', b2); } });
+          return el('div', { class: 'kt-tunggu-baris' + (r.tersedia ? ' siap' : '') },
+            el('div', null, el('b', { text: r.nama + ' · ' + r.wa }),
+              el('div', { class: 'sub', text: r.artikel + ' (' + r.generic + ') · ' + r.warna + ' · ' + r.ukuran }),
+              el('small', { class: r.tersedia ? 'kt-ok' : 'sub', text: (r.tersedia ? 'Ukuran sudah tersedia · ' : 'Masih kosong · ') + 'diminta ' + fTime(r.waktu) })),
+            el('div', { class: 'tags' },
+              r.tersedia ? el('a', { class: 'btn btn-primary btn-sm', href: 'https://wa.me/' + wa + '?text=' + encodeURIComponent(pesan), target: '_blank', rel: 'noopener', text: 'Kabari via WA' }) : null,
+              b1, b2));
+        })));
+    }
+    muat();
+  }
+
   function viewKatalog(v) {
     pageHead(v, 'Katalog Pelanggan', 'Halaman katalog untuk pelanggan: barang yang tersedia di toko, tanpa jumlah stok. Foto dicari otomatis dari eigeradventure.com; yang tidak ketemu bisa diisi di sini.');
     var url = 'https://eigerkartasura.github.io/'; // situs katalog terpisah (tanpa nama pribadi), disalin otomatis tiap jam dari folder katalog/
@@ -6295,6 +6410,11 @@
         el('div', { class: 'tags' },
           el('button', { class: 'btn btn-primary btn-sm', type: 'button', text: 'Salin link', onclick: function () { copyText(url).then(function () { toast('Link katalog disalin'); }, function () { toast('Gagal menyalin', true); }); } }),
           el('a', { class: 'btn btn-ghost btn-sm', href: url, target: '_blank', rel: 'noopener', text: 'Buka katalog' })))));
+    var qrBox = el('div', { class: 'card section' }, skel(1));
+    var statistikBox = el('div', { class: 'card section' }, skel(2));
+    v.append(qrBox, statistikBox);
+    katalogQR(qrBox, url);
+    katalogStatistik(statistikBox);
     var stat = el('div', { class: 'card section' }, skel(1));
     var promoBox = el('div', { class: 'card section' }, skel(1));
     var list = el('div', { class: 'card section' }, skel(3));
@@ -6371,7 +6491,7 @@
     beranda: viewBeranda, briefing: viewBriefing, mingguan: viewMingguan, omni: viewOmni, kesehatan: viewKesehatan, pengumuman: viewPengumuman, handover: viewHandover, feedback: viewFeedback, apresiasi: viewApresiasi, dokumentasi: viewDokumentasi, monitoring: viewMonitoring, trend: viewTrend, ra: viewRA, produk: viewProduk, customer: viewCustomer,
     stok: viewStok, stokart: viewStokArt, saranreq: viewSaranReq, display: viewDisplay, cari: viewCari, unggahbin: viewUnggahBin, unggahdata: viewUnggahData, newarrival: viewNewArrival, putaway: viewPutaway, kas: viewKas, 'kas-rekap': viewKasRekap, 'kas-setor': viewKasSetor, 'kas-petty': viewKasPetty, unggah: viewUnggah,
     jadwal: viewJadwal, jadwaldraf: viewJadwalDraf, persetujuan: viewPersetujuan, targetadm: viewTargetAdm, pengaturan: viewPengaturan, request: viewRequest, tukar: viewTukar, simpanan: viewSimpanan,
-    akun: viewAkun, admin: viewAdmin, aktivitas: viewAktivitas, pica: viewPica, katalog: viewKatalog
+    akun: viewAkun, admin: viewAdmin, aktivitas: viewAktivitas, pica: viewPica, katalog: viewKatalog, kabari: viewKabari
   });
   render();
 })();

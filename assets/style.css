@@ -1495,3 +1495,25 @@ html[data-theme=dark] .promo-tag{background:var(--orange-50);color:#FDBA74}
 .kt-bm ol{margin:6px 0 0;padding-left:18px;font-size:13px;color:var(--muted)}
 .kt-bm-link{cursor:grab}
 .kt-juknis{background:var(--navy-50)}
+/* katalog: QR, statistik, kabari pelanggan */
+.kt-qr{display:flex;flex-wrap:wrap;gap:16px;align-items:center}
+.kt-qr-gb{width:180px;height:180px;border:1px solid var(--line-2);border-radius:12px;overflow:hidden;background:#fff;flex:none}
+.kt-qr-gb svg{width:100%;height:100%;display:block}
+.kt-stat-angka-besar{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin:12px 0}
+.kt-stat-angka-besar>div{background:var(--bg-2,#f4f6fa);border-radius:10px;padding:10px 12px;display:flex;flex-direction:column}
+.kt-stat-angka-besar b{font-size:22px}
+.kt-stat-angka-besar span{font-size:12px;opacity:.75}
+.kt-stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px}
+.kt-stat-kol h4{margin:0 0 6px;font-size:14px}
+.kt-stat-list{margin:0;padding-left:22px;display:flex;flex-direction:column;gap:6px}
+.kt-stat-list li{display:list-item}
+.kt-stat-list li>span{display:inline-flex;vertical-align:top}
+.kt-stat-list li{position:relative;padding-right:40px}
+.kt-stat-nama{flex-direction:column;min-width:0}
+.kt-stat-nama b{font-size:13px}
+.kt-stat-nama small{font-size:11.5px;opacity:.7}
+.kt-stat-angka{position:absolute;right:0;top:0;font-weight:700}
+.kt-tunggu{display:flex;flex-direction:column;margin-top:10px}
+.kt-tunggu-baris{display:flex;flex-wrap:wrap;justify-content:space-between;gap:8px 16px;padding:12px 0;border-top:1px solid var(--line-2)}
+.kt-tunggu-baris.siap{background:linear-gradient(90deg,rgba(18,135,106,.08),transparent);padding-left:10px;border-left:3px solid #12876A}
+.kt-ok{color:#12876A;font-weight:700}
