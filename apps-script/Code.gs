@@ -11,7 +11,7 @@
 /** Versi kode. WAJIB dinaikkan setiap kali Code.gs diubah (format yyyy-MM-dd.n),
  *  lalu simpan ke GitHub (alishobrun/hub-toko-2299) SEBELUM dipasang. Halaman Kesehatan Data
  *  membandingkan angka ini dengan GitHub supaya kode yang dipasang di luar GitHub ketahuan. */
-const KODE_VERSI = '2026-11-11.4';
+const KODE_VERSI = '2026-11-11.5';
 
 const CFG = {
   STORE: '2299',
@@ -5631,7 +5631,7 @@ function katalogSusun_(fotoIkut) {
   items.sort(function (p, q) { return (q.b - p.b) || (p.n < q.n ? -1 : 1); });
   const ups = read_('bin_upload'), last = ups.length ? ups[ups.length - 1] : null;
   return { toko: CFG.STORE_NAME, wa: KATALOG.WA, diperbarui: last ? String(last.waktu) : '', items: items,
-    promoSampai: promoSampai, promoToko: fotoIkut ? promoTokoAktif_() : [] };
+    promoSampai: promoSampai, promoToko: fotoIkut ? promoTokoAktif_() : [], banner: fotoIkut ? bannerEiger_() : [] };
 }
 
 function katalogData_() {
@@ -5678,6 +5678,42 @@ function buildIdEiger_(baru) {
   c.put('eiger_build', m[1], 21600);
   return m[1];
 }
+/** Banner kampanye di beranda eigeradventure.com untuk katalog pelanggan.
+ *  Diambil otomatis paling banyak sekali sehari (disimpan di properti), jadi tidak perlu diurus.
+ *  Banner cara bayar / promo online dilewati supaya pelanggan tidak mengira itu promo toko.
+ *  Kalau situsnya sedang tidak bisa dibaca, daftar terakhir tetap dipakai. → [{d, m, u, n}] */
+function bannerEiger_(paksa) {
+  const lama = prop_('katalog_banner');
+  if (!paksa && lama && lama.tgl === today_()) return lama.list || [];
+  const CDN = /^https:\/\/d1yutv2xslo29o\.cloudfront\.net\/banner\/photo\/[\w-]+\.(?:webp|jpe?g|png)$/i;
+  const LEWATI_URL = /^\/products\/?$|payment|promo|voucher|flash|sale|deal|diskon|cicil|kredit/i;
+  const LEWATI_NAMA = /payment|bayar|cicil|kredit|voucher|promo|sale|deal|diskon|ongkir|11\.11|12\.12/i;
+  try {
+    const html = UrlFetchApp.fetch('https://www.eigeradventure.com/', { muteHttpExceptions: true, headers: { 'User-Agent': 'Mozilla/5.0 (Basecamp 2299 katalog toko)' } }).getContentText();
+    const m = html.match(/<script id="__NEXT_DATA__" type="application\/json">([\s\S]*?)<\/script>/);
+    if (!m) throw new Error('data beranda tidak ditemukan');
+    const qs = ((JSON.parse(m[1]).props || {}).pageProps || {}).dehydratedState || {};
+    const q = (qs.queries || []).filter(function (x) { return x.queryKey && x.queryKey[0] === 'home' && x.queryKey[1] === 'banner'; })[0];
+    const data = q && q.state && q.state.data && q.state.data.data;
+    if (!Array.isArray(data)) throw new Error('daftar banner tidak ditemukan');
+    const bersih = function (u) { return String(u || '').split('?')[0]; };
+    const list = data.map(function (x) { return x.attributes || {}; })
+      .filter(function (a) {
+        return CDN.test(bersih(a.fileWeb)) && CDN.test(bersih(a.fileWebResponsive)) &&
+          !LEWATI_URL.test(String(a.urlWeb || '')) && !LEWATI_NAMA.test(String(a.name || ''));
+      })
+      .sort(function (a, b) { return (Number(a.sequenceNumber) || 99) - (Number(b.sequenceNumber) || 99); })
+      .slice(0, 6)
+      .map(function (a) { return { d: bersih(a.fileWeb), m: bersih(a.fileWebResponsive), u: String(a.urlWeb || ''), n: String(a.name || '').replace(/[`'"]/g, '').trim() }; });
+    if (!list.length && lama && lama.list && lama.list.length) throw new Error('banner kosong');
+    prop_('katalog_banner', { tgl: today_(), list: list, at: now_() });
+    return list;
+  } catch (e) {
+    const sisa = (lama && lama.list) || [];
+    prop_('katalog_banner', { tgl: today_(), list: sisa, at: lama ? lama.at : '', galat: String(e.message || e) });
+    return sisa;
+  }
+}
 /** Pencarian produk di eigeradventure untuk beberapa kata sekaligus → [{produk:[attributes], blokir}]. */
 function cariEiger_(kata) {
   function sekali(bid) {
@@ -5718,6 +5754,7 @@ function fotoDariHalaman_(html) {
 /** Pemicu (harian & lanjutan): cari foto untuk artikel katalog yang belum punya foto. */
 function cariFotoKatalog() {
   hapusPemicuLanjut_();
+  try { bannerEiger_(); } catch (e) { /* banner tidak wajib */ }
   const jalan = prop_('katalog_cari');
   if (jalan && jalan.jalan && Date.now() - jalan.at < 6 * 60e3) return; // putaran lain masih berjalan
   const mulai = Date.now();
