@@ -11,7 +11,7 @@
 /** Versi kode. WAJIB dinaikkan setiap kali Code.gs diubah (format yyyy-MM-dd.n),
  *  lalu simpan ke GitHub (alishobrun/hub-toko-2299) SEBELUM dipasang. Halaman Kesehatan Data
  *  membandingkan angka ini dengan GitHub supaya kode yang dipasang di luar GitHub ketahuan. */
-const KODE_VERSI = '2026-11-01.4';
+const KODE_VERSI = '2026-11-10.1';
 
 const CFG = {
   STORE: '2299',
@@ -89,6 +89,8 @@ const TABS = {
   // buku petty cash dari CARE (laporan PettyCash.xlsx diunggah manual)
   petty_care: ['id', 'kode', 'waktu', 'debit', 'kredit', 'saldo', 'akun', 'status', 'ket', 'oleh', 'diubah'],
   // buku Store Safe (brankas) dari CARE: uang masuk saat closing (POS Desktop) & setoran ke bank
+  dok_antre: ['file_id', 'nama', 'tanggal', 'jenis', 'mb', 'didaftar'],
+  dok_terkirim: ['file_id', 'nama', 'waktu', 'link', 'catatan'],
   putaway_tpl: ['kategori', 'bin_sell', 'bin_wa', 'diubah', 'oleh'],
   master_sku: ['sku', 'varian', 'ukuran', 'nama', 'lv2', 'lv3', 'lv4'],
   tag_na: ['sku', 'bulan', 'username', 'nama', 'waktu'],
@@ -2426,11 +2428,17 @@ Object.assign(API, {
     }
     const set = settings_();
     const p = PropertiesService.getScriptProperties();
+    const kirim = dokTerkirim_(), antre = {};
+    read_('dok_antre').forEach(function (r) { antre[String(r.file_id)] = String(r.didaftar || ''); });
+    items.forEach(function (x) { const k = kirim[x.id]; x.fany = k ? { ok: true, waktu: k.waktu, link: k.link } : antre[x.id] ? { ok: false, antre: antre[x.id] } : { ok: false }; });
     return { bulan: bulan, items: items, bulanTersedia: JSON.parse(bl), today: today_(), sekarang: Utilities.formatDate(new Date(), CFG.TZ, 'HH:mm'),
       mundur: DOK_MUNDUR_HARI,
       batasOpen: Number(set.dok_batas_open), batasClose: Number(set.dok_batas_close), maxMb: Number(set.dok_max_mb),
       siap: !!(p.getProperty('UPLOAD_URL') && p.getProperty('UPLOAD_SECRET')) };
   },
+
+  /** Admin: susun ulang antrean kiriman ke OneDrive Pak Fany (semua bulan). */
+  dokAntreSemua: function (req) { auth_(req, true); return dokAntre_(true); },
 
   /** Admin: sambungkan mesin upload (alamat Web App + kunci dari Upload.gs). */
   setUpload: function (req) {
@@ -2443,6 +2451,36 @@ Object.assign(API, {
     return true;
   }
 });
+
+/* ---------- Salinan video ke folder OneDrive Pak Fany ----------
+ * Basecamp menaruh video yang belum terkirim di tab dok_antre (paling banyak DOK_ANTRE_MAKS sekaligus).
+ * Alur Power Automate (akun Microsoft toko) membaca dok_antre, menyalin file dari Google Drive ke folder
+ * OneDrive Pak Fany, lalu menambah baris di dok_terkirim. Basecamp merapikan antrean tiap 15 menit. */
+const DOK_ANTRE_MAKS = 15;
+function dokTerkirim_() {
+  const o = {};
+  read_('dok_terkirim').forEach(function (r) { if (r.file_id) o[String(r.file_id)] = { waktu: String(r.waktu || ''), link: String(r.link || '') }; });
+  return o;
+}
+/** semua = true: periksa seluruh bulan (kiriman video lama); false: bulan ini & bulan lalu. */
+function dokAntre_(semua) {
+  const kirim = dokTerkirim_(), bulanIni = today_().slice(0, 7), bulanLalu = addDays_(bulanIni + '-01', -1).slice(0, 7);
+  const bulan = [];
+  const it = DriveApp.getFolderById(DOK_FOLDER_ID).getFolders();
+  while (it.hasNext()) { const m = String(it.next().getName()).match(/^(\d{4}-\d{2})/); if (m && (semua || m[1] === bulanIni || m[1] === bulanLalu)) bulan.push(m[1]); }
+  let semuaVid = [];
+  bulan.forEach(function (b) { semuaVid = semuaVid.concat(dokBaca_(b)); });
+  const belum = semuaVid.filter(function (x) { return !kirim[x.id]; })
+    .sort(function (a, b) { return a.tanggal === b.tanggal ? (a.jam < b.jam ? -1 : 1) : (a.tanggal < b.tanggal ? -1 : 1); }); // yang lama dulu
+  const lama = {}; read_('dok_antre').forEach(function (r) { lama[String(r.file_id)] = String(r.didaftar || ''); });
+  const rows = belum.slice(0, DOK_ANTRE_MAKS).map(function (x) {
+    return { file_id: x.id, nama: x.nama, tanggal: x.tanggal, jenis: x.jenis, mb: Math.round(x.size / 1048576), didaftar: lama[x.id] || now_() };
+  });
+  const sebelum = Object.keys(lama).sort().join(','), sesudah = rows.map(function (r) { return r.file_id; }).sort().join(',');
+  if (sebelum !== sesudah) withLock_(function () { writeAll_('dok_antre', rows); });
+  if (semua) PropertiesService.getScriptProperties().setProperty('DOK_SISA', String(belum.length));
+  return { antre: rows.length, belum: belum.length, terkirim: Object.keys(kirim).length };
+}
 
 function dokBaca_(bulan) {
   const root = DriveApp.getFolderById(DOK_FOLDER_ID);
@@ -3290,6 +3328,7 @@ function labelOf_(name) { return GmailApp.getUserLabelByName(name) || GmailApp.c
 function cekEmailDsr() {
   try { hangatkanDsr_(); } catch (e) { Logger.log('hangat dsr: ' + e); }
   try { siapkanBriefing_(); } catch (e) { Logger.log('briefing: ' + e); }
+  try { dokAntre_(false); } catch (e) { Logger.log('dok antre: ' + e); }
   try { const pp = PropertiesService.getScriptProperties(); if (pp.getProperty('REKAP_ANTRE') && Date.now() - Number(pp.getProperty('REKAP_PEMICU') || 0) > 5 * 60 * 1000) prosesRekap(); } catch (e) { Logger.log('rekap antre: ' + e); }
   const lab = labelOf_(DSR_EMAIL.LABEL), labGagal = labelOf_(DSR_EMAIL.LABEL_GAGAL);
   const threads = GmailApp.search('from:' + DSR_EMAIL.FROM + ' -label:' + DSR_EMAIL.LABEL + ' -label:' + DSR_EMAIL.LABEL_GAGAL + ' newer_than:3d', 0, 30);

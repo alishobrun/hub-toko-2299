@@ -6108,19 +6108,32 @@
       }
       var per = {}; d.items.forEach(function (x) { per[x.oleh] = (per[x.oleh] || 0) + 1; });
       var days = Object.keys(byDay).sort().reverse();
+      var fOk = d.items.filter(function (x) { return x.fany && x.fany.ok; }).length;
+      var fanyBox = el('div', { class: 'note', style: 'margin-bottom:10px' },
+        el('b', { text: 'Salinan ke OneDrive Pak Fany: ' + fOk + ' / ' + d.items.length + ' video bulan ini' }),
+        el('div', { class: 'muted', style: 'font-size:12.5px;margin-top:2px', text: '✓ sudah tersalin · ⏳ dalam antrean (dikirim otomatis ±30 menit) · — belum masuk antrean' }),
+        isAdmin() ? el('button', { type: 'button', class: 'btn btn-ghost btn-sm', style: 'margin-top:8px', onclick: function (e) {
+          var b = e.currentTarget; b.disabled = true;
+          api('dokAntreSemua').then(function (r) { b.disabled = false; toast(r.belum ? r.belum + ' video belum di folder Pak Fany · ' + r.antre + ' masuk antrean berikutnya' : 'Semua video sudah tersalin'); load(); })
+            .catch(function (er) { b.disabled = false; toast(er.message, true); });
+        } }, icon('refresh'), 'Periksa semua bulan') : null);
       listBox.replaceChildren(
         el('div', { class: 'card-head' }, el('h3', { text: 'Riwayat ' + bulanLabel(d.bulan) }), monthSel(d.bulanTersedia.length ? d.bulanTersedia : [d.bulan], d.bulan, function (m) { bulan = m; load(); })),
         el('div', { class: 'stats stats-3', style: 'margin:10px 0' },
           el('div', { class: 'stat' }, el('span', { text: 'Hari lengkap' }), el('b', { class: 'c-good', text: lengkap + ' / ' + hitung })),
           el('div', { class: 'stat' }, el('span', { text: 'Hari bolong' }), el('b', { class: bolong.length ? 'c-bad' : '', text: String(bolong.length) })),
           el('div', { class: 'stat' }, el('span', { text: 'Total video' }), el('b', { text: String(d.items.length) }))),
+        fanyBox,
         bolong.length ? el('p', { class: 'note', text: 'Belum lengkap: ' + bolong.map(function (t) { return Number(t.slice(8)); }).join(', ') }) : null,
         Object.keys(per).length ? el('div', { class: 'tags', style: 'margin-bottom:10px' }, Object.keys(per).sort(function (a, b) { return per[b] - per[a]; }).map(function (n) { return el('span', { class: 'tag', text: titleCase(n) + ' · ' + per[n] }); })) : null,
         days.length ? el('div', { class: 'dok-list' }, days.map(function (t) {
           return el('div', { class: 'dok-day' }, el('div', { class: 'dok-date' }, el('b', { text: String(Number(t.slice(8))) }), el('span', { text: dDayName(t) })),
             el('div', { class: 'dok-vids' }, byDay[t].map(function (x) {
               return el('button', { type: 'button', class: 'dok-vid ' + x.jenis.toLowerCase(), onclick: function () { playVideo(x); } },
-                icon('video'), el('span', null, el('b', { text: x.jenis === 'OPENING' ? 'Opening' : 'Closing' }), el('small', { text: titleCase(x.oleh) + ' · ' + x.jam + ' · ' + fmtMB(x.size) })));
+                icon('video'), el('span', null, el('b', { text: x.jenis === 'OPENING' ? 'Opening' : 'Closing' }), el('small', { text: titleCase(x.oleh) + ' · ' + x.jam + ' · ' + fmtMB(x.size) }),
+                  el('span', { class: 'dok-dua' }, el('i', { class: 'ok', text: '✓ Drive toko' }),
+                    el('i', { class: x.fany && x.fany.ok ? 'ok' : x.fany && x.fany.antre ? 'antre' : 'belum', title: x.fany && x.fany.ok ? 'Tersalin ' + x.fany.waktu : '',
+                      text: x.fany && x.fany.ok ? '✓ Pak Fany' : x.fany && x.fany.antre ? '⏳ Pak Fany' : '— Pak Fany' }))));
             })));
         })) : el('div', { class: 'empty', text: 'Belum ada video di bulan ini' }));
     }
