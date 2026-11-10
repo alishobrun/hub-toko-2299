@@ -6320,7 +6320,9 @@
         el('div', { class: 'kt-bar' }, el('i', { style: 'width:' + (n ? ada / n * 100 : 0) + '%' })),
         el('p', { class: 'sub', style: 'margin-top:10px' },
           t.selesai ? 'Pencarian otomatis terakhir ' + fTime(t.selesai) + ': ' + t.cek + ' artikel dicek, ' + t.ketemu + ' foto ketemu' + (t.sisa ? ', ' + t.sisa + ' sedang dilanjutkan.' : '.') : 'Pencarian otomatis berjalan tiap hari pukul 03.00 untuk artikel yang belum punya foto.',
-          t.galat ? el('b', { class: 'kt-galat', text: ' ' + t.galat }) : null));
+          t.galat ? el('b', { class: 'kt-galat', text: ' ' + t.galat }) : null),
+        el('p', { class: 'sub' }, 'Banner kampanye dari eigeradventure.com: ' + ((D.banner && D.banner.list) ? D.banner.list.length + ' banner' + (D.banner.at ? ', diambil ' + fTime(D.banner.at) : '') : 'belum diambil') + '. Diperbarui otomatis tiap hari.',
+          D.banner && D.banner.galat ? el('b', { class: 'kt-galat', text: ' ' + D.banner.galat }) : null));
     }
     function drawList() {
       var F = { belum: function (x) { return !x.f.length; }, otomatis: function (x) { return x.f.length && x.sumber === 'otomatis'; }, manual: function (x) { return x.sumber === 'manual'; }, semua: function () { return true; } };

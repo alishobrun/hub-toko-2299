@@ -11,7 +11,7 @@
 /** Versi kode. WAJIB dinaikkan setiap kali Code.gs diubah (format yyyy-MM-dd.n),
  *  lalu simpan ke GitHub (alishobrun/hub-toko-2299) SEBELUM dipasang. Halaman Kesehatan Data
  *  membandingkan angka ini dengan GitHub supaya kode yang dipasang di luar GitHub ketahuan. */
-const KODE_VERSI = '2026-11-11.5';
+const KODE_VERSI = '2026-11-11.6';
 
 const CFG = {
   STORE: '2299',
@@ -5686,7 +5686,7 @@ function bannerEiger_(paksa) {
   const lama = prop_('katalog_banner');
   if (!paksa && lama && lama.tgl === today_()) return lama.list || [];
   const CDN = /^https:\/\/d1yutv2xslo29o\.cloudfront\.net\/banner\/photo\/[\w-]+\.(?:webp|jpe?g|png)$/i;
-  const LEWATI_URL = /^\/products\/?$|payment|promo|voucher|flash|sale|deal|diskon|cicil|kredit/i;
+  const LEWATI_URL = /^\/products\/?(?:\?|$)|discount|payment|promo|voucher|flash|sale|deal|diskon|cicil|kredit/i;
   const LEWATI_NAMA = /payment|bayar|cicil|kredit|voucher|promo|sale|deal|diskon|ongkir|11\.11|12\.12/i;
   try {
     const html = UrlFetchApp.fetch('https://www.eigeradventure.com/', { muteHttpExceptions: true, headers: { 'User-Agent': 'Mozilla/5.0 (Basecamp 2299 katalog toko)' } }).getContentText();
@@ -5935,7 +5935,7 @@ Object.assign(API, {
         const f = F[it.g] || {};
         return { g: it.g, n: it.n, k3: it.k3, k4: it.k4, f: f.foto ? String(f.foto).split(/\s+/) : [], sumber: String(f.sumber || ''), status: String(f.status || 'belum dicek'), dicek: String(f.dicek || ''), url: String(f.url || '') };
       }),
-      cari: prop_('katalog_cari'), total: prop_('katalog_cari_total'), diperbarui: d.diperbarui
+      cari: prop_('katalog_cari'), total: prop_('katalog_cari_total'), diperbarui: d.diperbarui, banner: prop_('katalog_banner')
     };
   },
 
@@ -5965,6 +5965,7 @@ Object.assign(API, {
     if (req.ulangSemua) withLock_(function () {
       writeAll_('katalog_foto', read_('katalog_foto').filter(function (f) { return f.foto; }));
     });
+    try { bannerEiger_(true); katalogBaru_(); } catch (e) { /* banner tidak wajib */ }
     hapusPemicuLanjut_();
     ScriptApp.newTrigger('cariFotoKatalogLanjut').timeBased().after(10 * 1000).create();
     return { dijadwalkan: true };
