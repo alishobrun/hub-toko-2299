@@ -3014,6 +3014,14 @@
       el('div', { class: 'field' }, el('label', { for: 'set-dokmb', text: 'Maksimal ukuran video (MB)' }), el('div', { class: 'inline' }, mb, mbBtn)),
       timeRow('dok_ingat_open', 'Pengingat opening mulai (RA shift pagi)'), timeRow('dok_batas_open', 'Batas video opening'),
       timeRow('dok_ingat_close', 'Pengingat closing mulai (RA shift siang)'), timeRow('dok_batas_close', 'Batas video closing'),
+      (function () {
+        var inp = el('input', { type: 'url', placeholder: 'https://eigerindo-my.sharepoint.com/…', id: 'set-fany' });
+        apiSwr('dokList', {}).then(function (d) { if (d && d.fanyLink && !inp.value) inp.value = d.fanyLink; });
+        var b = el('button', { class: 'btn btn-primary', type: 'button', text: 'Simpan', onclick: function () {
+          b.disabled = true; api('setFanyLink', { url: inp.value.trim() }).then(function () { b.disabled = false; swrClear('dokList'); toast('Link folder Pak Fany disimpan'); }).catch(function (e) { b.disabled = false; toast(e.message, true); });
+        } });
+        return el('div', { class: 'field' }, el('label', { for: 'set-fany', text: 'Link folder video Pak Fany (OneDrive, bisa edit tanpa login)' }), el('div', { class: 'inline' }, inp, b));
+      })(),
       timeRow('data_batas', 'Pengingat admin: DSR & By Bin belum diunggah setelah jam'),
       el('h3', { text: 'Mesin upload', style: 'margin-top:18px' }),
       el('p', { class: 'sub', text: 'Alamat Web App dan kunci dari mesin upload di akun pemilik folder Dokumentasi.' }),
@@ -6109,9 +6117,23 @@
       var per = {}; d.items.forEach(function (x) { per[x.oleh] = (per[x.oleh] || 0) + 1; });
       var days = Object.keys(byDay).sort().reverse();
       var fOk = d.items.filter(function (x) { return x.fany && x.fany.ok; }).length;
-      var fanyBox = el('div', { class: 'note', style: 'margin-bottom:10px' },
-        el('b', { text: 'Salinan ke OneDrive Pak Fany: ' + fOk + ' / ' + d.items.length + ' video bulan ini' }),
-        el('div', { class: 'muted', style: 'font-size:12.5px;margin-top:2px', text: '✓ sudah tersalin · ⏳ dalam antrean (dikirim otomatis ±30 menit) · — belum masuk antrean' }),
+      var belumF = d.items.filter(function (x) { return !(x.fany && x.fany.ok); });
+      var tandai = function (list, btn) {
+        if (!confirm('Tandai ' + list.length + ' video sudah diunggah ke folder Pak Fany?')) return;
+        btn.disabled = true;
+        api('dokFanyTandai', { ids: list.map(function (x) { return x.id; }), nama: list.map(function (x) { return x.nama; }) })
+          .then(function () { toast('Tanda Pak Fany ✓ disimpan'); load(); }).catch(function (e) { btn.disabled = false; toast(e.message, true); });
+      };
+      var fanyBox = el('div', { class: 'note dok-fany', style: 'margin-bottom:10px' },
+        el('b', { text: 'Folder Pak Fany: ' + fOk + ' / ' + d.items.length + ' video bulan ini sudah masuk' }),
+        el('div', { class: 'muted', style: 'font-size:12.5px;margin-top:2px', text: 'Unggah video yang sama ke folder Pak Fany (tanpa login), lalu tekan "Sudah". ✓ sudah · ⏳ belum.' }),
+        d.fanyLink ? el('a', { class: 'btn btn-orange btn-sm', style: 'margin-top:8px', href: d.fanyLink, target: '_blank', rel: 'noopener' }, icon('upload'), 'Buka folder Pak Fany') :
+          el('p', { class: 'muted', style: 'margin:6px 0 0', text: 'Link folder Pak Fany belum diatur (admin: Pengaturan → Dokumentasi video).' }),
+        belumF.length ? el('div', { class: 'dok-belum' }, belumF.map(function (x) {
+          return el('div', { class: 'dok-belum-row' },
+            el('span', { text: dShort(x.tanggal) + ' · ' + (x.jenis === 'OPENING' ? 'Opening' : 'Closing') + ' · ' + titleCase(x.oleh) + ' · ' + fmtMB(x.size) }),
+            el('button', { type: 'button', class: 'btn btn-ghost btn-sm', text: 'Sudah', onclick: function (e) { tandai([x], e.currentTarget); } }));
+        }), belumF.length > 1 ? el('button', { type: 'button', class: 'btn btn-ghost btn-sm', style: 'margin-top:6px', text: 'Tandai semua (' + belumF.length + ') sudah', onclick: function (e) { tandai(belumF, e.currentTarget); } }) : null) : null,
         isAdmin() ? el('button', { type: 'button', class: 'btn btn-ghost btn-sm', style: 'margin-top:8px', onclick: function (e) {
           var b = e.currentTarget; b.disabled = true;
           api('dokAntreSemua').then(function (r) { b.disabled = false; toast(r.belum ? r.belum + ' video belum di folder Pak Fany · ' + r.antre + ' masuk antrean berikutnya' : 'Semua video sudah tersalin'); load(); })
@@ -6133,7 +6155,7 @@
                 icon('video'), el('span', null, el('b', { text: x.jenis === 'OPENING' ? 'Opening' : 'Closing' }), el('small', { text: titleCase(x.oleh) + ' · ' + x.jam + ' · ' + fmtMB(x.size) }),
                   el('span', { class: 'dok-dua' }, el('i', { class: 'ok', text: '✓ Drive toko' }),
                     el('i', { class: x.fany && x.fany.ok ? 'ok' : x.fany && x.fany.antre ? 'antre' : 'belum', title: x.fany && x.fany.ok ? 'Tersalin ' + x.fany.waktu : '',
-                      text: x.fany && x.fany.ok ? '✓ Pak Fany' : x.fany && x.fany.antre ? '⏳ Pak Fany' : '— Pak Fany' }))));
+                      text: x.fany && x.fany.ok ? '✓ Pak Fany' : '⏳ Pak Fany' }))));
             })));
         })) : el('div', { class: 'empty', text: 'Belum ada video di bulan ini' }));
     }

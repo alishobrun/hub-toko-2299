@@ -1468,3 +1468,6 @@ html[data-theme=dark] .promo-tag{background:var(--orange-50);color:#FDBA74}
 .dok-dua i{font-style:normal;font-size:11px;font-weight:600;padding:1px 6px;border-radius:999px;background:var(--line);color:var(--muted)}
 .dok-dua i.ok{background:rgba(22,163,74,.14);color:#15803d}
 .dok-dua i.antre{background:rgba(234,179,8,.18);color:#a16207}
+.dok-belum{margin-top:10px;display:flex;flex-direction:column;gap:6px}
+.dok-belum-row{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:6px 0;border-top:1px solid var(--line);font-size:13.5px}
+.dok-belum-row:first-child{border-top:0}

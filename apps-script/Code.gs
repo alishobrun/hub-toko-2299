@@ -11,7 +11,7 @@
 /** Versi kode. WAJIB dinaikkan setiap kali Code.gs diubah (format yyyy-MM-dd.n),
  *  lalu simpan ke GitHub (alishobrun/hub-toko-2299) SEBELUM dipasang. Halaman Kesehatan Data
  *  membandingkan angka ini dengan GitHub supaya kode yang dipasang di luar GitHub ketahuan. */
-const KODE_VERSI = '2026-11-10.1';
+const KODE_VERSI = '2026-11-10.2';
 
 const CFG = {
   STORE: '2299',
@@ -2434,11 +2434,33 @@ Object.assign(API, {
     return { bulan: bulan, items: items, bulanTersedia: JSON.parse(bl), today: today_(), sekarang: Utilities.formatDate(new Date(), CFG.TZ, 'HH:mm'),
       mundur: DOK_MUNDUR_HARI,
       batasOpen: Number(set.dok_batas_open), batasClose: Number(set.dok_batas_close), maxMb: Number(set.dok_max_mb),
-      siap: !!(p.getProperty('UPLOAD_URL') && p.getProperty('UPLOAD_SECRET')) };
+      siap: !!(p.getProperty('UPLOAD_URL') && p.getProperty('UPLOAD_SECRET')), fanyLink: p.getProperty('FANY_LINK') || '' };
   },
 
   /** Admin: susun ulang antrean kiriman ke OneDrive Pak Fany (semua bulan). */
   dokAntreSemua: function (req) { auth_(req, true); return dokAntre_(true); },
+
+  /** Petugas menandai video sudah diunggah manual ke folder Pak Fany (opsi semi-otomatis). */
+  dokFanyTandai: function (req) {
+    const u = auth_(req);
+    const ids = (req.ids || []).map(String).filter(function (x) { return /^[\w-]{10,}$/.test(x); }).slice(0, 50);
+    if (!ids.length) throw new Error('Pilih video');
+    const sudah = dokTerkirim_(), nama = {};
+    (req.nama || []).forEach(function (n, i) { nama[ids[i]] = String(n || '').slice(0, 150); });
+    const baru = ids.filter(function (id) { return !sudah[id]; }).map(function (id) { return { file_id: id, nama: nama[id] || '', waktu: now_(), link: '', catatan: 'manual · ' + u.nama }; });
+    if (baru.length) withLock_(function () { appendRows_('dok_terkirim', baru); });
+    CacheService.getScriptCache().removeAll(['dok_' + today_().slice(0, 7)]);
+    log_(u.username, 'video ke folder Pak Fany', baru.length + ' video (manual)');
+    return { ditandai: baru.length };
+  },
+  /** Admin: link folder OneDrive Pak Fany (tidak disimpan di GitHub). */
+  setFanyLink: function (req) {
+    const a = auth_(req, true), url = String(req.url || '').trim();
+    if (url && !/^https:\/\/[\w.-]+\.(sharepoint\.com|onedrive\.live\.com|1drv\.ms)\//.test(url)) throw new Error('Link harus dari SharePoint / OneDrive');
+    PropertiesService.getScriptProperties().setProperty('FANY_LINK', url);
+    log_(a.username, 'link folder Pak Fany', url ? 'diubah' : 'dihapus');
+    return true;
+  },
 
   /** Admin: sambungkan mesin upload (alamat Web App + kunci dari Upload.gs). */
   setUpload: function (req) {
