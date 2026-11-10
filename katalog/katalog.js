@@ -233,7 +233,7 @@
     isiUlang($('#tiketRel'), xs.map(function (p) {
       var j = String(p.jenis || 'REGULER').toUpperCase(), st = statusPromo(p.mulai, p.selesai);
       return el('article', { class: 'tiket ' + j.toLowerCase() },
-        el('div', { class: 'tiket-sisi' }, el('span', { svg: '<svg viewBox="0 0 24 24">' + (IKON_JENIS[j] || IKON_JENIS.REGULER) + '</svg>' }), el('small', { text: judul(j) })),
+        el('div', { class: 'tiket-sisi' }, el('span', { svg: '<svg viewBox="0 0 24 24">' + (IKON_JENIS[j] || IKON_JENIS.REGULER) + '</svg>' }), el('small', { text: { EAC: 'EAC', BANKING: 'Banking', EVENT: 'Event', BAZAAR: 'Bazaar' }[j] || judul(j) })),
         el('div', { class: 'tiket-isi' },
           el('span', { class: 'status ' + st.kelas, text: st.teks }),
           el('b', { text: p.judul }),
