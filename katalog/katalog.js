@@ -245,7 +245,7 @@
         function () { pilihKat(k, ''); }));
     });
     // sub-kategori terbanyak ikut tampil sebagai ikon, seperti marketplace
-    Object.keys(hit4).sort(function (a, b) { return hit4[b] - hit4[a]; }).slice(0, 12).forEach(function (k) {
+    Object.keys(hit4).filter(function (k) { var p = k.split('|'); return subNama(p[1]) !== katNama(p[0]); }).sort(function (a, b) { return hit4[b] - hit4[a]; }).slice(0, 12).forEach(function (k) {
       var p = k.split('|');
       isi.push(ikonKat(subNama(p[1]), W[k] ? el('img', { src: W[k].f, alt: '', loading: 'lazy', referrerpolicy: 'no-referrer' }) : svg((KAT[p[0]] || {}).ikon || IKON_SEMUA), '', F.k3 === p[0] && F.k4 === p[1],
         function () { pilihKat(p[0], p[1]); }));
