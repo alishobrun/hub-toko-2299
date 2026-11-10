@@ -209,7 +209,6 @@
     });
     slides.splice.apply(slides, [Math.min(1, slides.length), 0].concat(kampanye));
     $('#banner').classList.toggle('ada-foto', kampanye.length > 0);
-    gambarLatar(kampanye.length ? D.banner : []);
     if (!slides.length) slides.push(el('div', { class: 'slide' }, el('small', { text: 'EIGER STORE A. YANI KARTASURA' }), el('b', { text: 'Siap jalan dari Kartasura' }),
       el('span', { text: 'Cek barang yang tersedia di toko, lalu tanya langsung lewat WhatsApp.' })));
     var rel = $('#bannerRel'), titik = $('#bannerTitik');
@@ -218,7 +217,7 @@
     var ke = 0;
     rel.onscroll = function () {
       var i = Math.round(rel.scrollLeft / rel.clientWidth);
-      if (i !== ke) { ke = i; [].forEach.call(titik.children, function (t, j) { t.className = j === i ? 'aktif' : ''; }); latarKe(slides[i]); }
+      if (i !== ke) { ke = i; [].forEach.call(titik.children, function (t, j) { t.className = j === i ? 'aktif' : ''; }); }
     };
     clearInterval(bannerTimer);
     if (slides.length > 1 && !matchMedia('(prefers-reduced-motion: reduce)').matches) bannerTimer = setInterval(function () {
@@ -227,17 +226,6 @@
     }, 4500);
   }
 
-  /* Latar foto kampanye yang diburamkan di belakang banner (terlihat di layar lebar). */
-  function gambarLatar(list) {
-    var box = $('#latarBanner');
-    if (!box) { box = el('div', { class: 'latar-banner', id: 'latarBanner', 'aria-hidden': 'true' }); $('#beranda').prepend(box); }
-    isiUlang(box, list.map(function (b, i) { return el('i', { class: i ? '' : 'aktif', style: "background-image:url('" + b.d.replace(/'/g, '') + "')" }); }));
-  }
-  function latarKe(slide) {
-    var box = $('#latarBanner'); if (!box || !box.children.length) return;
-    var k = [].indexOf.call(document.querySelectorAll('#bannerRel .s-foto'), slide);
-    if (k >= 0) [].forEach.call(box.children, function (x, j) { x.className = j === k ? 'aktif' : ''; });
-  }
   /** Ketuk banner kampanye → cari barang yang serupa di toko (bukan pindah ke toko online). */
   function cariKampanye(b) {
     var seg = String(b.u || '').split('/').filter(Boolean).pop() || b.n || '';

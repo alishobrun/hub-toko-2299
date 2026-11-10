@@ -295,7 +295,6 @@ svg { flex: none; }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
 
 /* ---------- banner kampanye eigeradventure ---------- */
-.beranda { position: relative; isolation: isolate; }
 .banner.ada-foto .banner-rel { aspect-ratio: 1.8; }
 .banner.ada-foto .slide { min-height: 0; height: 100%; }
 @media (min-width: 700px) { .banner.ada-foto .banner-rel { aspect-ratio: 2.6; max-height: 440px; } }
@@ -305,9 +304,44 @@ svg { flex: none; }
 .slide.s-foto img { object-fit: cover; }
 .slide .slide-sumber { position: absolute; left: 8px; bottom: 22px; max-width: calc(100% - 16px); font-size: 10px; font-weight: 600; opacity: 1;
   background: rgba(0, 0, 0, .45); color: #fff; padding: 2px 7px; border-radius: 99px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.latar-banner { position: absolute; z-index: -1; top: -12px; left: 50%; width: 100vw; height: calc(100% + 24px); max-height: 560px; transform: translateX(-50%); overflow: hidden; pointer-events: none; }
-.latar-banner i { position: absolute; inset: -40px; background: center / cover no-repeat; filter: blur(36px) saturate(1.2) brightness(.85); opacity: 0; transition: opacity .8s; }
-.latar-banner i.aktif { opacity: .55; }
-.latar-banner::after { content: ''; position: absolute; inset: 0; background: linear-gradient(180deg, transparent 40%, var(--latar) 100%); }
-@media (prefers-reduced-motion: reduce) { .latar-banner i { transition: none; } }
+
+/* ---------- foto alam (Merbabu & Merapi, Unsplash License) ---------- */
+:root {
+  --foto-atas: url('https://images.unsplash.com/photo-1575573685828-7c1e20f05124?w=1600&q=70&auto=format&fit=crop');
+  --foto-hero: url('https://images.unsplash.com/photo-1685360594641-91fb52833b3b?w=1800&q=70&auto=format&fit=crop');
+  --foto-oranye: url('https://images.unsplash.com/photo-1651890044335-a55d59f5b167?w=1200&q=70&auto=format&fit=crop');
+  --foto-hijau: url('https://images.unsplash.com/photo-1647067379984-9e0e069b097a?w=1200&q=70&auto=format&fit=crop');
+  --foto-ungu: url('https://images.unsplash.com/photo-1501600696725-895c50e7ae0a?w=1200&q=70&auto=format&fit=crop');
+  --foto-navy: url('https://images.unsplash.com/photo-1724076150462-8fcb67d8abb3?w=1200&q=70&auto=format&fit=crop');
+}
+@media (max-width: 699px) {
+  :root {
+    --foto-atas: url('https://images.unsplash.com/photo-1575573685828-7c1e20f05124?w=800&q=65&auto=format&fit=crop');
+    --foto-hero: url('https://images.unsplash.com/photo-1685360594641-91fb52833b3b?w=900&q=65&auto=format&fit=crop');
+    --foto-oranye: url('https://images.unsplash.com/photo-1651890044335-a55d59f5b167?w=800&q=65&auto=format&fit=crop');
+    --foto-hijau: url('https://images.unsplash.com/photo-1647067379984-9e0e069b097a?w=800&q=65&auto=format&fit=crop');
+    --foto-ungu: url('https://images.unsplash.com/photo-1501600696725-895c50e7ae0a?w=800&q=65&auto=format&fit=crop');
+    --foto-navy: url('https://images.unsplash.com/photo-1724076150462-8fcb67d8abb3?w=800&q=65&auto=format&fit=crop');
+  }
+}
+/* header: Merbabu keemasan, ditimpa oranye supaya tetap terasa Eigerindo */
+.atas { background: linear-gradient(180deg, rgba(229, 83, 42, .86), rgba(242, 107, 58, .74)), var(--foto-atas) center 38% / cover no-repeat, var(--oranye); }
+/* panggung di belakang banner: lautan awan, memudar ke abu latar */
+.beranda { position: relative; isolation: isolate; padding-top: 12px; }
+.beranda::before {
+  content: ''; position: absolute; z-index: -1; top: 0; left: 50%; width: 100vw; height: 340px; transform: translateX(-50%); pointer-events: none;
+  background: linear-gradient(180deg, rgba(10, 26, 79, .25) 0%, rgba(10, 26, 79, .05) 55%, var(--latar) 100%), var(--foto-hero) center 40% / cover no-repeat;
+}
+@media (min-width: 900px) { .beranda::before { height: 480px; } }
+.banner { margin: 0 12px; border-radius: 10px; box-shadow: 0 8px 24px rgba(10, 26, 79, .25); }
+@media (min-width: 900px) { .banner { margin: 0; } }
+/* slide promo toko memakai foto alam + lapisan warna dari kiri agar tulisan terbaca */
+.slide { background: linear-gradient(100deg, rgba(10, 26, 79, .92) 0%, rgba(15, 42, 122, .7) 45%, rgba(15, 42, 122, .15) 100%), var(--foto-navy) center / cover no-repeat, var(--navy); }
+.slide.s-oranye { background: linear-gradient(100deg, rgba(200, 62, 22, .94) 0%, rgba(242, 107, 58, .72) 45%, rgba(242, 107, 58, .1) 100%), var(--foto-oranye) center 60% / cover no-repeat, var(--oranye); }
+.slide.s-hijau { background: linear-gradient(100deg, rgba(8, 72, 56, .94) 0%, rgba(14, 107, 84, .72) 45%, rgba(14, 107, 84, .12) 100%), var(--foto-hijau) center / cover no-repeat, #0E6B54; }
+.slide.s-ungu { background: linear-gradient(100deg, rgba(46, 30, 104, .94) 0%, rgba(62, 42, 138, .72) 45%, rgba(62, 42, 138, .12) 100%), var(--foto-ungu) center 45% / cover no-repeat, #3E2A8A; }
+.slide:not(.s-foto)::after { display: none; }
+.slide:not(.s-foto) b, .slide:not(.s-foto) small, .slide:not(.s-foto) span { text-shadow: 0 1px 8px rgba(0, 0, 0, .25); }
+.kaki .kredit { font-size: 11px; opacity: .8; }
+.kaki .kredit a { color: inherit; }
 html, body { overflow-x: clip; }
