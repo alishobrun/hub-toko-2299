@@ -39,7 +39,7 @@ Login per orang: anggota tim mendaftar sendiri, lalu admin menyetujui. Akun pert
 
 - **Banner kampanye** diambil otomatis dari beranda eigeradventure.com (`bannerEiger_`, sekali sehari, ikut pemicu 03.00). Banner cara bayar/diskon online dilewati; kalau situs gagal dibaca, daftar terakhir tetap dipakai. Status terlihat di Basecamp → Katalog Pelanggan. Ketuk banner = cari barang serupa di katalog toko.
 
-Halaman publik untuk pelanggan di `katalog/` (alamatnya: `<alamat GitHub Pages>/katalog/`), tanpa login.
+Halaman publik untuk pelanggan di `katalog/`, tanpa login. Alamat yang dibagikan: **https://eigerkartasura.github.io/** (repo organisasi `eigerkartasura/eigerkartasura.github.io`). Situs itu menyalin `katalog/` + `assets/config.js` dan ikon dari repo ini lewat workflow `salin-katalog.yml` tiap jam (menit ke-7); jangan edit file di repo situs, edit di sini saja. Link lama `…/hub-toko-2299/katalog/` dialihkan otomatis ke alamat baru.
 
 - Isi: artikel yang tersedia di toko per kategori (Tas, Pakaian, Sepatu & sandal, Perlengkapan outdoor, Topi, Aksesoris) dan sub-kategori, pencarian, filter Pria/Wanita, urutan harga. Tombol **Tanya di WhatsApp** ke nomor toko (`KATALOG.WA` di `Code.gs`) dengan pesan berisi nama, kode, warna dan ukuran.
 - **Tidak ada jumlah stok.** Per warna hanya ukuran *tersedia* atau *kosong* (dicoret). Data sales, pelanggan dan lokasi bin tidak dikirim.

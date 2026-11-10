@@ -6288,7 +6288,7 @@
   /* ---------- Katalog pelanggan: link & foto artikel (admin) ---------- */
   function viewKatalog(v) {
     pageHead(v, 'Katalog Pelanggan', 'Halaman katalog untuk pelanggan: barang yang tersedia di toko, tanpa jumlah stok. Foto dicari otomatis dari eigeradventure.com; yang tidak ketemu bisa diisi di sini.');
-    var url = location.href.split('#')[0].replace(/index\.html$/, '').replace(/\/?$/, '/') + 'katalog/';
+    var url = 'https://eigerkartasura.github.io/'; // situs katalog terpisah (tanpa nama pribadi), disalin otomatis tiap jam dari folder katalog/
     v.append(el('div', { class: 'card' }, el('h3', { text: 'Link untuk pelanggan' }),
       el('p', { class: 'sub', text: 'Bagikan link ini di WhatsApp, Instagram atau QR code di toko. Stok ikut berubah setiap By Bin diunggah.' }),
       el('div', { class: 'kt-link' }, el('code', { text: url }),
