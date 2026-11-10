@@ -29,6 +29,13 @@
     'INSECT PROTECTION': 'Anti nyamuk', 'TREKKING POLE': 'Trekking pole', HAMMOCK: 'Hammock', 'RAIN COVER': 'Rain cover',
     CAPS: 'Topi', CAP: 'Topi', HAT: 'Topi rimba', HATS: 'Topi rimba', BEANIES: 'Kupluk', BEANIE: 'Kupluk', BALACLAVA: 'Balaclava', BUFF: 'Buff & masker',
     BELTS: 'Ikat pinggang', BELT: 'Ikat pinggang', WALLET: 'Dompet', WALLETS: 'Dompet', GLOVES: 'Sarung tangan', GLOVE: 'Sarung tangan',
+    CASES: 'Case & tas kecil', 'MOTORCYCLE BAG': 'Tas motor', LUGGAGE: 'Koper', 'SPECIAL PURPOSE BAG': 'Tas khusus',
+    'CHAIN ACCESSORIES': 'Gantungan & rantai', 'GADGET ACCESSORIES': 'Aksesoris gadget', 'BAGS ACCESSORIES': 'Aksesoris tas',
+    'TRAVEL ACCESSORIES': 'Aksesoris travel', WATCHES: 'Jam tangan', JEWELRY: 'Gelang & perhiasan', BANDS: 'Gelang',
+    KITCHENWARE: 'Alat masak', 'LIGHTING EQUIPMENT': 'Senter & lampu', 'MAT & COT': 'Matras & velbed', POLE: 'Trekking pole',
+    'BAG COVER': 'Cover tas', 'CLIMBING EQUIPMENT': 'Alat panjat', COMPASS: 'Kompas', 'EMERGENCY EQUIPMENT': 'Perlengkapan darurat',
+    KNIVES: 'Pisau lipat', 'RIDING EQUIPMENT': 'Perlengkapan riding', 'SANITARY EQUIPMENT': 'Perlengkapan mandi', 'SLEEPING ACCS': 'Aksesoris tidur',
+    TABLE: 'Meja lipat', TOOLS: 'Peralatan', SHOELACE: 'Tali sepatu', BANDANA: 'Bandana', HIJAB: 'Hijab', SCARF: 'Syal',
     KEYCHAIN: 'Gantungan kunci', GAITER: 'Gaiter', SUNGLASSES: 'Kacamata', WATCH: 'Jam tangan', STRAP: 'Strap', MASK: 'Masker'
   };
   var WARNA = {
@@ -39,7 +46,11 @@
     BRW: ['Cokelat', '#6B4A2E'], BRO: ['Cokelat', '#6B4A2E'], DBR: ['Cokelat tua', '#4A3020'], LBR: ['Cokelat muda', '#A07A55'], KHK: ['Khaki', '#B9A77A'], TAN: ['Tan', '#C19A6B'],
     SAN: ['Pasir', '#D2B98B'], BEI: ['Beige', '#D8C8A8'], MOC: ['Mocha', '#7B5B47'], CAM: ['Loreng', 'linear-gradient(135deg,#5B6236 0 33%,#8A7A4F 33% 66%,#3C4A2C 66%)'],
     RED: ['Merah', '#B8312F'], MAR: ['Maroon', '#6E1F2A'], ORA: ['Oranye', '#E0742B'], YEL: ['Kuning', '#E8C130'], MUS: ['Mustard', '#C9A13B'],
-    PNK: ['Merah muda', '#E6A1B5'], PIN: ['Merah muda', '#E6A1B5'], PUR: ['Ungu', '#6A4C93'], LIL: ['Lilac', '#B7A3CF'], NOS: ['Satu warna', '#9AA39D']
+    PNK: ['Merah muda', '#E6A1B5'], PIN: ['Merah muda', '#E6A1B5'], PUR: ['Ungu', '#6A4C93'], LIL: ['Lilac', '#B7A3CF'], NOS: ['Satu warna', '#9AA39D'],
+    CRE: ['Krem', '#EADFC6'], TER: ['Terracotta', '#B5583A'], TAU: ['Taupe', '#8B7D6B'], LGY: ['Abu muda', '#C4C8CA'], MGY: ['Abu-abu', '#8A8F93'],
+    BGE: ['Beige', '#D8C8A8'], DKH: ['Khaki tua', '#8C7B4F'], DOL: ['Olive tua', '#454A28'], CYN: ['Cyan', '#2CB5C9'], TUR: ['Turquoise', '#30B5A8'],
+    WNE: ['Wine', '#6B2232'], COF: ['Kopi', '#5A3D2B'], PEC: ['Peach', '#F2B595'], SGE: ['Sage', '#9CAF88'], MAG: ['Magenta', '#B5267A'],
+    BRZ: ['Bronze', '#8C6239'], DEN: ['Denim', '#3E5C86'], DPU: ['Ungu tua', '#4B2E63'], DPI: ['Merah muda tua', '#C0577A'], LGE: ['Hijau muda', '#9CC59A']
   };
 
   /* ---------- util ---------- */
@@ -78,8 +89,8 @@
   function genderNama(g) {
     g = String(g || '').toLowerCase();
     if (!g) return '';
+    if (/kid|anak|child|junior|boy|girl/.test(g)) return 'Anak';
     if (/unisex/.test(g)) return 'Unisex';
-    if (/kid|anak|child|junior/.test(g)) return 'Anak';
     if (/wom|ladies|female|wanita/.test(g)) return 'Wanita';
     if (/\bmen\b|^men|male|pria/.test(g)) return 'Pria';
     return judul(g);

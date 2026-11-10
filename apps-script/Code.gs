@@ -11,7 +11,7 @@
 /** Versi kode. WAJIB dinaikkan setiap kali Code.gs diubah (format yyyy-MM-dd.n),
  *  lalu simpan ke GitHub (alishobrun/hub-toko-2299) SEBELUM dipasang. Halaman Kesehatan Data
  *  membandingkan angka ini dengan GitHub supaya kode yang dipasang di luar GitHub ketahuan. */
-const KODE_VERSI = '2026-11-10.4';
+const KODE_VERSI = '2026-11-10.5';
 
 const CFG = {
   STORE: '2299',
@@ -5578,6 +5578,13 @@ function katalogSusun_(fotoIkut) {
   const F = {};
   if (fotoIkut) read_('katalog_foto').forEach(function (f) { if (f.foto) F[String(f.generic)] = String(f.foto).split(/\s+/).filter(String); });
   const naHari = Number(settings_().na_hari) || CFG.NA_HARI, batasBaru = addDays_(today_(), -naHari);
+  // "Baru" juga untuk artikel yang pertama kali ada stok di toko ≤ BARU_TOKO_HARI (bukan stok awal/baseline)
+  const batasToko = addDays_(today_(), -CFG.BARU_TOKO_HARI), masukToko = {};
+  read_('varian_pertama').forEach(function (x) {
+    if (x.baseline === 'ya') return;
+    const g = String(x.generic), t = String(x.pertama).slice(0, 10);
+    if (t >= batasToko && (!masukToko[g] || t > masukToko[g])) masukToko[g] = t;
+  });
   const items = [];
   Object.keys(G).forEach(function (g) {
     const a = G[g], w = [];
@@ -5590,7 +5597,7 @@ function katalogSusun_(fotoIkut) {
     });
     if (!w.length) return;
     w.sort(function (p, q) { return p[0] < q[0] ? -1 : 1; });
-    const it = { g: g, n: a.n, k3: a.k3, k4: a.k4, gd: a.gd, ac: a.ac, h: a.h, hm: a.hMin && a.hMin < a.h ? a.hMin : 0, b: a.baru && a.baru >= batasBaru ? 1 : 0, w: w };
+    const it = { g: g, n: a.n, k3: a.k3, k4: a.k4, gd: a.gd, ac: a.ac, h: a.h, hm: a.hMin && a.hMin < a.h ? a.hMin : 0, b: (a.baru && a.baru >= batasBaru) || masukToko[g] ? 1 : 0, w: w };
     if (fotoIkut && F[g]) it.f = F[g];
     items.push(it);
   });
