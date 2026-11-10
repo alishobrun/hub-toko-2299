@@ -367,6 +367,9 @@
   $('#q').addEventListener('input', function (e) { clearTimeout(tunda); tunda = setTimeout(function () { F.q = e.target.value; if (D) saring(); }, 180); });
   $('#gender').addEventListener('change', function (e) { F.gd = e.target.value; saring(); });
   $('#urut').addEventListener('change', function (e) { F.urut = e.target.value; saring(); });
+  // bilah filter menempel tepat di bawah bilah atas (tinggi bilah atas beda di HP & komputer)
+  function ukurAtas() { document.documentElement.style.setProperty('--atas', $('.atas').offsetHeight + 'px'); }
+  ukurAtas(); window.addEventListener('resize', ukurAtas);
   var alat = $('#alat');
   if (window.IntersectionObserver) {
     var penanda = el('div', { style: 'height:1px' }); alat.parentNode.insertBefore(penanda, alat);

@@ -89,7 +89,7 @@ a { color: inherit; }
 /* ---------- alat: sub-kategori & filter ---------- */
 main { max-width: var(--lebar); margin: 0 auto; padding: 18px 20px 40px; }
 .alat {
-  position: sticky; top: 58px; z-index: 3; margin: 0 -20px; padding: 10px 20px; background: rgba(238, 241, 236, .95);
+  position: sticky; top: var(--atas, 58px); z-index: 3; margin: 0 -20px; padding: 10px 20px; background: rgba(238, 241, 236, .95);
   backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center;
   border-bottom: 1px solid transparent;
 }
@@ -252,7 +252,7 @@ main { max-width: var(--lebar); margin: 0 auto; padding: 18px 20px 40px; }
   .sorot h2 { font-size: 19px; }
   .sorot-rel { grid-auto-columns: 152px; gap: 10px; }
   main { padding: 14px 14px 40px; }
-  .alat { margin: 0 -14px; padding: 8px 14px; top: 54px; }
+  .alat { margin: 0 -14px; padding: 8px 14px; }
   .pilih { margin-left: 0; }
   .isi { padding: 9px 10px 12px; }
   .nama { font-size: 14px; }
