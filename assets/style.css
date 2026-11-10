@@ -1491,3 +1491,6 @@ html[data-theme=dark] .promo-tag{background:var(--orange-50);color:#FDBA74}
 .kt-form .hb-search{margin:0}
 .kt-form-2{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:0 10px}
 .kt-form .sel{width:100%}
+.kt-bm{display:flex;flex-wrap:wrap;gap:12px 20px;align-items:center;justify-content:space-between;margin:12px 0 4px;padding:12px 14px;border-radius:12px;background:var(--orange-50)}
+.kt-bm ol{margin:6px 0 0;padding-left:18px;font-size:13px;color:var(--muted)}
+.kt-bm-link{cursor:grab}

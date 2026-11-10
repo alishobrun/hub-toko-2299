@@ -6178,6 +6178,20 @@
     function load() {
       api('katalogPromoList').then(function (d) { data = d; draw(); }).catch(function (e) { box.replaceChildren(errBox(e)); });
     }
+    // impor dari bookmark "Kirim promo ke katalog" (#/katalog?impor=…)
+    var qs = (location.hash.split('?')[1] || ''), imp = new URLSearchParams(qs).get('impor');
+    if (imp) {
+      history.replaceState(null, '', location.pathname + location.search + '#/katalog');
+      var promos = null;
+      try { promos = JSON.parse(decodeURIComponent(escape(atob(imp)))); } catch (e) { promos = null; }
+      if (!Array.isArray(promos)) toast('Data promo dari Integrated Hub tidak terbaca. Klik bookmark sekali lagi.', true);
+      else {
+        box.replaceChildren(el('h3', { text: 'Promo di toko' }), el('p', { class: 'sub', text: 'Menyimpan ' + promos.length + ' promo dari Integrated Hub…' }), skel(1));
+        api('katalogPromoImpor', { promos: promos }).then(function (r) { toast(r.jumlah + ' promo dari Integrated Hub tersimpan ke katalog'); load(); })
+          .catch(function (e) { toast(e.message, true); load(); });
+        return;
+      }
+    }
     function form(p) {
       p = p || { jenis: 'Reguler', mulai: todayJkt(), selesai: todayJkt() };
       var f = {
@@ -6206,15 +6220,23 @@
       var t = todayJkt();
       var urut = data.slice().sort(function (a, b) { var aa = a.selesai < t ? 1 : 0, bb = b.selesai < t ? 1 : 0; return (aa - bb) || (a.mulai < b.mulai ? -1 : 1); });
       box.replaceChildren(el('div', { class: 'card-head' }, el('div', null, el('h3', { text: 'Promo di toko' }),
-          el('p', { class: 'sub', text: 'Tampil sebagai tiket promo di katalog, lengkap dengan status berlaku (hari terakhir, mulai besok, berlaku s/d). Salin dari menu Info Promo (Juknis) di Integrated Hub Jateng 01. Promo yang sudah lewat otomatis hilang dari katalog.' })),
+          el('p', { class: 'sub', text: 'Tampil sebagai tiket promo di katalog, lengkap dengan status berlaku (hari terakhir, mulai besok, berlaku s/d). Promo yang sudah lewat otomatis hilang dari katalog.' })),
           edit === 'baru' ? null : el('button', { class: 'btn btn-primary btn-sm', type: 'button', text: 'Tambah promo', onclick: function () { edit = 'baru'; draw(); } })),
+        el('div', { class: 'kt-bm' },
+          el('div', null, el('b', { text: 'Ambil otomatis dari Integrated Hub (sekali klik)' }),
+            el('ol', null,
+              el('li', { text: 'Sekali saja: seret tombol oranye ini ke bilah bookmark Chrome (Ctrl+Shift+B untuk menampilkan bilah bookmark).' }),
+              el('li', { text: 'Tiap ada Juknis baru: buka Integrated Hub Jateng 01, login, buka menu Info Promo (Juknis).' }),
+              el('li', { text: 'Klik bookmark "Kirim promo ke katalog". Basecamp terbuka dan promo langsung tersimpan. Promo Factory Store & toko terpilih dilewati; promo yang diisi manual tidak ditimpa.' }))),
+          el('a', { class: 'btn btn-orange btn-sm kt-bm-link', href: "javascript:(function(){var s=document.createElement('script');s.src='https://alishobrun.github.io/hub-toko-2299/assets/kirim-promo.js?t='+Date.now();document.body.appendChild(s);})();",
+            title: 'Seret ke bilah bookmark', onclick: function (e) { e.preventDefault(); toast('Seret tombol ini ke bilah bookmark Chrome, jangan diklik di sini'); } }, icon('upload'), 'Kirim promo ke katalog')),
         edit === 'baru' ? form(null) : null,
         urut.length ? el('div', { class: 'kt-rows' }, urut.map(function (p) {
           if (edit === p.id) return form(p);
           var st = status(p);
           return el('div', { class: 'kt-row' },
             el('div', { class: 'kt-main' }, el('b', { text: p.judul }),
-              el('small', null, p.jenis + ' · ' + dShort(p.mulai) + ' – ' + dShort(p.selesai) + ' · ', el('b', { class: st[1], text: st[0] })),
+              el('small', null, p.jenis + ' · ' + dShort(p.mulai) + ' – ' + dShort(p.selesai) + ' · ', el('b', { class: st[1], text: st[0] }), p.sumber === 'hub' ? ' · dari Integrated Hub' : p.sumber === 'manual' ? ' · diisi manual' : ''),
               p.syarat || p.produk ? el('small', { text: [p.syarat, p.produk].filter(Boolean).join(' · ') }) : null),
             el('div', { class: 'tags', style: 'align-self:center' },
               el('button', { class: 'btn btn-ghost btn-sm', type: 'button', text: 'Ubah', onclick: function () { edit = p.id; draw(); } }),

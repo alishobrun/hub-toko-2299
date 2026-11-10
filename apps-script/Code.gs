@@ -11,7 +11,7 @@
 /** Versi kode. WAJIB dinaikkan setiap kali Code.gs diubah (format yyyy-MM-dd.n),
  *  lalu simpan ke GitHub (alishobrun/hub-toko-2299) SEBELUM dipasang. Halaman Kesehatan Data
  *  membandingkan angka ini dengan GitHub supaya kode yang dipasang di luar GitHub ketahuan. */
-const KODE_VERSI = '2026-11-11.2';
+const KODE_VERSI = '2026-11-11.3';
 
 const CFG = {
   STORE: '2299',
@@ -98,7 +98,7 @@ const TABS = {
   // foto katalog pelanggan per generic: otomatis dari eigeradventure.com atau diisi admin
   katalog_foto: ['generic', 'foto', 'sumber', 'url', 'status', 'dicek', 'oleh'],
   // promo umum toko untuk katalog pelanggan (dari juknis promo / web Integrated Hub), diisi admin
-  katalog_promo: ['id', 'judul', 'jenis', 'mulai', 'selesai', 'syarat', 'produk', 'aktif', 'diubah', 'oleh']
+  katalog_promo: ['id', 'judul', 'jenis', 'mulai', 'selesai', 'syarat', 'produk', 'aktif', 'diubah', 'oleh', 'sumber']
 };
 
 const PECAHAN = [100000, 50000, 20000, 10000, 5000, 2000, 1000, 500, 200, 100];
@@ -5816,7 +5816,7 @@ function pasangCariFoto_() {
 
 /* ---------- promo umum toko (tab katalog_promo) ---------- */
 function promoTokoOut_(r) {
-  return { id: String(r.id), judul: String(r.judul || ''), jenis: String(r.jenis || ''), mulai: toIsoDate_(r.mulai) || String(r.mulai || ''),
+  return { id: String(r.id), sumber: String(r.sumber || ''), judul: String(r.judul || ''), jenis: String(r.jenis || ''), mulai: toIsoDate_(r.mulai) || String(r.mulai || ''),
     selesai: toIsoDate_(r.selesai) || String(r.selesai || ''), syarat: String(r.syarat || ''), produk: String(r.produk || ''), aktif: String(r.aktif || 'ya') };
 }
 /** Promo yang ditampilkan ke pelanggan: aktif dan belum berakhir (yang akan datang ikut, status dihitung di halaman). */
@@ -5842,7 +5842,7 @@ Object.assign(API, {
     if (selesai < mulai) throw new Error('Tanggal selesai tidak boleh sebelum tanggal mulai');
     const id = String(p.id || '') || Utilities.getUuid().slice(0, 8);
     const row = { id: id, judul: judul, jenis: String(p.jenis || 'Reguler').slice(0, 20), mulai: mulai, selesai: selesai,
-      syarat: String(p.syarat || '').slice(0, 200), produk: String(p.produk || '').slice(0, 200), aktif: p.aktif === 'tidak' ? 'tidak' : 'ya', diubah: now_(), oleh: u.username };
+      syarat: String(p.syarat || '').slice(0, 200), produk: String(p.produk || '').slice(0, 200), aktif: p.aktif === 'tidak' ? 'tidak' : 'ya', diubah: now_(), oleh: u.username, sumber: 'manual' };
     withLock_(function () {
       if (!updateRow_('katalog_promo', 'id', id, row)) append_('katalog_promo', row);
       katalogBaru_();
@@ -5850,6 +5850,28 @@ Object.assign(API, {
     log_(u.username, 'promo katalog', judul + ' · ' + mulai + ' s/d ' + selesai);
     return promoTokoOut_(row);
   },
+  /** Admin: impor promo dari menu Info Promo (Juknis) Integrated Hub lewat bookmark "Kirim promo ke katalog".
+   *  Semua promo hasil impor sebelumnya diganti; promo yang diisi manual tidak disentuh. */
+  katalogPromoImpor: function (req) {
+    const u = auth_(req, true);
+    const list = (req.promos || []).slice(0, 60).map(function (p) {
+      return { judul: String(p.judul || '').trim().slice(0, 120), jenis: String(p.jenis || 'Reguler').slice(0, 20), mulai: toIsoDate_(p.mulai), selesai: toIsoDate_(p.selesai),
+        syarat: String(p.syarat || '').slice(0, 200), produk: String(p.produk || '').slice(0, 200) };
+    }).filter(function (p) { return p.judul && p.mulai && p.selesai && p.selesai >= p.mulai; });
+    if (!list.length) throw new Error('Tidak ada promo yang terbaca. Pastikan halaman Info Promo (Juknis) sudah terbuka.');
+    withLock_(function () {
+      const tetap = read_('katalog_promo').filter(function (r) { return String(r.sumber) === 'manual'; });
+      const baru = list.map(function (p, i) {
+        return { id: 'hub' + Utilities.formatDate(new Date(), CFG.TZ, 'yyMMddHHmm') + i, judul: p.judul, jenis: p.jenis, mulai: p.mulai, selesai: p.selesai,
+          syarat: p.syarat, produk: p.produk, aktif: 'ya', diubah: now_(), oleh: u.username, sumber: 'hub' };
+      });
+      writeAll_('katalog_promo', tetap.concat(baru));
+      katalogBaru_();
+    });
+    log_(u.username, 'impor promo katalog', list.length + ' promo dari Integrated Hub');
+    return { jumlah: list.length, promos: list };
+  },
+
   /** Admin: hapus satu promo toko. */
   katalogPromoHapus: function (req) {
     const u = auth_(req, true), id = String(req.id || '');
