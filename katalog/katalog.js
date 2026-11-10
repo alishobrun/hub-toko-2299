@@ -99,6 +99,32 @@
     if (!it.h) return null;
     return it.hm ? rp(it.hm) + ' – ' + nf.format(it.h) : rp(it.h);
   }
+  /* ---------- tanggal & status promo (zona Asia/Jakarta) ---------- */
+  var BUL = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+  function hariIni() { return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jakarta' }).format(new Date()); }
+  function tambahHari(iso, n) { var d = new Date(iso + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); }
+  function tglPendek(iso) { var p = String(iso || '').split('-'); return p.length === 3 ? Number(p[2]) + ' ' + BUL[Number(p[1]) - 1] : ''; }
+  /** Teks berlaku sebuah promo: { teks, kelas } — kelas '' (berjalan), 'akhir' (hari terakhir), 'nanti' (belum mulai). */
+  function statusPromo(mulai, selesai) {
+    var t = hariIni();
+    if (mulai && mulai > t) return { teks: mulai === tambahHari(t, 1) ? 'Mulai besok, ' + tglPendek(mulai) : 'Mulai ' + tglPendek(mulai), kelas: 'nanti' };
+    if (selesai && selesai === t) return { teks: 'Hari terakhir, berlaku sampai hari ini', kelas: 'akhir' };
+    if (selesai && selesai === tambahHari(t, 1)) return { teks: 'Berlaku sampai besok, ' + tglPendek(selesai), kelas: 'akhir' };
+    return { teks: 'Masih berlaku s/d ' + tglPendek(selesai), kelas: '' };
+  }
+  /** Promo harga artikel masih berlaku? (list promo bulan ini, s/d akhir bulan) */
+  function promoAktif() { return !!(D && D.promoSampai && D.promoSampai >= hariIni()); }
+  function prItem(it) { return promoAktif() && it.pr ? it.pr : null; }
+  function prWarna(w) { return promoAktif() && w[3] ? w[3] : null; }
+  var IKON_JAM = '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>';
+  var IKON_JENIS = {
+    EVENT: '<path d="M4 7h16v13H4Z"/><path d="M4 11h16M8 3v4M16 3v4"/><path d="m12 13.5 1 2 2.2.3-1.6 1.5.4 2.2-2-1-2 1 .4-2.2-1.6-1.5 2.2-.3Z"/>',
+    BANKING: '<rect x="3" y="6" width="18" height="13" rx="2"/><path d="M3 10h18M7 15h4"/>',
+    EAC: '<circle cx="12" cy="9" r="5"/><path d="m9 13-2 8 5-3 5 3-2-8"/>',
+    REGULER: '<path d="M3 12V4h8l10 10-8 8Z"/><circle cx="7.5" cy="8.5" r="1.5"/>',
+    BAZAAR: '<path d="M3 12V4h8l10 10-8 8Z"/><circle cx="7.5" cy="8.5" r="1.5"/>'
+  };
+
   function waLink(teks) { return 'https://wa.me/' + (D && D.wa || '6281120022574') + '?text=' + encodeURIComponent(teks); }
   var toastT;
   function toast(t) {
@@ -115,7 +141,7 @@
 
   /* ---------- keadaan ---------- */
   var D = null;                 // data katalog
-  var F = { k3: '', k4: '', q: '', gd: '', urut: 'pilihan' };
+  var F = { k3: '', k4: '', q: '', gd: '', urut: 'pilihan', promo: false };
   var tampil = PER_HALAMAN, hasil = [];
 
   /* ---------- data ---------- */
@@ -161,6 +187,8 @@
       .forEach(function (g) { sel.append(el('option', { value: g, text: g })); });
     sel.value = cur;
     sel.closest('label').hidden = sel.options.length < 3;
+    $('#hanyaPromo').hidden = !D.items.some(prItem);
+    gambarPromoToko();
     gambarKategori();
     gambarSorot();
     saring();
@@ -180,25 +208,61 @@
     });
     var tile = function (k, nama, n, path) {
       var foto = k && wakil[k] ? el('img', { src: wakil[k].f, alt: '', loading: 'lazy', referrerpolicy: 'no-referrer' }) : el('span', { svg: '<svg viewBox="0 0 24 24">' + path + '</svg>' });
-      return el('button', { class: 'kat' + (k ? '' : ' kat-semua'), type: 'button', 'aria-pressed': String(F.k3 === k), onclick: function () {
-        F.k3 = F.k3 === k && k ? '' : k; F.k4 = '';
+      return el('button', { class: 'kat' + (k ? '' : ' kat-semua'), type: 'button', 'aria-pressed': String(F.k3 === k && !(k === '' && F.promo)), onclick: function () {
+        F.k3 = F.k3 === k && k ? '' : k; F.k4 = ''; if (!k) setPromo(false);
         gambarKategori(); saring();
         var a = $('#alat'); if (a.getBoundingClientRect().top < 60) a.scrollIntoView({ behavior: 'smooth' });
       } }, el('span', { class: 'kat-foto' }, foto), el('span', { class: 'kat-teks' }, el('b', { text: nama }), el('small', { text: n + ' artikel' })));
     };
-    isiUlang($('#kategori'), tile('', 'Semua barang', D.items.length, IKON_SEMUA),
+    var nPromo = D.items.filter(prItem).length;
+    var maxD = D.items.reduce(function (m, it) { var p = prItem(it); return p ? Math.max(m, p.d) : m; }, 0);
+    var tilePromo = nPromo ? el('button', { class: 'kat kat-promo', type: 'button', 'aria-pressed': String(F.promo), onclick: function () {
+      setPromo(!F.promo); F.k4 = ''; gambarKategori(); saring();
+      var a = $('#alat'); if (a.getBoundingClientRect().top < 60) a.scrollIntoView({ behavior: 'smooth' });
+    } }, el('span', { class: 'kat-foto' }, el('b', null, el('small', { text: 'diskon s/d' }), maxD + '%')), el('span', { class: 'kat-teks' }, el('b', { text: 'Barang promo' }), el('small', { text: nPromo + ' artikel' }))) : null;
+    isiUlang($('#kategori'), tile('', 'Semua barang', D.items.length, IKON_SEMUA), tilePromo,
       ks.map(function (k) { return tile(k, katNama(k), hit[k], (KAT[k] || {}).ikon || IKON_SEMUA); }));
   }
+  function setPromo(on) { F.promo = on; $('#hanyaPromo').setAttribute('aria-pressed', String(on)); }
+
+  /** Tiket promo umum toko (dari juknis promo), dengan status berlaku hari ini. */
+  function gambarPromoToko() {
+    var t = hariIni();
+    var xs = (D.promoToko || []).filter(function (p) { return !p.selesai || p.selesai >= t; });
+    $('#blokPromo').hidden = !xs.length;
+    isiUlang($('#tiketRel'), xs.map(function (p) {
+      var j = String(p.jenis || 'REGULER').toUpperCase(), st = statusPromo(p.mulai, p.selesai);
+      return el('article', { class: 'tiket ' + j.toLowerCase() },
+        el('div', { class: 'tiket-sisi' }, el('span', { svg: '<svg viewBox="0 0 24 24">' + (IKON_JENIS[j] || IKON_JENIS.REGULER) + '</svg>' }), el('small', { text: judul(j) })),
+        el('div', { class: 'tiket-isi' },
+          el('span', { class: 'status ' + st.kelas, text: st.teks }),
+          el('b', { text: p.judul }),
+          p.syarat ? el('p', { text: p.syarat }) : null,
+          p.produk ? el('p', { text: 'Berlaku untuk: ' + p.produk }) : null));
+    }));
+  }
+
+  /** Deretan "Harga promo": artikel promo berfoto, diskon terbesar dulu. */
+  function gambarSorotPromo() {
+    var xs = D.items.filter(function (it) { return prItem(it) && fotoBersih(it).length; })
+      .sort(function (a, b) { return prItem(b).d - prItem(a).d; }).slice(0, 16);
+    $('#sorotPromo').hidden = xs.length < 3 || !!(F.k3 || F.q.trim() || F.gd || F.promo);
+    isiUlang($('#sorotPromoRel'), xs.map(kartu));
+  }
+  $('#sorotPromoSemua').addEventListener('click', function () {
+    setPromo(true); F.urut = 'diskon'; $('#urut').value = 'diskon'; F.k3 = ''; F.k4 = ''; gambarKategori(); saring();
+    $('#alat').scrollIntoView({ behavior: 'smooth' });
+  });
 
   /** Deretan "Baru di toko": artikel baru yang berfoto. Tampil hanya tanpa filter/pencarian. */
   function gambarSorot() {
     var xs = D.items.filter(function (it) { return it.b && fotoBersih(it).length; }).slice(0, 16);
     var box = $('#sorot');
-    box.hidden = xs.length < 4 || !!(F.k3 || F.q.trim() || F.gd);
+    box.hidden = xs.length < 4 || !!(F.k3 || F.q.trim() || F.gd || F.promo);
     isiUlang($('#sorotRel'), xs.map(kartu));
   }
   $('#sorotSemua').addEventListener('click', function () {
-    F.urut = 'baru'; $('#urut').value = 'baru'; F.k3 = ''; F.k4 = ''; gambarKategori(); saring();
+    F.urut = 'baru'; $('#urut').value = 'baru'; F.k3 = ''; F.k4 = ''; setPromo(false); gambarKategori(); saring();
     $('#alat').scrollIntoView({ behavior: 'smooth' });
   });
 
@@ -224,14 +288,17 @@
 
   function saring() {
     var q = F.q.trim().toLowerCase();
-    var dasar = D.items.filter(function (it) { return (!F.k3 || it.k3 === F.k3) && (!F.gd || genderNama(it.gd) === F.gd) && cocokCari(it, q); });
+    var dasar = D.items.filter(function (it) { return (!F.k3 || it.k3 === F.k3) && (!F.gd || genderNama(it.gd) === F.gd) && (!F.promo || prItem(it)) && cocokCari(it, q); });
     gambarSub(dasar);
     gambarSorot();
+    gambarSorotPromo();
     hasil = dasar.filter(function (it) { return !F.k4 || it.k4 === F.k4; });
-    var h = function (it) { return it.hm || it.h || 0; };
+    var h = function (it) { var p = prItem(it); return p ? p.n : (it.hm || it.h || 0); };
+    var dk = function (it) { var p = prItem(it); return p ? p.d : 0; };
     var ada = function (it) { return fotoBersih(it).length ? 1 : 0; };
     var sorter = {
-      pilihan: function (a, b) { return (ada(b) - ada(a)) || (b.b - a.b) || (a.n < b.n ? -1 : 1); },
+      pilihan: function (a, b) { return (ada(b) - ada(a)) || (b.b - a.b) || ((dk(b) ? 1 : 0) - (dk(a) ? 1 : 0)) || (a.n < b.n ? -1 : 1); },
+      diskon: function (a, b) { return (dk(b) - dk(a)) || (ada(b) - ada(a)) || (a.n < b.n ? -1 : 1); },
       baru: function (a, b) { return (b.b - a.b) || (a.n < b.n ? -1 : 1); },
       nama: function (a, b) { return a.n < b.n ? -1 : 1; },
       murah: function (a, b) { return (h(a) || 9e9) - (h(b) || 9e9); },
@@ -239,7 +306,7 @@
     }[F.urut];
     hasil.sort(sorter);
     tampil = PER_HALAMAN;
-    $('#hitung').textContent = hasil.length ? hasil.length + ' artikel tersedia' + (F.k4 ? ' di ' + subNama(F.k4).toLowerCase() : F.k3 ? ' di ' + katNama(F.k3).toLowerCase() : '') : '';
+    $('#hitung').textContent = hasil.length ? hasil.length + ' artikel ' + (F.promo ? 'promo ' : '') + 'tersedia' + (F.k4 ? ' di ' + subNama(F.k4).toLowerCase() : F.k3 ? ' di ' + katNama(F.k3).toLowerCase() : '') : '';
     gambarGrid();
   }
 
@@ -279,22 +346,27 @@
   function kartu(it) {
     var foto = fotoAtauIkon(it, fotoBersih(it)[0], namaTampil(it.n));
     if (it.b) foto.append(el('span', { class: 'baru', text: 'Baru' }));
-    var ht = hargaTeks(it);
+    var ht = hargaTeks(it), pr = prItem(it);
+    if (pr) foto.append(el('span', { class: 'pita', text: '-' + pr.d + '%' }));
     var titik = it.w.slice(0, 5).map(function (w) { return el('i', { style: 'background:' + warnaInfo(w[0])[1], title: warnaInfo(w[0])[0] }); });
-    return el('button', { class: 'kartu', type: 'button', onclick: function () { buka(it); } }, foto,
+    var st = pr ? statusPromo('', D.promoSampai) : null;
+    var harga = pr ? [el('div', { class: 'harga-blok' }, el('span', { class: 'harga promo', text: rp(pr.n) }), pr.h > pr.n ? el('s', { class: 'harga-coret', text: rp(pr.h) }) : null),
+      el('span', { class: 'berlaku' }, ikon(IKON_JAM), st.kelas === 'akhir' ? 'Promo hari terakhir' : 'Promo s/d ' + tglPendek(D.promoSampai))]
+      : el('div', { class: 'harga-blok' }, el('span', { class: 'harga' + (ht ? '' : ' tanya'), text: ht || 'Tanya harga di toko' }));
+    return el('button', { class: 'kartu' + (pr ? ' ada-promo' : ''), type: 'button', onclick: function () { buka(it); } }, foto,
       el('div', { class: 'isi' },
         el('span', { class: 'jenis', text: katNama(it.k3) + ' / ' + subNama(it.k4) }),
         el('h3', { class: 'nama', text: namaTampil(it.n) }),
         el('div', { class: 'titik', 'aria-label': it.w.length + ' warna' }, titik, it.w.length > 5 ? el('small', { text: '+' + (it.w.length - 5) }) : null),
-        el('span', { class: 'harga' + (ht ? '' : ' tanya'), text: ht || 'Tanya harga di toko' })));
+        harga));
   }
 
   /* ---------- detail artikel ---------- */
   var dlg = $('#lembar');
   function buka(it, dariHash) {
-    var wi = 0, uk = '', fi = 0;
+    var wi = Math.max(0, it.w.findIndex(function (w) { return prWarna(w); })), uk = '', fi = 0;
     var tersedia = function (w) { return w[1].filter(function (u) { return u[1]; }); };
-    var ukTersedia = tersedia(it.w[0]);
+    var ukTersedia = tersedia(it.w[wi]);
     if (ukTersedia.length === 1) uk = ukTersedia[0][0];
     var isi = $('#lembarIsi');
     var fotos = fotoBersih(it);
@@ -302,9 +374,17 @@
     function gambar() {
       var w = it.w[wi], wInfo = warnaInfo(w[0]);
       var hargaW = w[2] ? rp(w[2]) : hargaTeks(it);
+      var pw = prWarna(w), stp = pw ? statusPromo('', D.promoSampai) : null;
       var satuUkuran = w[1].length === 1 && w[1][0][0] === 'NOS';
       var teks = 'Halo EIGER Kartasura, saya mau tanya ' + namaTampil(it.n) + ' (kode ' + it.g + ')' +
-        ', warna ' + wInfo[0].toLowerCase() + (uk && uk !== 'NOS' ? ', ukuran ' + uk : '') + '. Apakah masih tersedia di toko?';
+        ', warna ' + wInfo[0].toLowerCase() + (uk && uk !== 'NOS' ? ', ukuran ' + uk : '') +
+        (pw ? ', harga promo ' + rp(pw[1]) + ' (diskon ' + pw[0] + '%)' : '') + '. Apakah masih tersedia di toko?';
+      var blokHarga = pw ? el('div', { class: 'kotak-promo' },
+        el('span', { class: 'status ' + stp.kelas, text: stp.kelas === 'akhir' ? 'Promo hari terakhir' : 'Promo masih berlaku s/d ' + tglPendek(D.promoSampai) }),
+        el('div', { class: 'baris' }, el('span', { class: 'harga promo', text: rp(pw[1]) }), pw[2] > pw[1] ? el('s', { class: 'harga-coret', text: rp(pw[2]) }) : null),
+        pw[2] > pw[1] ? el('span', { class: 'hemat', text: 'Hemat ' + rp(pw[2] - pw[1]) + ' (diskon ' + pw[0] + '%)' }) : null,
+        el('span', { class: 'ket-promo', text: 'Harga promo untuk warna ' + wInfo[0].toLowerCase() + '. Harga bisa berbeda per ukuran, pastikan ke toko.' }))
+        : el('span', { class: 'harga' + (hargaW ? '' : ' tanya'), text: hargaW || 'Tanya harga di toko' });
       var utama = fotoAtauIkon(it, fotos[fi], namaTampil(it.n));
       utama.className = 'foto utama';
       isiUlang(isi, 
@@ -320,12 +400,12 @@
             el('span', { class: 'jenis', text: katNama(it.k3) + ' / ' + subNama(it.k4) + (genderNama(it.gd) ? ' / ' + genderNama(it.gd) : '') }),
             el('h2', { id: 'dNama', text: namaTampil(it.n) }),
             el('span', { class: 'kode', text: 'Kode artikel ' + it.g })),
-          el('span', { class: 'harga' + (hargaW ? '' : ' tanya'), text: hargaW || 'Tanya harga di toko' }),
+          blokHarga,
           el('div', { class: 'blok' }, el('h3', null, 'Warna ', el('span', { text: wInfo[0] })),
             el('div', { class: 'warna' }, it.w.map(function (x, i) {
               return el('button', { type: 'button', 'aria-pressed': String(i === wi), onclick: function () {
                 wi = i; var t = tersedia(it.w[i]); uk = t.length === 1 ? t[0][0] : (t.some(function (u) { return u[0] === uk; }) ? uk : ''); gambar();
-              } }, el('i', { style: 'background:' + warnaInfo(x[0])[1] }), warnaInfo(x[0])[0]);
+              } }, el('i', { style: 'background:' + warnaInfo(x[0])[1] }), warnaInfo(x[0])[0], prWarna(x) ? el('em', { text: '-' + prWarna(x)[0] + '%' }) : null);
             }))),
           satuUkuran ? null : el('div', { class: 'blok' }, el('h3', null, 'Ukuran ', el('span', { text: uk ? uk : 'pilih ukuran' })),
             el('div', { class: 'ukuran' }, w[1].map(function (u) {
@@ -367,6 +447,7 @@
   $('#q').addEventListener('input', function (e) { clearTimeout(tunda); tunda = setTimeout(function () { F.q = e.target.value; if (D) saring(); }, 180); });
   $('#gender').addEventListener('change', function (e) { F.gd = e.target.value; saring(); });
   $('#urut').addEventListener('change', function (e) { F.urut = e.target.value; saring(); });
+  $('#hanyaPromo').addEventListener('click', function () { setPromo(!F.promo); gambarKategori(); saring(); });
   // bilah filter menempel tepat di bawah bilah atas (tinggi bilah atas beda di HP & komputer)
   function ukurAtas() { document.documentElement.style.setProperty('--atas', $('.atas').offsetHeight + 'px'); }
   ukurAtas(); window.addEventListener('resize', ukurAtas);

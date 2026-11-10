@@ -11,7 +11,7 @@
 /** Versi kode. WAJIB dinaikkan setiap kali Code.gs diubah (format yyyy-MM-dd.n),
  *  lalu simpan ke GitHub (alishobrun/hub-toko-2299) SEBELUM dipasang. Halaman Kesehatan Data
  *  membandingkan angka ini dengan GitHub supaya kode yang dipasang di luar GitHub ketahuan. */
-const KODE_VERSI = '2026-11-11.1';
+const KODE_VERSI = '2026-11-11.2';
 
 const CFG = {
   STORE: '2299',
@@ -96,7 +96,9 @@ const TABS = {
   tag_na: ['sku', 'bulan', 'username', 'nama', 'waktu'],
   safe_care: ['kode', 'waktu', 'debit', 'kredit', 'saldo', 'dari', 'akun', 'status', 'jenis', 'mesin', 'alamat', 'ket', 'tgl_jual', 'oleh', 'diubah'],
   // foto katalog pelanggan per generic: otomatis dari eigeradventure.com atau diisi admin
-  katalog_foto: ['generic', 'foto', 'sumber', 'url', 'status', 'dicek', 'oleh']
+  katalog_foto: ['generic', 'foto', 'sumber', 'url', 'status', 'dicek', 'oleh'],
+  // promo umum toko untuk katalog pelanggan (dari juknis promo / web Integrated Hub), diisi admin
+  katalog_promo: ['id', 'judul', 'jenis', 'mulai', 'selesai', 'syarat', 'produk', 'aktif', 'diubah', 'oleh']
 };
 
 const PECAHAN = [100000, 50000, 20000, 10000, 5000, 2000, 1000, 500, 200, 100];
@@ -5451,6 +5453,7 @@ Object.assign(API, {
       if (f) f.setContent(blob.getDataAsString()); else folderSistem_().createFile(blob);
       const p = PropertiesService.getScriptProperties();
       p.setProperty('PROMO_VER', String(Number(p.getProperty('PROMO_VER') || 0) + 1));
+      katalogBaru_();
       log_(u.username, 'list promo ' + bulan, na.length + ' New Arrival, ' + Object.keys(sel).length + ' Store Selected');
       if (u.role !== 'admin') notif_('admin', 'info', 'stok', 'List promo ' + bulan + ' diunggah ' + u.nama, na.length + ' SKU New Arrival · ' + Object.keys(sel).length + ' SKU Store Selected', '#/newarrival');
     }, 60000);
@@ -5518,7 +5521,7 @@ function katalogBaru_() {
   const p = PropertiesService.getScriptProperties();
   p.setProperty('ver_katalog', String(Number(p.getProperty('ver_katalog') || 0) + 1));
 }
-function katalogKunci_() { return 'katalog_v' + (PropertiesService.getScriptProperties().getProperty('ver_katalog') || '0'); }
+function katalogKunci_() { return 'katalog_v' + (PropertiesService.getScriptProperties().getProperty('ver_katalog') || '0') + '_' + today_(); } // status promo berubah tiap hari
 
 function urutUkuran_(a, b) {
   const O = ['XXXS', 'XXS', 'XS', 'S', 'M', 'L', 'XL', 'XXL', '2XL', 'XXXL', '3XL', '4XL', '5XL'];
@@ -5547,6 +5550,16 @@ function katalogSusun_(fotoIkut) {
   let IX = {};
   try { IX = skuIndex_(); } catch (e) { Logger.log('katalog skuIndex: ' + e); }
   const G = {}, varianDipakai = {};
+  // harga promo per SKU dari LIST PROMO bulanan (sheet STORE-SELECTED): hanya bila list bulan ini (berlaku s/d akhir bulan)
+  let PS = {}, promoSampai = '';
+  try {
+    const P = promoBaca_(), bulanIni = today_().slice(0, 7);
+    if (P && P.bulan === bulanIni && P.sel) {
+      PS = P.sel;
+      const q = bulanIni.split('-').map(Number);
+      promoSampai = bulanIni + '-' + pad_(new Date(Date.UTC(q[0], q[1], 0)).getUTCDate());
+    }
+  } catch (e) { Logger.log('katalog promo: ' + e); }
   read_('bin').forEach(function (o) {
     if (!binKatalogOk_(o)) return;
     const sku = String(o.sku).trim(), g = String(o.generic || '').trim() || sku.slice(0, 9);
@@ -5567,7 +5580,13 @@ function katalogSusun_(fotoIkut) {
     if (db > a.baru) a.baru = db;
     const w = a.W[warna] || (a.W[warna] = { vk: vk, U: {}, h: 0 });
     if (hg > w.h) w.h = hg;
-    if ((Number(o.available) || 0) > 0) w.U[ukuran] = 1; else if (!w.U[ukuran]) w.U[ukuran] = 0;
+    if ((Number(o.available) || 0) > 0) {
+      w.U[ukuran] = 1;
+      const ps = PS[sku]; // [disc 0–1, netto, harga normal, remark]
+      if (ps && Number(ps[1]) > 0 && Number(ps[0]) > 0) {
+        if (!w.P || Number(ps[1]) < w.P[1]) w.P = [Number(ps[0]), Number(ps[1]), Number(ps[2]) || w.h || 0];
+      }
+    } else if (!w.U[ukuran]) w.U[ukuran] = 0;
     varianDipakai[vk] = warna;
   });
   // ukuran lengkap per varian dari indeks SKU master → ukuran yang tidak ada di toko tampil "kosong"
@@ -5594,17 +5613,25 @@ function katalogSusun_(fotoIkut) {
       Object.keys(run[x.vk] || {}).forEach(function (u) { if (x.U[u] == null) x.U[u] = 0; });
       const uk = Object.keys(x.U).sort(urutUkuran_);
       if (!uk.some(function (u) { return x.U[u]; })) return; // warna tanpa ukuran tersedia tidak ditampilkan
-      w.push([kode, uk.map(function (u) { return [u, x.U[u]]; }), x.h]); // [warna, [[ukuran, tersedia 1/0]], harga warna ini]
+      const row = [kode, uk.map(function (u) { return [u, x.U[u]]; }), x.h]; // [warna, [[ukuran, tersedia 1/0]], harga warna ini, promo?]
+      if (x.P) row.push([Math.round(x.P[0] * 100), x.P[1], x.P[2] || x.h]); // [diskon %, harga promo, harga normal]
+      w.push(row);
     });
     if (!w.length) return;
     w.sort(function (p, q) { return p[0] < q[0] ? -1 : 1; });
     const it = { g: g, n: a.n, k3: a.k3, k4: a.k4, gd: a.gd, ac: a.ac, h: a.h, hm: a.hMin && a.hMin < a.h ? a.hMin : 0, b: (a.baru && a.baru >= batasBaru) || masukToko[g] ? 1 : 0, w: w };
     if (fotoIkut && F[g]) it.f = F[g];
+    const pw = w.filter(function (r) { return r[3]; });
+    if (pw.length) {
+      const murah = pw.reduce(function (m, r) { return !m || r[3][1] < m[3][1] ? r : m; }, null);
+      it.pr = { d: pw.reduce(function (m, r) { return Math.max(m, r[3][0]); }, 0), n: murah[3][1], h: murah[3][2] };
+    }
     items.push(it);
   });
   items.sort(function (p, q) { return (q.b - p.b) || (p.n < q.n ? -1 : 1); });
   const ups = read_('bin_upload'), last = ups.length ? ups[ups.length - 1] : null;
-  return { toko: CFG.STORE_NAME, wa: KATALOG.WA, diperbarui: last ? String(last.waktu) : '', items: items };
+  return { toko: CFG.STORE_NAME, wa: KATALOG.WA, diperbarui: last ? String(last.waktu) : '', items: items,
+    promoSampai: promoSampai, promoToko: fotoIkut ? promoTokoAktif_() : [] };
 }
 
 function katalogData_() {
@@ -5786,7 +5813,54 @@ function pasangCariFoto_() {
   ScriptApp.newTrigger('cariFotoKatalog').timeBased().everyDays(1).atHour(3).create();
 }
 
+
+/* ---------- promo umum toko (tab katalog_promo) ---------- */
+function promoTokoOut_(r) {
+  return { id: String(r.id), judul: String(r.judul || ''), jenis: String(r.jenis || ''), mulai: toIsoDate_(r.mulai) || String(r.mulai || ''),
+    selesai: toIsoDate_(r.selesai) || String(r.selesai || ''), syarat: String(r.syarat || ''), produk: String(r.produk || ''), aktif: String(r.aktif || 'ya') };
+}
+/** Promo yang ditampilkan ke pelanggan: aktif dan belum berakhir (yang akan datang ikut, status dihitung di halaman). */
+function promoTokoAktif_() {
+  const t = today_();
+  return read_('katalog_promo').map(promoTokoOut_).filter(function (p) { return p.judul && p.aktif !== 'tidak' && (!p.selesai || p.selesai >= t); })
+    .sort(function (a, b) { return (a.mulai > t ? 1 : 0) - (b.mulai > t ? 1 : 0) || (a.selesai < b.selesai ? -1 : 1); });
+}
+
 Object.assign(API, {
+  /** Admin: semua promo toko (termasuk yang sudah lewat / dinonaktifkan). */
+  katalogPromoList: function (req) {
+    auth_(req, true);
+    return read_('katalog_promo').map(promoTokoOut_).sort(function (a, b) { return a.selesai < b.selesai ? 1 : -1; });
+  },
+  /** Admin: tambah / ubah satu promo toko. */
+  katalogPromoSimpan: function (req) {
+    const u = auth_(req, true), p = req.promo || {};
+    const judul = String(p.judul || '').trim().slice(0, 120);
+    const mulai = toIsoDate_(p.mulai), selesai = toIsoDate_(p.selesai);
+    if (!judul) throw new Error('Nama promo wajib diisi');
+    if (!mulai || !selesai) throw new Error('Tanggal mulai dan selesai wajib diisi');
+    if (selesai < mulai) throw new Error('Tanggal selesai tidak boleh sebelum tanggal mulai');
+    const id = String(p.id || '') || Utilities.getUuid().slice(0, 8);
+    const row = { id: id, judul: judul, jenis: String(p.jenis || 'Reguler').slice(0, 20), mulai: mulai, selesai: selesai,
+      syarat: String(p.syarat || '').slice(0, 200), produk: String(p.produk || '').slice(0, 200), aktif: p.aktif === 'tidak' ? 'tidak' : 'ya', diubah: now_(), oleh: u.username };
+    withLock_(function () {
+      if (!updateRow_('katalog_promo', 'id', id, row)) append_('katalog_promo', row);
+      katalogBaru_();
+    });
+    log_(u.username, 'promo katalog', judul + ' · ' + mulai + ' s/d ' + selesai);
+    return promoTokoOut_(row);
+  },
+  /** Admin: hapus satu promo toko. */
+  katalogPromoHapus: function (req) {
+    const u = auth_(req, true), id = String(req.id || '');
+    withLock_(function () {
+      writeAll_('katalog_promo', read_('katalog_promo').filter(function (r) { return String(r.id) !== id; }));
+      katalogBaru_();
+    });
+    log_(u.username, 'hapus promo katalog', id);
+    return true;
+  },
+
   /** PUBLIK (tanpa login): data katalog untuk pelanggan. Tanpa jumlah stok. */
   katalog: function () { return katalogData_(); },
 

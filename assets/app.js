@@ -6164,6 +6164,69 @@
   }
 
 
+  /* ---------- Katalog pelanggan: promo umum toko (tiket "Promo di toko") ---------- */
+  function promoToko(box) {
+    var JENIS = ['Reguler', 'Event', 'Banking', 'EAC'];
+    var data = [], edit = null;
+    function status(p) {
+      var t = todayJkt();
+      if (p.aktif === 'tidak') return ['Disembunyikan', 'muted'];
+      if (p.selesai < t) return ['Sudah berakhir', 'muted'];
+      if (p.mulai > t) return ['Mulai ' + dShort(p.mulai), 'c-warn'];
+      return [p.selesai === t ? 'Hari terakhir' : 'Berlaku s/d ' + dShort(p.selesai), 'c-good'];
+    }
+    function load() {
+      api('katalogPromoList').then(function (d) { data = d; draw(); }).catch(function (e) { box.replaceChildren(errBox(e)); });
+    }
+    function form(p) {
+      p = p || { jenis: 'Reguler', mulai: todayJkt(), selesai: todayJkt() };
+      var f = {
+        judul: el('input', { class: 'hb-search', value: p.judul || '', placeholder: 'Contoh: Buy More Save More, beli 2 disc 5%' }),
+        jenis: el('select', { class: 'sel' }, JENIS.map(function (j) { var o = el('option', { value: j, text: j }); if (String(p.jenis).toLowerCase() === j.toLowerCase()) o.selected = true; return o; })),
+        mulai: el('input', { class: 'hb-search', type: 'date', value: p.mulai || '' }),
+        selesai: el('input', { class: 'hb-search', type: 'date', value: p.selesai || '' }),
+        syarat: el('input', { class: 'hb-search', value: p.syarat || '', placeholder: 'Contoh: Min. belanja Rp500.000' }),
+        produk: el('input', { class: 'hb-search', value: p.produk || '', placeholder: 'Contoh: Produk non promo, kecuali New Arrival' }),
+        aktif: el('select', { class: 'sel' }, el('option', { value: 'ya', text: 'Tampil di katalog' }), el('option', { value: 'tidak', text: 'Sembunyikan' }))
+      };
+      f.aktif.value = p.aktif === 'tidak' ? 'tidak' : 'ya';
+      var simpan = el('button', { class: 'btn btn-primary btn-sm', type: 'button', text: p.id ? 'Simpan perubahan' : 'Tambah promo', onclick: function () {
+        simpan.disabled = true;
+        api('katalogPromoSimpan', { promo: { id: p.id || '', judul: f.judul.value, jenis: f.jenis.value, mulai: f.mulai.value, selesai: f.selesai.value, syarat: f.syarat.value, produk: f.produk.value, aktif: f.aktif.value } })
+          .then(function () { toast(p.id ? 'Promo diperbarui' : 'Promo ditambahkan'); edit = null; load(); })
+          .catch(function (e) { simpan.disabled = false; toast(e.message, true); });
+      } });
+      var lbl = function (t, x) { return el('div', { class: 'field' }, el('label', { text: t }), x); };
+      return el('div', { class: 'kt-form' }, lbl('Nama promo', f.judul),
+        el('div', { class: 'kt-form-2' }, lbl('Jenis', f.jenis), lbl('Mulai', f.mulai), lbl('Selesai', f.selesai), lbl('Tampil', f.aktif)),
+        lbl('Syarat (opsional)', f.syarat), lbl('Berlaku untuk (opsional)', f.produk),
+        el('div', { class: 'tags' }, simpan, el('button', { class: 'btn btn-ghost btn-sm', type: 'button', text: 'Batal', onclick: function () { edit = null; draw(); } })));
+    }
+    function draw() {
+      var t = todayJkt();
+      var urut = data.slice().sort(function (a, b) { var aa = a.selesai < t ? 1 : 0, bb = b.selesai < t ? 1 : 0; return (aa - bb) || (a.mulai < b.mulai ? -1 : 1); });
+      box.replaceChildren(el('div', { class: 'card-head' }, el('div', null, el('h3', { text: 'Promo di toko' }),
+          el('p', { class: 'sub', text: 'Tampil sebagai tiket promo di katalog, lengkap dengan status berlaku (hari terakhir, mulai besok, berlaku s/d). Salin dari menu Info Promo (Juknis) di Integrated Hub Jateng 01. Promo yang sudah lewat otomatis hilang dari katalog.' })),
+          edit === 'baru' ? null : el('button', { class: 'btn btn-primary btn-sm', type: 'button', text: 'Tambah promo', onclick: function () { edit = 'baru'; draw(); } })),
+        edit === 'baru' ? form(null) : null,
+        urut.length ? el('div', { class: 'kt-rows' }, urut.map(function (p) {
+          if (edit === p.id) return form(p);
+          var st = status(p);
+          return el('div', { class: 'kt-row' },
+            el('div', { class: 'kt-main' }, el('b', { text: p.judul }),
+              el('small', null, p.jenis + ' · ' + dShort(p.mulai) + ' – ' + dShort(p.selesai) + ' · ', el('b', { class: st[1], text: st[0] })),
+              p.syarat || p.produk ? el('small', { text: [p.syarat, p.produk].filter(Boolean).join(' · ') }) : null),
+            el('div', { class: 'tags', style: 'align-self:center' },
+              el('button', { class: 'btn btn-ghost btn-sm', type: 'button', text: 'Ubah', onclick: function () { edit = p.id; draw(); } }),
+              el('button', { class: 'btn btn-ghost btn-sm', type: 'button', text: 'Hapus', onclick: function () {
+                if (!confirm('Hapus promo "' + p.judul + '"?')) return;
+                api('katalogPromoHapus', { id: p.id }).then(function () { toast('Promo dihapus'); load(); }).catch(function (e) { toast(e.message, true); });
+              } })));
+        })) : el('div', { class: 'empty', text: 'Belum ada promo toko. Tambahkan dari Info Promo (Juknis) Integrated Hub.' }));
+    }
+    load();
+  }
+
   /* ---------- Katalog pelanggan: link & foto artikel (admin) ---------- */
   function viewKatalog(v) {
     pageHead(v, 'Katalog Pelanggan', 'Halaman katalog untuk pelanggan: barang yang tersedia di toko, tanpa jumlah stok. Foto dicari otomatis dari eigeradventure.com; yang tidak ketemu bisa diisi di sini.');
@@ -6175,8 +6238,10 @@
           el('button', { class: 'btn btn-primary btn-sm', type: 'button', text: 'Salin link', onclick: function () { copyText(url).then(function () { toast('Link katalog disalin'); }, function () { toast('Gagal menyalin', true); }); } }),
           el('a', { class: 'btn btn-ghost btn-sm', href: url, target: '_blank', rel: 'noopener', text: 'Buka katalog' })))));
     var stat = el('div', { class: 'card section' }, skel(1));
+    var promoBox = el('div', { class: 'card section' }, skel(1));
     var list = el('div', { class: 'card section' }, skel(3));
-    v.append(stat, list);
+    v.append(promoBox, stat, list);
+    promoToko(promoBox);
     var D = null, saring = 'belum', q = '', tampil = 60;
 
     function load() {

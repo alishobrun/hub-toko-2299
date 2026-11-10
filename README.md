@@ -43,6 +43,9 @@ Halaman publik untuk pelanggan di `katalog/` (alamatnya: `<alamat GitHub Pages>/
 - **Tidak ada jumlah stok.** Per warna hanya ukuran *tersedia* atau *kosong* (dicoret). Data sales, pelanggan dan lokasi bin tidak dikirim.
 - Data dari aksi `katalog` (tanpa token): stok tab `bin` (available > 0, barang jual, bukan Damage), nama/gender/harga (Loc Amount) dari `master`, ukuran lengkap dari `master_sku`. Label **Baru** = Created On ≤ batas New Arrival. Disimpan di cache dan dihitung ulang otomatis saat By Bin atau master diunggah.
 - **Foto:** pemicu `cariFotoKatalog` (tiap hari 03.00, dilanjutkan otomatis bila belum selesai) memakai pencarian situs eigeradventure per artikel (nama lengkap, lalu nama pendek) dan hanya memakai foto produk yang `skuProduct`-nya sama dengan kode generic. Cadangan: halaman `eigeradventure.com/d/<nama-artikel>` yang mencantumkan kode generic. Artikel yang dicek dengan cara lama otomatis dicek ulang (`KATALOG.METODE`). Hasil di tab `katalog_foto`. Artikel yang tidak ketemu dicoba lagi setelah 14 hari.
+- **Harga promo per artikel** dari LIST PROMO bulanan (sheet STORE-SELECTED, menu New Arrival & Promo): pita diskon, harga promo, harga coret dan "Promo s/d <akhir bulan>". Hanya dipakai bila list promo untuk bulan berjalan; filter **Hanya promo** dan urutan **Diskon terbesar**.
+- **Promo di toko** (tiket promo umum: event, banking, EAC, dll.) dari tab `katalog_promo`, diisi admin dari Info Promo (Juknis) Integrated Hub Jateng 01. Status berlaku dihitung otomatis tiap hari; yang sudah lewat hilang sendiri.
+- Tampilan memakai warna Eigerindo (navy & oranye) dan font Plus Jakarta Sans + Bricolage Grotesque.
 - Menu admin **Katalog Pelanggan**: link untuk dibagikan, status foto, jalankan pencarian, dan isi link foto manual (eigeradventure atau Google Drive). Isian manual tidak pernah ditimpa pencarian otomatis.
 
 ## Rumus sales
