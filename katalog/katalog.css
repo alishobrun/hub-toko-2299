@@ -325,7 +325,7 @@ svg { flex: none; }
   }
 }
 /* header: Merbabu keemasan, ditimpa oranye supaya tetap terasa Eigerindo */
-.atas { background: linear-gradient(180deg, rgba(229, 83, 42, .86), rgba(242, 107, 58, .74)), var(--foto-atas) center 38% / cover no-repeat, var(--oranye); }
+.atas { background: linear-gradient(90deg, rgba(200, 62, 22, .82) 0%, rgba(229, 83, 42, .5) 50%, rgba(10, 26, 79, .35) 100%), var(--foto-atas) center 62% / cover no-repeat, var(--oranye); }
 /* panggung di belakang banner: lautan awan, memudar ke abu latar */
 .beranda { position: relative; isolation: isolate; padding-top: 12px; }
 .beranda::before {
