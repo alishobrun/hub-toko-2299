@@ -6167,7 +6167,31 @@
   /* ---------- Katalog pelanggan: promo umum toko (tiket "Promo di toko") ---------- */
   function promoToko(box) {
     var JENIS = ['Reguler', 'Event', 'Banking', 'EAC'];
-    var data = [], edit = null;
+    var data = [], edit = null, hasilJuknis = null;
+    function muatSkrip(src) {
+      return new Promise(function (ok, no) { var x = document.createElement('script'); x.src = src; x.onload = ok; x.onerror = function () { no(new Error('Gagal memuat ' + src)); }; document.head.appendChild(x); });
+    }
+    /** Unggah PDF Juknis Promo: dibaca di browser (pdf.js), promo toko reguler disimpan ke katalog. */
+    function unggahJuknis(file, btn) {
+      if (!file) return;
+      if (!/\.pdf$/i.test(file.name)) { toast('Pilih file PDF Juknis Promo', true); return; }
+      btn.disabled = true; toast('Membaca ' + file.name + '…');
+      var siap = window.pdfjsLib ? Promise.resolve() : muatSkrip('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js').then(function () {
+        window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+      });
+      siap.then(function () { return window.Juknis ? null : muatSkrip('assets/juknis.js?v=' + Date.now()); })
+        .then(function () { return file.arrayBuffer(); })
+        .then(function (buf) { return window.Juknis.teksPdf(window.pdfjsLib, new Uint8Array(buf)); })
+        .then(function (pages) {
+          var r = window.Juknis.baca(pages), reg = window.Juknis.untukTokoReguler(r.promos);
+          if (!reg.length) throw new Error('Tidak ada program promo toko reguler yang terbaca dari file ini');
+          hasilJuknis = { file: file.name, bulan: r.bulan, total: r.promos.length, dipakai: reg.length,
+            dilewati: r.promos.filter(function (p) { return reg.indexOf(p) < 0; }).map(function (p) { return p.judul; }) };
+          return api('katalogPromoImpor', { promos: reg, sumber: 'juknis', file: file.name });
+        })
+        .then(function (r) { btn.disabled = false; toast(r.jumlah + ' promo dari Juknis tersimpan ke katalog'); load(); })
+        .catch(function (e) { btn.disabled = false; toast(e.message, true); });
+    }
     function status(p) {
       var t = todayJkt();
       if (p.aktif === 'tidak') return ['Disembunyikan', 'muted'];
@@ -6222,8 +6246,19 @@
       box.replaceChildren(el('div', { class: 'card-head' }, el('div', null, el('h3', { text: 'Promo di toko' }),
           el('p', { class: 'sub', text: 'Tampil sebagai tiket promo di katalog, lengkap dengan status berlaku (hari terakhir, mulai besok, berlaku s/d). Promo yang sudah lewat otomatis hilang dari katalog.' })),
           edit === 'baru' ? null : el('button', { class: 'btn btn-primary btn-sm', type: 'button', text: 'Tambah promo', onclick: function () { edit = 'baru'; draw(); } })),
+        (function () {
+          var inp = el('input', { type: 'file', accept: 'application/pdf,.pdf', hidden: true });
+          var btn = el('button', { class: 'btn btn-primary btn-sm', type: 'button', onclick: function () { inp.click(); } }, icon('upload'), 'Unggah Juknis PDF');
+          inp.addEventListener('change', function () { unggahJuknis(inp.files[0], btn); inp.value = ''; });
+          return el('div', { class: 'kt-bm kt-juknis' },
+            el('div', null, el('b', { text: 'Cara utama: unggah PDF Juknis Promo bulanan' }),
+              el('p', { class: 'sub', style: 'margin:4px 0 0', text: 'Semua program promo dibaca otomatis: periode, minimal belanja, dan ketentuan (cashback, cicilan, aturan beli 2/3 pcs, dll.). Promo Factory Store, Bazaar dan toko terpilih dilewati. Promo hasil unggahan sebelumnya diganti; promo yang diisi manual tetap.' }),
+              hasilJuknis ? el('p', { class: 'sub', style: 'margin:6px 0 0' }, el('b', { text: 'Terakhir: ' + hasilJuknis.file + ' · ' + hasilJuknis.dipakai + ' dari ' + hasilJuknis.total + ' program dipakai.' }),
+                hasilJuknis.dilewati.length ? ' Dilewati: ' + hasilJuknis.dilewati.join(', ') + '.' : '') : null),
+            btn, inp);
+        })(),
         el('div', { class: 'kt-bm' },
-          el('div', null, el('b', { text: 'Ambil otomatis dari Integrated Hub (sekali klik)' }),
+          el('div', null, el('b', { text: 'Cara cadangan: ambil dari Integrated Hub (sekali klik)' }),
             el('ol', null,
               el('li', { text: 'Sekali saja: seret tombol oranye ini ke bilah bookmark Chrome (Ctrl+Shift+B untuk menampilkan bilah bookmark).' }),
               el('li', { text: 'Tiap ada Juknis baru: buka Integrated Hub Jateng 01, login, buka menu Info Promo (Juknis).' }),
@@ -6236,7 +6271,8 @@
           var st = status(p);
           return el('div', { class: 'kt-row' },
             el('div', { class: 'kt-main' }, el('b', { text: p.judul }),
-              el('small', null, p.jenis + ' · ' + dShort(p.mulai) + ' – ' + dShort(p.selesai) + ' · ', el('b', { class: st[1], text: st[0] }), p.sumber === 'hub' ? ' · dari Integrated Hub' : p.sumber === 'manual' ? ' · diisi manual' : ''),
+              el('small', null, p.jenis + ' · ' + dShort(p.mulai) + ' – ' + dShort(p.selesai) + ' · ', el('b', { class: st[1], text: st[0] }), p.sumber === 'hub' ? ' · dari Integrated Hub' : p.sumber === 'juknis' ? ' · dari Juknis PDF' : p.sumber === 'manual' ? ' · diisi manual' : ''),
+              p.ket ? el('small', { text: p.ket }) : null,
               p.syarat || p.produk ? el('small', { text: [p.syarat, p.produk].filter(Boolean).join(' · ') }) : null),
             el('div', { class: 'tags', style: 'align-self:center' },
               el('button', { class: 'btn btn-ghost btn-sm', type: 'button', text: 'Ubah', onclick: function () { edit = p.id; draw(); } }),

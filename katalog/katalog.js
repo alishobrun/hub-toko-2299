@@ -237,8 +237,9 @@
         el('div', { class: 'tiket-isi' },
           el('span', { class: 'status ' + st.kelas, text: st.teks }),
           el('b', { text: p.judul }),
-          p.syarat ? el('p', { text: p.syarat }) : null,
-          p.produk ? el('p', { text: 'Berlaku untuk: ' + p.produk }) : null));
+          p.syarat ? el('p', { class: 'tiket-syarat', text: p.syarat }) : null,
+          p.ket ? el('ul', { class: 'tiket-ket' }, p.ket.split(/\s*•\s*/).filter(Boolean).slice(0, 3).map(function (k) { return el('li', { text: k }); })) : null,
+          p.produk ? el('p', { text: 'Berlaku untuk: ' + p.produk.replace(/\s*\((list|exc)[^)]*\)/gi, '') }) : null));
     }));
   }
 

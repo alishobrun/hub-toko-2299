@@ -96,7 +96,7 @@ a { color: inherit; }
 /* ---------- tiket promo toko ---------- */
 .blok-promo, .sorot { max-width: var(--lebar); margin: 30px auto 0; padding: 0 20px; }
 .tiket-rel {
-  display: grid; grid-auto-flow: column; grid-auto-columns: minmax(270px, 320px); gap: 14px;
+  display: grid; grid-auto-flow: column; grid-auto-columns: minmax(280px, 330px); gap: 14px; align-items: start;
   overflow-x: auto; scroll-snap-type: x mandatory; padding: 2px 2px 8px; scrollbar-width: thin;
 }
 .tiket {
@@ -120,6 +120,10 @@ a { color: inherit; }
 .tiket-isi { padding: 12px 14px 13px; display: flex; flex-direction: column; gap: 5px; min-width: 0; }
 .tiket-isi b { font-size: 14.5px; line-height: 1.3; font-weight: 800; }
 .tiket-isi p { margin: 0; font-size: 12.5px; color: var(--abu); line-height: 1.4; }
+.tiket-isi .tiket-syarat { color: var(--tinta); font-weight: 700; }
+.tiket-ket { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 3px; }
+.tiket-ket li { position: relative; padding-left: 13px; font-size: 12.5px; line-height: 1.4; color: var(--tinta); }
+.tiket-ket li::before { content: ''; position: absolute; left: 2px; top: .5em; width: 5px; height: 5px; border-radius: 50%; background: var(--oranye); }
 .status { align-self: flex-start; display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; padding: 3px 9px; border-radius: 999px; background: #E3F4EE; color: var(--hijau); }
 .status::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
 .status.akhir { background: var(--oranye-50); color: var(--promo); }
