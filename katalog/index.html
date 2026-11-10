@@ -2,8 +2,8 @@
 <html lang="id">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#0A1A4F">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#F26B3A">
   <title>Katalog EIGER Kartasura</title>
   <meta name="description" content="Cek barang dan promo yang tersedia di EIGER Store A. Yani Kartasura, Sukoharjo, lalu tanya langsung lewat WhatsApp.">
   <meta property="og:title" content="Katalog EIGER Kartasura">
@@ -13,108 +13,88 @@
   <link rel="apple-touch-icon" href="../assets/icon-180.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wdth,wght@12..96,75..100,500..800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="katalog.css?v=202611110500">
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="katalog.css?v=202611110700">
 </head>
 <body>
-  <header class="atas">
+  <header class="atas" id="atas">
     <div class="atas-in">
       <a class="merek" href="./" aria-label="Katalog EIGER Kartasura, halaman awal">
-        <svg class="merek-ikon" viewBox="0 0 32 32" aria-hidden="true"><circle cx="21" cy="11" r="4.5" fill="#F26B3A"/><path d="M2 27 12.5 9l5 8.5 3-4.5L30 27Z" fill="#fff"/><path d="m12.5 9 2.6 4.5-2.6-1.2-2.4 1.6Z" fill="#0A1A4F" opacity=".35"/></svg>
+        <svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="22" cy="10" r="4.5" fill="#FFE1D3"/><path d="M2 27 12.5 9l5 8.5 3-4.5L30 27Z" fill="#fff"/></svg>
         <span><b>EIGER</b><small>Kartasura</small></span>
       </a>
       <label class="cari">
         <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.6-3.6"/></svg>
-        <input id="q" type="search" placeholder="Cari carrier, sandal, jaket…" autocomplete="off" enterkeyhint="search" aria-label="Cari barang">
+        <input id="q" type="search" placeholder="Cari di EIGER Kartasura" autocomplete="off" enterkeyhint="search" aria-label="Cari barang">
       </label>
+      <a class="atas-wa" id="waAtas" href="#" target="_blank" rel="noopener" aria-label="Chat toko di WhatsApp">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a9 9 0 0 0-7.8 13.5L3 21l4.6-1.2A9 9 0 1 0 12 3Z"/></svg>
+      </a>
     </div>
   </header>
 
-  <section class="hero">
-    <!-- ornamen: garis kontur, matahari & tiga lapis punggung gunung -->
-    <svg class="hero-gunung" viewBox="0 0 1440 360" preserveAspectRatio="xMidYMax slice" aria-hidden="true">
-      <g fill="none" stroke="#2B4CB0" stroke-width="1.1" opacity=".55">
-        <path d="M-20 120c160-50 260 10 420-30s260-70 420-40 300 50 640-10"/>
-        <path d="M-20 150c180-46 280 6 440-26s250-60 410-34 320 44 630-8"/>
-        <path d="M-20 90c150-40 270 20 400-24s300-72 450-40 280 40 630-20"/>
-      </g>
-      <circle cx="1080" cy="150" r="58" fill="#F26B3A"/>
-      <circle cx="1080" cy="150" r="86" fill="none" stroke="#F26B3A" stroke-opacity=".28" stroke-width="2" stroke-dasharray="3 9"/>
-      <path d="M0 360V250l120-60 90 40 140-110 110 80 90-50 160 120 120-70 150 90 130-110 140 90 90-40 100 60v90Z" fill="#16379A" opacity=".85"/>
-      <path d="M0 360V290l160-70 120 60 160-90 140 100 130-60 170 80 150-70 170 80 140-50 100 40v80Z" fill="#0F2A7A"/>
-      <path d="M0 360v-38l200-36 180 30 200-46 220 44 200-34 220 40 220-30v70Z" fill="#0A1A4F"/>
-    </svg>
-    <div class="hero-in">
-      <p class="toko">EIGER Store A. Yani Kartasura, Sukoharjo</p>
-      <h1>Siap jalan dari Kartasura</h1>
-      <p class="lead">Lihat barang dan promo yang sedang ada di toko. Pilih warna dan ukuran, lalu tanya langsung lewat WhatsApp.</p>
-      <p class="update" id="update"></p>
-    </div>
-  </section>
-
-  <nav class="kategori" id="kategori" aria-label="Kategori"></nav>
-
-  <section class="blok-promo" id="blokPromo" hidden>
-    <div class="judul-blok"><h2>Promo di toko</h2><span class="judul-garis" aria-hidden="true"></span></div>
-    <div class="tiket-rel" id="tiketRel"></div>
-  </section>
-
-  <section class="sorot" id="sorotPromo" hidden>
-    <div class="judul-blok"><h2>Harga promo</h2><span class="judul-garis" aria-hidden="true"></span><button class="sorot-semua" type="button" id="sorotPromoSemua">Lihat semua</button></div>
-    <div class="sorot-rel" id="sorotPromoRel"></div>
-  </section>
-
-  <section class="sorot" id="sorot" hidden>
-    <div class="judul-blok"><h2>Baru di toko</h2><span class="judul-garis" aria-hidden="true"></span><button class="sorot-semua" type="button" id="sorotSemua">Lihat semua</button></div>
-    <div class="sorot-rel" id="sorotRel"></div>
-  </section>
-
-  <main>
-    <div class="alat" id="alat">
-      <div class="sub" id="sub" role="group" aria-label="Jenis barang"></div>
-      <div class="pilih">
-        <button class="saring-promo" id="hanyaPromo" type="button" aria-pressed="false" hidden>Hanya promo</button>
-        <label><span>Untuk</span>
-          <select id="gender"><option value="">Semua</option></select>
-        </label>
-        <label><span>Urutkan</span>
-          <select id="urut">
-            <option value="pilihan">Pilihan toko</option>
-            <option value="diskon">Diskon terbesar</option>
-            <option value="baru">Terbaru dulu</option>
-            <option value="murah">Harga terendah</option>
-            <option value="mahal">Harga tertinggi</option>
-            <option value="nama">Nama A–Z</option>
-          </select>
-        </label>
+  <div class="halaman">
+    <!-- beranda: banner, kategori, strip promo (disembunyikan saat mencari / menyaring) -->
+    <section class="beranda" id="beranda">
+      <div class="banner" id="banner" aria-roledescription="carousel" aria-label="Promo">
+        <div class="banner-rel" id="bannerRel"></div>
+        <div class="banner-titik" id="bannerTitik"></div>
       </div>
-    </div>
-    <p class="hitung" id="hitung" aria-live="polite"></p>
-    <section class="grid" id="grid"></section>
-    <div class="lagi" id="lagi"></div>
-  </main>
-
-  <footer class="kaki">
-    <svg class="kaki-gunung" viewBox="0 0 1440 80" preserveAspectRatio="none" aria-hidden="true"><path d="M0 80V52l140-30 110 22 150-40 130 34 120-20 170 30 140-26 160 28 120-18 200 30v18Z" fill="#0A1A4F"/></svg>
-    <div class="kaki-in">
-      <div>
-        <b>EIGER Store A. Yani Kartasura</b>
-        <p>Ketersediaan dan harga promo mengikuti data terakhir di toko dan bisa berubah. Pastikan lewat WhatsApp sebelum datang.</p>
+      <div class="info-toko">
+        <span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21Z"/><circle cx="12" cy="9.5" r="2.5"/></svg>EIGER Store A. Yani Kartasura, Sukoharjo</span>
+        <span id="update"></span>
       </div>
-      <a class="wa-kaki" id="waKaki" href="#" target="_blank" rel="noopener">Chat toko di WhatsApp</a>
-    </div>
-  </footer>
 
-  <a class="wa-mengambang" id="waFab" href="#" target="_blank" rel="noopener" aria-label="Chat toko di WhatsApp">
-    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a9 9 0 0 0-7.8 13.5L3 21l4.6-1.2A9 9 0 1 0 12 3Z"/><path d="M8.8 8.6c.2-.5.5-.5.8-.5h.5c.2 0 .4 0 .6.5l.7 1.7c.1.2 0 .4-.1.6l-.5.6c-.1.2-.2.3 0 .6.5.9 1.6 2 2.6 2.4.3.1.4.1.6-.1l.6-.7c.2-.2.4-.2.6-.1l1.7.8c.3.1.4.3.4.5 0 .6-.3 1.4-1 1.7-.6.3-1.5.4-3.3-.4a9.4 9.4 0 0 1-4.2-4c-.6-1.2-.6-2.3-.2-3Z" fill="currentColor" stroke="none"/></svg>
-    <span>Chat toko</span>
-  </a>
+      <section class="kotak">
+        <div class="kotak-kepala"><h2>Kategori</h2></div>
+        <div class="kategori" id="kategori"></div>
+      </section>
 
-  <dialog class="lembar" id="lembar" aria-labelledby="dNama">
+      <section class="kotak promo-strip" id="stripPromo" hidden>
+        <div class="kotak-kepala strip-kepala">
+          <h2><span class="petir" aria-hidden="true">⚡</span>PROMO TOKO</h2>
+          <span class="hitung-mundur" id="hitungMundur" aria-label="Sisa waktu promo"></span>
+          <button class="lihat" type="button" id="stripSemua">Lihat semua ›</button>
+        </div>
+        <div class="strip-rel" id="stripRel"></div>
+      </section>
+    </section>
+
+    <!-- daftar produk -->
+    <section class="kotak daftar" id="daftar">
+      <div class="daftar-kepala" id="daftarKepala"><h2 id="judulDaftar">Rekomendasi untukmu</h2></div>
+      <div class="tab-urut" id="tabUrut" role="tablist" aria-label="Urutkan">
+        <button type="button" role="tab" data-u="pilihan" aria-selected="true">Terkait</button>
+        <button type="button" role="tab" data-u="baru" aria-selected="false">Terbaru</button>
+        <button type="button" role="tab" data-u="diskon" aria-selected="false">Promo</button>
+        <button type="button" role="tab" data-u="harga" aria-selected="false" class="tab-harga">Harga <i aria-hidden="true"></i></button>
+      </div>
+      <div class="saring" id="saring"></div>
+      <p class="hitung" id="hitung" aria-live="polite"></p>
+      <div class="grid" id="grid"></div>
+      <div class="lagi" id="lagi"></div>
+    </section>
+
+    <footer class="kaki">
+      <b>EIGER Store A. Yani Kartasura</b>
+      <p>Ketersediaan dan harga promo mengikuti data terakhir di toko dan bisa berubah. Pastikan lewat WhatsApp sebelum datang.</p>
+    </footer>
+  </div>
+
+  <!-- menu bawah (HP) -->
+  <nav class="menu-bawah" aria-label="Menu">
+    <button type="button" data-m="beranda" aria-current="page"><svg viewBox="0 0 24 24"><path d="M3 11 12 3l9 8v9a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1Z"/></svg>Beranda</button>
+    <button type="button" data-m="kategori"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><rect x="14" y="14" width="7" height="7" rx="2"/></svg>Kategori</button>
+    <button type="button" data-m="promo"><svg viewBox="0 0 24 24"><path d="M3 12V4h8l10 10-8 8Z"/><circle cx="7.5" cy="8.5" r="1.5"/></svg>Promo</button>
+    <a id="waBawah" href="#" target="_blank" rel="noopener"><svg viewBox="0 0 24 24"><path d="M12 3a9 9 0 0 0-7.8 13.5L3 21l4.6-1.2A9 9 0 1 0 12 3Z"/></svg>Chat</a>
+  </nav>
+
+  <!-- lembar: detail produk / daftar promo / kategori -->
+  <dialog class="lembar" id="lembar">
     <div class="lembar-in" id="lembarIsi"></div>
   </dialog>
 
-  <script src="../assets/config.js?v=202611110300"></script>
-  <script src="katalog.js?v=202611110500"></script>
+  <script src="../assets/config.js?v=202611110700"></script>
+  <script src="katalog.js?v=202611110700"></script>
 </body>
 </html>
