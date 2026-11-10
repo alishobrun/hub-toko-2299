@@ -6051,7 +6051,7 @@
         el('span', { class: 'drop-txt' }, el('b', { text: 'Pilih, rekam, atau seret & lepas video' }), el('span', { text: 'Maksimal ' + d.maxMb + ' MB · disarankan 720p, 1–2 menit' })), input);
       aktifkanDrop(drop, input);
       var area = el('div');
-      var minD = addDays(d.today, -(isAdmin() ? 366 : (d.mundur || 7)));
+      var minD = addDays(d.today, -(d.mundur || 3650));
       var dateInp = el('input', { type: 'date', id: 'vid-date', value: tanggal || d.today, max: d.today, min: minD });
       var dateNote = el('small', { class: 'muted' });
       function noteDate() {
@@ -6060,7 +6060,7 @@
       }
       dateInp.addEventListener('change', function () {
         if (!dateInp.value || dateInp.value > d.today) dateInp.value = d.today;
-        if (dateInp.value < minD) { dateInp.value = minD; toast('Tanggal paling lama ' + (isAdmin() ? 366 : (d.mundur || 7)) + ' hari ke belakang', true); }
+        if (dateInp.value < minD) { dateInp.value = minD; toast('Tanggal terlalu lama', true); }
         noteDate();
       });
       noteDate();

@@ -11,7 +11,7 @@
 /** Versi kode. WAJIB dinaikkan setiap kali Code.gs diubah (format yyyy-MM-dd.n),
  *  lalu simpan ke GitHub (alishobrun/hub-toko-2299) SEBELUM dipasang. Halaman Kesehatan Data
  *  membandingkan angka ini dengan GitHub supaya kode yang dipasang di luar GitHub ketahuan. */
-const KODE_VERSI = '2026-11-10.2';
+const KODE_VERSI = '2026-11-10.3';
 
 const CFG = {
   STORE: '2299',
@@ -2372,7 +2372,7 @@ function kpiBriefing_(rows, tgl) {
  * Kunci & alamat mesin upload disimpan di Script Properties: UPLOAD_URL, UPLOAD_SECRET.
  * ===================================================================== */
 const DOK_FOLDER_ID = '1qlwAdXg_liYKpyXrOLMwa5NohxpK8xZy';
-const DOK_MUNDUR_HARI = 7; // anggota tim boleh mengunggah untuk tanggal sampai 7 hari ke belakang (admin bebas)
+const DOK_MUNDUR_HARI = 3650; // semua anggota tim boleh mengunggah untuk tanggal berapa pun yang sudah lewat (bukan masa depan)
 const DOK_RE = /^(\d{4}-\d{2}-\d{2}) (OPENING|CLOSING) - (.+?) (\d{4})\.(\w+)$/;
 
 Object.assign(API, {
@@ -2388,7 +2388,7 @@ Object.assign(API, {
     let tgl = String(req.tanggal || today);
     if (!/^\d{4}-\d{2}-\d{2}$/.test(tgl)) throw new Error('Tanggal tidak valid');
     if (tgl > today) throw new Error('Tanggal tidak boleh di masa depan');
-    const batasMundur = u.role === 'admin' ? 366 : DOK_MUNDUR_HARI;
+    const batasMundur = DOK_MUNDUR_HARI;
     if (tgl < addDays_(today, -batasMundur)) throw new Error('Tanggal paling lama ' + batasMundur + ' hari ke belakang');
     const payload = { id: Utilities.getUuid(), u: u.username, n: u.nama, j: jenis, max: Math.round(Number(set.dok_max_mb || 300) * 1048576),
       exp: Date.now() + 6 * 3600e3, t: tgl, h: Utilities.formatDate(now, CFG.TZ, 'HHmm') };
