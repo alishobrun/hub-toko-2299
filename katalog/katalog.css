@@ -548,3 +548,21 @@ button.tanya { cursor: pointer; }
 .pilihan:not(.pilihan-ukuran) button[aria-pressed="true"] { border: 2px solid var(--oranye-tua); background: var(--oranye-50); color: var(--oranye-tua); font-weight: 700; }
 .pilihan:not(.pilihan-ukuran) button[aria-pressed="true"]::after { display: none; }
 .pilihan:not(.pilihan-ukuran) button em { top: -9px; right: -6px; border-radius: 4px; padding: 1px 4px; }
+
+/* ================= bilah urutkan & saring ================= */
+.daftar-kepala { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; text-align: left; border-bottom: 0; padding: 16px 14px 6px; }
+.daftar-kepala h2 { font-size: 18px; color: var(--tinta); }
+.daftar-kepala .hitung { padding: 0; font-size: 13px; white-space: nowrap; }
+.bilah { position: sticky; top: var(--atas-h); z-index: 10; background: var(--kertas); padding: 8px 12px 10px; border-bottom: 1px solid var(--garis); box-shadow: 0 6px 12px -10px rgba(10, 26, 79, .35); }
+.bilah .tab-urut { position: static; display: flex; gap: 2px; padding: 4px; background: #EEF2FB; border: 0; border-radius: 99px; }
+@media (min-width: 700px) { .bilah .tab-urut { display: inline-flex; } }
+.bilah .tab-urut button { flex: 1; padding: 8px 18px; border-radius: 99px; font-size: 13.5px; font-weight: 500; color: #4A5878; white-space: nowrap; }
+.bilah .tab-urut button + button::before, .bilah .tab-urut button[aria-selected="true"]::after { display: none; }
+.bilah .tab-urut button[aria-selected="true"] { background: #fff; color: var(--oranye-tua); font-weight: 700; box-shadow: 0 1px 4px rgba(10, 26, 79, .18); }
+.bilah .saring { padding: 10px 0 0; align-items: center; background: none; }
+.saring-label { flex: none; font-size: 12.5px; font-weight: 700; color: var(--abu); }
+.saring-garis { flex: none; width: 1px; height: 20px; background: var(--garis); margin: 0 2px; }
+.bilah .chip, .bilah .chip-harga[aria-pressed="false"] { border: 1px solid transparent; background: #F2F4F8; color: var(--tinta); font-weight: 500; padding: 6px 14px; }
+.bilah .chip:hover { border-color: #C9D3E6; }
+.bilah .chip[aria-pressed="true"] { background: var(--oranye-tua); color: #fff; border-color: var(--oranye-tua); }
+.bilah .chip:not(.hapus)[aria-pressed="true"]::before { content: '✓ '; }
