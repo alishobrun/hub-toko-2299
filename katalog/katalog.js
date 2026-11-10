@@ -115,7 +115,7 @@
 
   /* ---------- keadaan ---------- */
   var D = null;                 // data katalog
-  var F = { k3: '', k4: '', q: '', gd: '', urut: 'baru' };
+  var F = { k3: '', k4: '', q: '', gd: '', urut: 'pilihan' };
   var tampil = PER_HALAMAN, hasil = [];
 
   /* ---------- data ---------- */
@@ -162,6 +162,7 @@
     sel.value = cur;
     sel.closest('label').hidden = sel.options.length < 3;
     gambarKategori();
+    gambarSorot();
     saring();
     bukaDariHash();
   }
@@ -170,16 +171,36 @@
     var hit = {};
     D.items.forEach(function (it) { hit[it.k3] = (hit[it.k3] || 0) + 1; });
     var ks = Object.keys(hit).sort(function (a, b) { return ((KAT[a] || {}).urut || 9) - ((KAT[b] || {}).urut || 9); });
+    // foto wakil tiap kategori: artikel berfoto, utamakan yang baru
+    var wakil = {};
+    D.items.forEach(function (it) {
+      var f = fotoBersih(it)[0]; if (!f) return;
+      var w = wakil[it.k3];
+      if (!w || (it.b && !w.b)) wakil[it.k3] = { f: f, b: it.b };
+    });
     var tile = function (k, nama, n, path) {
-      return el('button', { class: 'kat', type: 'button', 'aria-pressed': String(F.k3 === k), onclick: function () {
+      var foto = k && wakil[k] ? el('img', { src: wakil[k].f, alt: '', loading: 'lazy', referrerpolicy: 'no-referrer' }) : el('span', { svg: '<svg viewBox="0 0 24 24">' + path + '</svg>' });
+      return el('button', { class: 'kat' + (k ? '' : ' kat-semua'), type: 'button', 'aria-pressed': String(F.k3 === k), onclick: function () {
         F.k3 = F.k3 === k && k ? '' : k; F.k4 = '';
         gambarKategori(); saring();
-        var a = $('#alat'); if (a.getBoundingClientRect().top < 0) a.scrollIntoView({ behavior: 'smooth' });
-      } }, ikon(path), el('b', { text: nama }), el('small', { text: n + ' artikel' }));
+        var a = $('#alat'); if (a.getBoundingClientRect().top < 60) a.scrollIntoView({ behavior: 'smooth' });
+      } }, el('span', { class: 'kat-foto' }, foto), el('span', { class: 'kat-teks' }, el('b', { text: nama }), el('small', { text: n + ' artikel' })));
     };
     isiUlang($('#kategori'), tile('', 'Semua barang', D.items.length, IKON_SEMUA),
       ks.map(function (k) { return tile(k, katNama(k), hit[k], (KAT[k] || {}).ikon || IKON_SEMUA); }));
   }
+
+  /** Deretan "Baru di toko": artikel baru yang berfoto. Tampil hanya tanpa filter/pencarian. */
+  function gambarSorot() {
+    var xs = D.items.filter(function (it) { return it.b && fotoBersih(it).length; }).slice(0, 16);
+    var box = $('#sorot');
+    box.hidden = xs.length < 4 || !!(F.k3 || F.q.trim() || F.gd);
+    isiUlang($('#sorotRel'), xs.map(kartu));
+  }
+  $('#sorotSemua').addEventListener('click', function () {
+    F.urut = 'baru'; $('#urut').value = 'baru'; F.k3 = ''; F.k4 = ''; gambarKategori(); saring();
+    $('#alat').scrollIntoView({ behavior: 'smooth' });
+  });
 
   function gambarSub(dasar) {
     var box = $('#sub');
@@ -205,9 +226,12 @@
     var q = F.q.trim().toLowerCase();
     var dasar = D.items.filter(function (it) { return (!F.k3 || it.k3 === F.k3) && (!F.gd || genderNama(it.gd) === F.gd) && cocokCari(it, q); });
     gambarSub(dasar);
+    gambarSorot();
     hasil = dasar.filter(function (it) { return !F.k4 || it.k4 === F.k4; });
     var h = function (it) { return it.hm || it.h || 0; };
+    var ada = function (it) { return fotoBersih(it).length ? 1 : 0; };
     var sorter = {
+      pilihan: function (a, b) { return (ada(b) - ada(a)) || (b.b - a.b) || (a.n < b.n ? -1 : 1); },
       baru: function (a, b) { return (b.b - a.b) || (a.n < b.n ? -1 : 1); },
       nama: function (a, b) { return a.n < b.n ? -1 : 1; },
       murah: function (a, b) { return (h(a) || 9e9) - (h(b) || 9e9); },
@@ -239,7 +263,11 @@
   function fotoBersih(it) { return (it.f || []).filter(function (u) { return !/\/(thumbnail|small)\//.test(u); }); }
   function fotoAtauIkon(it, src, alt) {
     var box = el('div', { class: 'foto' });
-    var ganti = function () { isiUlang(box, ikon((KAT[it.k3] || {}).ikon || IKON_SEMUA, 'ikon')); };
+    var ganti = function () {
+      isiUlang(box, el('div', { class: 'tanpa-foto', 'aria-hidden': 'true' },
+        el('span', { svg: '<svg viewBox="0 0 24 24">' + ((KAT[it.k3] || {}).ikon || IKON_SEMUA) + '</svg>' }),
+        el('div', null, el('b', { text: namaTampil(it.n) }), el('small', { text: subNama(it.k4) }))));
+    };
     if (src) {
       var img = el('img', { src: src, alt: alt || '', loading: 'lazy', decoding: 'async', referrerpolicy: 'no-referrer' });
       img.addEventListener('error', ganti);

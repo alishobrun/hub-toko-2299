@@ -11,7 +11,7 @@
 /** Versi kode. WAJIB dinaikkan setiap kali Code.gs diubah (format yyyy-MM-dd.n),
  *  lalu simpan ke GitHub (alishobrun/hub-toko-2299) SEBELUM dipasang. Halaman Kesehatan Data
  *  membandingkan angka ini dengan GitHub supaya kode yang dipasang di luar GitHub ketahuan. */
-const KODE_VERSI = '2026-11-10.5';
+const KODE_VERSI = '2026-11-11.1';
 
 const CFG = {
   STORE: '2299',
@@ -5504,11 +5504,12 @@ Object.assign(API, {
 const KATALOG = {
   WA: '6281120022574',           // nomor WhatsApp toko untuk tombol "Tanya di WhatsApp"
   WEB: 'https://www.eigeradventure.com/d/',
-  CDN_RE: /https:\/\/d1yutv2xslo29o\.cloudfront\.net\/product\/variant\/media\/web\/(?!small\/)[A-Za-z0-9_\-\/]+\.(?:webp|jpe?g|png)/g,
+  CDN_RE: /https:\/\/d1yutv2xslo29o\.cloudfront\.net\/product\/variant\/media\/web\/(?!small\/|thumbnail\/)[A-Za-z0-9_\-\/]+\.(?:webp|jpe?g|png)/g,
   ULANG_HARI: 14,                // artikel yang belum ketemu fotonya dicoba lagi setelah 14 hari
-  BATCH: 12,                     // halaman yang dibuka bersamaan
+  BATCH: 8,                      // permintaan bersamaan (dibuat kecil supaya sopan ke situs eigeradventure)
   WAKTU_MS: 4.5 * 60e3,          // batas satu putaran (Apps Script maks 6 menit)
-  CACHE_DETIK: 21600
+  CACHE_DETIK: 21600,
+  METODE: 'otomatis2'             // dinaikkan bila cara pencarian berubah → artikel yang belum ketemu dicoba lagi
 };
 const KAT3_OK_ = { ACCESSORIES: 1, APPAREL: 1, BAGS: 1, EQUIPMENT: 1, FOOTWEAR: 1, HEADWEAR: 1 };
 
@@ -5631,6 +5632,54 @@ function slugKandidat_(nama) {
   return out.filter(function (s, i) { return s && out.indexOf(s) === i; });
 }
 
+
+/** Kata pencarian: r=0 nama lengkap, r=1 dua kata pertama (tanpa awalan EIGER/WS). */
+function cariKata_(nama, r) {
+  const n = String(nama || '').replace(/["']/g, ' ').replace(/\s+/g, ' ').trim();
+  if (r === 0) return n;
+  const w = n.replace(/^(EIGER|WS)\s+/i, '').split(' ').filter(function (x) { return x.length > 1; });
+  const pendek = w.slice(0, 2).join(' ');
+  return pendek && pendek !== n ? pendek : '';
+}
+/** buildId Next.js situs eigeradventure (berubah tiap situs mereka diperbarui). */
+function buildIdEiger_(baru) {
+  const c = CacheService.getScriptCache();
+  if (!baru) { const hit = c.get('eiger_build'); if (hit) return hit; }
+  const html = UrlFetchApp.fetch('https://www.eigeradventure.com/', { muteHttpExceptions: true, headers: { 'User-Agent': 'Mozilla/5.0 (Basecamp 2299 katalog toko)' } }).getContentText();
+  const m = html.match(/"buildId":"([^"]+)"/);
+  if (!m) throw new Error('Format situs eigeradventure berubah (buildId tidak ditemukan)');
+  c.put('eiger_build', m[1], 21600);
+  return m[1];
+}
+/** Pencarian produk di eigeradventure untuk beberapa kata sekaligus → [{produk:[attributes], blokir}]. */
+function cariEiger_(kata) {
+  function sekali(bid) {
+    return UrlFetchApp.fetchAll(kata.map(function (q) {
+      return { url: 'https://www.eigeradventure.com/_next/data/' + bid + '/id/products.json?search=' + encodeURIComponent(q), muteHttpExceptions: true, headers: { 'User-Agent': 'Mozilla/5.0 (Basecamp 2299 katalog toko)' } };
+    }));
+  }
+  let res = sekali(buildIdEiger_(false));
+  if (res.some(function (r) { return r.getResponseCode() === 404; })) res = sekali(buildIdEiger_(true)); // buildId kedaluwarsa
+  return res.map(function (r) {
+    const code = r.getResponseCode();
+    if (code !== 200) return { produk: [], blokir: code === 403 || code === 429 };
+    try {
+      const j = JSON.parse(r.getContentText()), qs = (((j.pageProps || {}).dehydratedState || {}).queries || []);
+      let produk = [];
+      qs.forEach(function (x) { const d = x.state && x.state.data; if (d && Array.isArray(d.data)) produk = produk.concat(d.data.map(function (p) { return p.attributes || {}; })); });
+      return { produk: produk };
+    } catch (e) { return { produk: [] }; }
+  });
+}
+/** Foto produk dari hasil pencarian: foto utama lalu foto per warna, tanpa dobel, maks 6. */
+function fotoProduk_(a) {
+  const out = [];
+  const tambah = function (u) { u = String(u || ''); if (/^https:\/\/\S+\.(webp|jpe?g|png)$/i.test(u) && !/\/(small|thumbnail)\//.test(u) && out.indexOf(u) < 0) out.push(u); };
+  tambah(a.imageWeb || a.image);
+  (a.variantImages || []).forEach(function (v) { tambah(v.imageWeb || v.image); });
+  return out.slice(0, 6);
+}
+
 /** Ambil semua link foto produk dari halaman eigeradventure (urutan asli, tanpa dobel). */
 function fotoDariHalaman_(html) {
   const t = String(html).replace(/\\u002F/gi, '/').replace(/\\\//g, '/');
@@ -5656,6 +5705,7 @@ function cariFotoKatalog() {
       const f = ada[it.g];
       if (!f) return true;
       if (f.foto) return false; // sudah ada foto (otomatis atau manual)
+      if (String(f.oleh) !== KATALOG.METODE) return true; // dicek dengan cara lama → coba cara baru
       return String(f.dicek).slice(0, 10) < batasUlang;
     });
     const hasil = {};
@@ -5665,6 +5715,21 @@ function cariFotoKatalog() {
       i += batch.length;
       // putaran per kandidat alamat: hanya artikel yang belum ketemu yang dicoba alamat berikutnya
       const sisa = batch.map(function (it) { return { it: it, slugs: slugKandidat_(it.n), ok: null, url: '' }; });
+      // 1–2) pencarian situs eigeradventure (nama lengkap, lalu nama pendek): cocokkan lewat kode artikel (skuProduct)
+      [0, 1].forEach(function (r) {
+        const coba = sisa.filter(function (x) { return !x.ok && cariKata_(x.it.n, r); });
+        if (!coba.length || st.galat) return;
+        let res;
+        try { res = cariEiger_(coba.map(function (x) { return cariKata_(x.it.n, r); })); } catch (e) { st.galat = String(e.message || e).slice(0, 150); return; }
+        res.forEach(function (h, k) {
+          if (h.blokir) blokir++;
+          const x = coba[k], p = (h.produk || []).filter(function (a) { return String(a.skuProduct || '').slice(0, 9) === x.it.g; })[0];
+          if (!p) return;
+          const foto = fotoProduk_(p);
+          if (foto.length) { x.ok = foto; x.url = KATALOG.WEB + (p.slug || ''); }
+        });
+      });
+      // 3) cadangan: tebak alamat halaman dari nama artikel
       for (let r = 0; r < 3; r++) {
         const coba = sisa.filter(function (x) { return !x.ok && x.slugs[r]; });
         if (!coba.length) break;
@@ -5687,7 +5752,7 @@ function cariFotoKatalog() {
       sisa.forEach(function (x) {
         st.cek++;
         if (x.ok) st.ketemu++;
-        hasil[x.it.g] = { generic: x.it.g, foto: x.ok ? x.ok.join(' ') : '', sumber: x.ok ? 'otomatis' : '', url: x.url, status: x.ok ? 'ketemu' : 'tidak ketemu', dicek: now_(), oleh: 'otomatis' };
+        hasil[x.it.g] = { generic: x.it.g, foto: x.ok ? x.ok.join(' ') : '', sumber: x.ok ? 'otomatis' : '', url: x.url, status: x.ok ? 'ketemu' : 'tidak ketemu', dicek: now_(), oleh: KATALOG.METODE };
       });
       if (blokir >= KATALOG.BATCH * 2) { st.galat = 'eigeradventure.com menolak akses otomatis (403/429). Isi foto manual.'; break; }
     }
