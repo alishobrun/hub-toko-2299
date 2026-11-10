@@ -235,6 +235,8 @@
     } }) : null);
   }
 
+  /** Buang versi thumbnail/kecil dari foto yang sama. */
+  function fotoBersih(it) { return (it.f || []).filter(function (u) { return !/\/(thumbnail|small)\//.test(u); }); }
   function fotoAtauIkon(it, src, alt) {
     var box = el('div', { class: 'foto' });
     var ganti = function () { isiUlang(box, ikon((KAT[it.k3] || {}).ikon || IKON_SEMUA, 'ikon')); };
@@ -247,7 +249,7 @@
   }
 
   function kartu(it) {
-    var foto = fotoAtauIkon(it, it.f && it.f[0], namaTampil(it.n));
+    var foto = fotoAtauIkon(it, fotoBersih(it)[0], namaTampil(it.n));
     if (it.b) foto.append(el('span', { class: 'baru', text: 'Baru' }));
     var ht = hargaTeks(it);
     var titik = it.w.slice(0, 5).map(function (w) { return el('i', { style: 'background:' + warnaInfo(w[0])[1], title: warnaInfo(w[0])[0] }); });
@@ -267,7 +269,7 @@
     var ukTersedia = tersedia(it.w[0]);
     if (ukTersedia.length === 1) uk = ukTersedia[0][0];
     var isi = $('#lembarIsi');
-    var fotos = it.f || [];
+    var fotos = fotoBersih(it);
 
     function gambar() {
       var w = it.w[wi], wInfo = warnaInfo(w[0]);
