@@ -409,28 +409,73 @@
   $('#stripSemua').addEventListener('click', function () { pilihPromo(true); });
 
   /* ---------- daftar produk ---------- */
-  /* ---- pencarian pintar: kata sehari-hari, sinonim, dan salah ketik ringan ---- */
-  var FRASA = [[/\btas (gunung|carrier|kerir|keril|carier)\b/g, 'carrier'], [/\btas (pinggang|pinggul)\b/g, 'waist'], [/\btas (selempang|slempang)\b/g, 'sling'],
-    [/\btas (punggung|ransel|sekolah|kuliah)\b/g, 'ransel'], [/\b(jas|mantel) hujan\b/g, 'hujan'], [/\bkaos kaki\b/g, 'sock'], [/\bsleeping ?bag\b|\bkantong tidur\b/g, 'sleeping'],
-    [/\bsandal jepit\b/g, 'sandal'], [/\bsepatu gunung\b/g, 'sepatu mendaki'], [/\blampu kepala\b/g, 'headlamp']];
+  /* ---- pencarian pintar ----
+   * 1) kata/frasa kategori (topi, jaket, kaos kaki, tas gunung, ...) menyaring kategori, bukan dicocokkan ke potongan nama;
+   * 2) kata lain: harus ada di teks barang, atau sinonimnya sama dengan satu kata utuh (cap ≠ "esCAPe");
+   * 3) salah ketik ringan hanya bila pencarian biasa tidak menemukan apa-apa, hanya untuk kata ≥ 5 huruf, hanya ke nama barang. */
+  var KATA_KATEGORI = [
+    [/\bkaos kaki\b|\bkaus kaki\b|\bsocks?\b/, { k4: ['SOCK', 'SOCKS'] }, 'Kaos kaki'],
+    [/\bsarung tangan\b|\bgloves?\b/, { k4: ['GLOVES', 'GLOVE'] }, 'Sarung tangan'],
+    [/\b(jas|mantel) hujan\b|\bponc?ho\b|\brain ?coat\b/, { k4: ['RAINWEAR'] }, 'Jas hujan'],
+    [/\bsleeping ?bag\b|\bkantong tidur\b/, { k4: ['SLEEPING BAG'] }, 'Sleeping bag'],
+    [/\bikat pinggang\b|\bsabuk\b|\bbelt\b/, { k4: ['BELTS', 'BELT'] }, 'Ikat pinggang'],
+    [/\btas (gunung|carrier|kerir|keril|carier)\b|\bcarr?ier\b|\bkerir\b|\bkeril\b/, { k4: ['CARRIER'], uji: tasCarrier }, 'Carrier'],
+    [/\btas (pinggang|pinggul)\b|\bwaist ?bag\b/, { k4: ['WAIST BAG'] }, 'Tas pinggang'],
+    [/\btas (selempang|slempang)\b|\bsling ?bag\b/, { k4: ['SLING BAG', 'SHOULDER BAG'] }, 'Tas selempang'],
+    [/\btas (punggung|sekolah|kuliah)\b|\bransel\b|\bbackpack\b/, { k4: ['BACKPACK', 'DAYPACK'] }, 'Ransel'],
+    [/\btas motor\b/, { k4: ['MOTORCYCLE BAG'] }, 'Tas motor'],
+    [/\brain ?cover\b|\bcover tas\b/, { k4: ['BAG COVER', 'RAIN COVER'] }, 'Rain cover'],
+    [/\bsandal jepit\b|\bsandal\b|\bsendal\b|\bsandals\b/, { k4: ['SANDAL', 'SANDALS', 'SLIPPER'] }, 'Sandal'],
+    [/\bsepatu\b|\bshoes?\b|\bsneakers?\b/, { k4: ['SHOES', 'BOOTS'] }, 'Sepatu'],
+    [/\bkupluk\b|\bbeanies?\b/, { k4: ['BEANIES', 'BEANIE'] }, 'Kupluk'],
+    [/\btopi\b|\bcaps?\b|\bhats?\b|\bsnapback\b/, { k4: ['CAPS', 'CAP', 'HATS', 'HAT', 'BEANIES', 'BEANIE'] }, 'Topi'],
+    [/\bhijab\b|\bjilbab\b|\bkerudung\b/, { k4: ['HIJAB'] }, 'Hijab'],
+    [/\bjaket\b|\bjackets?\b|\bjkt\b/, { k4: ['JACKET'] }, 'Jaket'],
+    [/\bkemeja\b|\bshirts?\b/, { k4: ['SHIRT'] }, 'Kemeja'],
+    [/\bkaos\b|\bkaus\b|\bt ?shirt\b|\btees?\b/, { k4: ['TOP', 'T-SHIRT'] }, 'Kaos & atasan'],
+    [/\bcelana pendek\b|\bshorts?\b/, { k4: ['SHORTS'] }, 'Celana pendek'],
+    [/\bcelana\b|\bpants?\b|\bjogger\b/, { k4: ['PANTS', 'SHORTS'] }, 'Celana'],
+    [/\brompi\b|\bvest\b/, { k4: ['VEST'] }, 'Rompi'],
+    [/\bsweater\b|\bhoodie\b/, { k4: ['SWEATER', 'HOODIE'] }, 'Sweater & hoodie'],
+    [/\bbaselayer\b|\bmanset\b/, { k4: ['BASELAYER'] }, 'Baselayer'],
+    [/\bdompet\b|\bwallets?\b/, { k4: ['WALLET', 'WALLETS'] }, 'Dompet'],
+    [/\bbotol\b|\btumbler\b|\bbottle\b/, { k4: ['WATER STORAGE', 'BOTTLE'] }, 'Botol minum'],
+    [/\btenda\b|\btents?\b/, { k4: ['TENTS', 'TENT'] }, 'Tenda'],
+    [/\bmatras\b|\bvelbed\b/, { k4: ['MAT & COT', 'MATTRESS'] }, 'Matras'],
+    [/\bsenter\b|\bheadlamp\b|\blampu( kepala)?\b/, { k4: ['LIGHTING EQUIPMENT', 'LIGHTING'] }, 'Senter & lampu'],
+    [/\bjam( tangan)?\b|\bwatch(es)?\b/, { k4: ['WATCHES', 'WATCH'] }, 'Jam tangan'],
+    [/\bkacamata\b|\bsunglass(es)?\b/, { k4: ['SUNGLASSES'] }, 'Kacamata'],
+    [/\bhanduk\b|\btowel\b/, { k4: ['TOWEL'] }, 'Handuk'],
+    [/\bkursi\b|\bchair\b/, { k4: ['CHAIR'] }, 'Kursi lipat'],
+    [/\bkompor\b|\bnesting\b|\balat masak\b|\bmug\b|\bgelas\b/, { k4: ['KITCHENWARE', 'COOKWARE', 'COOKING'] }, 'Alat masak & minum'],
+    [/\bpisau\b|\bknife\b/, { k4: ['KNIVES'] }, 'Pisau'],
+    [/\bbandana\b|\bbuff\b/, { k4: ['BANDANA', 'BUFF'] }, 'Bandana & buff'],
+    [/\bpouch\b/, { k4: ['POUCH'] }, 'Pouch'],
+    [/\btas\b|\bbags?\b/, { k3: ['BAGS'] }, 'Tas']
+  ];
+  /** Carrier = sub-kategori CARRIER, atau ransel berkapasitas ≥ 35 liter (angka di nama, mis. "Eliptic Solaris 45"). */
+  function tasCarrier(it) {
+    if (it.k4 === 'CARRIER') return true;
+    if (it.k3 !== 'BAGS' || it.k4 !== 'BACKPACK') return false;
+    if (/carrier/i.test(it.n)) return true;
+    var m = String(it.n).match(/(?:^|\s)(\d{2,3})\s*(?:\+\s*\d+\s*)?l?(?=\s|$)/i);
+    return !!m && Number(m[1]) >= 35 && Number(m[1]) <= 120;
+  }
   var SINONIM = {
-    kaus: ['kaos', 'tee', 'top'], kaos: ['kaos', 'tee', 'top'], sendal: ['sandal'], cewek: ['wanita'], cewe: ['wanita'], perempuan: ['wanita'], women: ['wanita'],
-    cowok: ['pria'], cowo: ['pria'], laki: ['pria'], men: ['pria'], bocah: ['anak'], kids: ['anak'],
-    gunung: ['mountain', 'hiking', 'mendaki', 'carrier', 'trek'], mendaki: ['hiking', 'mountain', 'trek', 'mendaki'], naik: ['hiking', 'mendaki'], hiking: ['hiking', 'mendaki', 'mountain'],
-    kemping: ['camp'], camping: ['camp'], kemah: ['camp', 'tenda'], tumbler: ['botol', 'bottle'], botol: ['botol', 'bottle'], minum: ['botol', 'bottle'],
-    hujan: ['rain', 'hujan', 'poncho'], dompet: ['wallet', 'dompet'], senter: ['senter', 'lampu', 'light', 'lamp'], tenda: ['tent', 'tenda'],
-    jaket: ['jaket', 'jacket'], jacket: ['jaket', 'jacket'], celana: ['celana', 'pants', 'shorts'], sepatu: ['sepatu', 'shoes', 'boot'], tas: ['tas', 'bag', 'pack', 'carrier', 'pouch', 'ransel'],
-    kerir: ['carrier'], keril: ['carrier'], ransel: ['ransel', 'backpack', 'daypack'], topi: ['topi', 'cap', 'hat'], kupluk: ['kupluk', 'beanie'], sarung: ['sarung', 'glove'],
-    kemeja: ['kemeja', 'shirt'], rompi: ['rompi', 'vest'], jam: ['jam', 'watch'], gelang: ['gelang', 'band'], kacamata: ['kacamata', 'sunglass'], matras: ['matras', 'mat'],
-    kompor: ['stove', 'kompor', 'masak'], masak: ['masak', 'cook', 'kitchen'], kursi: ['kursi', 'chair'], handuk: ['handuk', 'towel'], motor: ['motor', 'riding', 'motorcycle'],
-    hitam: ['hitam', 'black'], putih: ['putih', 'white'], hijau: ['hijau', 'green', 'olive', 'army'], biru: ['biru', 'blue', 'navy'], merah: ['merah', 'red', 'maroon'], abu: ['abu', 'grey', 'gray', 'charcoal'],
-    coklat: ['cokelat', 'brown'], cokelat: ['cokelat', 'brown'], laptop: ['laptop'], murah: [''], bagus: ['']
+    cewek: ['wanita'], cewe: ['wanita'], perempuan: ['wanita'], women: ['wanita'], ladies: ['wanita'],
+    cowok: ['pria'], cowo: ['pria'], laki: ['pria'], men: ['pria'], bocah: ['anak'], kids: ['anak'], junior: ['jr', 'anak'],
+    gunung: ['mountain', 'mountaineering', 'hiking', 'mendaki', 'trekking'], mendaki: ['hiking', 'mountain', 'mountaineering', 'trekking'], hiking: ['hiking', 'mendaki', 'mountaineering'],
+    kemping: ['camp', 'camping'], kemah: ['camp', 'camping'], camping: ['camp', 'camping'], hujan: ['rain', 'waterproof'], motor: ['riding', 'motorcycle'],
+    hitam: ['black'], putih: ['white'], hijau: ['green', 'olive', 'army'], biru: ['blue', 'navy'], merah: ['red', 'maroon'], abu: ['grey', 'gray', 'charcoal'],
+    coklat: ['cokelat', 'brown'], cokelat: ['brown'], kuning: ['yellow'], ungu: ['purple'], pink: ['merah muda']
   };
+  var KATA_KOSONG = { murah: 1, bagus: 1, keren: 1, baru: 0, original: 1, ori: 1, eiger: 1, yang: 1, untuk: 1, buat: 1, dan: 1 };
   function teksCari(it) {
     if (it._t == null) {
-      it._t = (it.n + ' ' + it.g + ' ' + katNama(it.k3) + ' ' + subNama(it.k4) + ' ' + it.k4 + ' ' + it.ac + ' ' + genderNama(it.gd) + ' ' + it.k3 + ' ' +
-        it.w.map(function (w) { return warnaInfo(w[0])[0] + ' ' + w[0]; }).join(' ')).toLowerCase();
-      it._k = it._t.split(/[^a-z0-9]+/).filter(function (k) { return k.length >= 3; });
+      it._t = (it.n + ' ' + it.g + ' ' + katNama(it.k3) + ' ' + subNama(it.k4) + ' ' + it.ac + ' ' + genderNama(it.gd) + ' ' +
+        it.w.map(function (w) { return warnaInfo(w[0])[0]; }).join(' ')).toLowerCase();
+      it._k = it._t.split(/[^a-z0-9]+/).filter(Boolean);
+      it._kn = String(it.n).toLowerCase().split(/[^a-z0-9]+/).filter(function (k) { return k.length >= 4; });
     }
     return it._t;
   }
@@ -449,23 +494,46 @@
     }
     return prev[b.length];
   }
+  /** Urai kata pencarian → { kat: [{k3,k4,nama}], kata: [{k, alt}] } (disimpan per teks). */
   var cacheKata = {};
   function kataCari(q) {
     if (cacheKata[q]) return cacheKata[q];
-    var x = q.toLowerCase();
-    FRASA.forEach(function (f) { x = x.replace(f[0], f[1]); });
-    return (cacheKata[q] = x.split(/\s+/).filter(Boolean).map(function (k) { return { k: k, alt: (SINONIM[k] || [k]).concat([k]) }; })
-      .filter(function (k) { return k.alt[0] !== '' || k.alt.length > 2; }).filter(function (k) { return !(SINONIM[k.k] && SINONIM[k.k][0] === ''); }));
+    var x = ' ' + q.toLowerCase().replace(/[^a-z0-9.&\- ]+/g, ' ').replace(/\s+/g, ' ') + ' ', kat = [];
+    KATA_KATEGORI.forEach(function (k) {
+      var m = x.match(k[0]);
+      if (!m) return;
+      // nama barang yang memang memuat kata ini (mis. "Sling Bag Explore") tetap ditemukan lewat nama
+      kat.push({ k3: k[1].k3 || [], k4: k[1].k4 || [], uji: k[1].uji, nama: k[2], kata: m[0].trim() });
+      x = x.replace(k[0], ' ');
+    });
+    var kata = x.split(/\s+/).filter(function (k) { return k && KATA_KOSONG[k] !== 1; }).map(function (k) { return { k: k, alt: SINONIM[k] || [] }; });
+    return (cacheKata[q] = { kat: kat, kata: kata });
   }
+  var CARI_LONGGAR = false;
+  function cocokKat(it, kat) { return kat.some(function (c) { return c.uji ? c.uji(it) : c.k3.indexOf(it.k3) >= 0 || c.k4.indexOf(it.k4) >= 0; }); }
   function cocokCari(it, q) {
     if (!q) return true;
-    var teks = teksCari(it);
-    return kataCari(q).every(function (w) {
-      if (w.alt.some(function (a) { return a && teks.indexOf(a) >= 0; })) return true;
-      if (w.k.length < 4 || /^\d+$/.test(w.k)) return false;
-      var maks = w.k.length >= 7 ? 2 : 1;
-      return it._k.some(function (t) { return jarak(w.k, t, maks) <= maks || (t.length > w.k.length && jarak(w.k, t.slice(0, w.k.length), 1) <= 1 && w.k.length >= 5); });
+    var P = kataCari(q), teks = teksCari(it);
+    if (P.kat.length && !cocokKat(it, P.kat)) {
+      // di luar kategori: hanya bila nama barangnya sendiri memuat frasa kategori itu (mis. "Pouch" di nama tas)
+      var nama = String(it.n).toLowerCase();
+      if (!P.kat.some(function (c) { return c.kata.length >= 4 && nama.indexOf(c.kata) >= 0; })) return false;
+    }
+    return P.kata.every(function (w) {
+      if (teks.indexOf(w.k) >= 0) return true;
+      if (w.alt.some(function (a) { return it._k.indexOf(a) >= 0 || it._k.indexOf(a + 's') >= 0 || (a.indexOf(' ') > 0 && teks.indexOf(a) >= 0); })) return true;
+      if (!CARI_LONGGAR || w.k.length < 5 || /^\d+$/.test(w.k)) return false;
+      var maks = w.k.length >= 8 ? 2 : 1;
+      return it._kn.some(function (t) { return jarak(w.k, t, maks) <= maks || (t.length > w.k.length && jarak(w.k, t.slice(0, w.k.length), 1) <= 1); });
     });
+  }
+  /** Skor kecocokan untuk urutan "Terkait" saat mencari: kata ada di nama > kategori > sinonim/salah ketik. */
+  function skorCari(it, q) {
+    var P = kataCari(q), nama = String(it.n).toLowerCase(), s = 0;
+    P.kata.forEach(function (w) { if (nama.indexOf(w.k) >= 0) s += 3; else if (teksCari(it).indexOf(w.k) >= 0) s += 1; });
+    if (P.kat.length && cocokKat(it, P.kat)) s += 2;
+    if (P.kat.some(function (c) { return nama.indexOf(c.kata) >= 0; })) s += 1;
+    return s;
   }
   /* ================= saring & urutkan (gaya eigeradventure: tombol tarik-turun berisi kotak pilihan + jumlah) ================= */
   var HARGA = [['h1', 'Di bawah 200 rb', 0, 200000], ['h2', '200–500 rb', 200000, 500000], ['h3', '500 rb–1 jt', 500000, 1000000], ['h4', 'Di atas 1 jt', 1000000, 1e12]];
@@ -641,7 +709,10 @@
     var menyaring = !!(q || jumlahSaring() || K || F.uk);
     $('#beranda').hidden = !!(q || F.k3 || F.promo || F.baru || F.akt || K || F.gds.length || F.wrs.length || F.uks.length || F.hrg.length || F.uk);
     $('#judulDaftar').textContent = q ? 'Hasil pencarian "' + F.q.trim() + '"' : F.uk && !(K || F.promo || F.baru || F.k3 || A) ? 'Tersedia di ukuranku' : K ? K.j : F.promo ? 'Barang promo' : F.baru ? 'Baru di toko' : F.k3 ? (F.k4 ? subNama(F.k4) : katNama(F.k3)) + (F.gds.length === 1 ? ' ' + F.gds[0].toLowerCase() : '') : A ? 'Untuk ' + A.nama.toLowerCase() : F.gds.length === 1 ? 'Untuk ' + F.gds[0].toLowerCase() : 'Rekomendasi untukmu';
+    CARI_LONGGAR = false;
     hasil = D.items.filter(function (it) { return lolos(it, ''); });
+    if (q && !hasil.length) { CARI_LONGGAR = true; hasil = D.items.filter(function (it) { return lolos(it, ''); }); } // salah ketik ringan
+    var P = q ? kataCari(q) : null;
     if (K && F.urut === 'pilihan') hasil.sort(function (a, b) { return K.g.indexOf(a.g) - K.g.indexOf(b.g); });
     if (q.length >= 3 && !hasil.length) catatCariKosong(q);
     var h = hargaKini;
@@ -654,9 +725,14 @@
       harga: function (a, b) { var x = h(a) || 9e9, y = h(b) || 9e9; return F.arah === 'naik' ? x - y : (h(b) || 0) - (h(a) || 0); }
     }[F.urut];
     if (!(K && F.urut === 'pilihan')) hasil.sort(urut);
+    if (q && F.urut === 'pilihan') {
+      var sk = {}; hasil.forEach(function (it) { sk[it.g] = skorCari(it, q); });
+      hasil.sort(function (a, b) { return (sk[b.g] - sk[a.g]) || urut(a, b); });
+    }
     tampil = tetap ? Math.max(tampil, PER_HALAMAN) : PER_HALAMAN;
     gambarSaring();
-    $('#hitung').textContent = hasil.length + ' barang' + (menyaring ? ' cocok' : ' tersedia di toko');
+    $('#hitung').textContent = hasil.length + ' barang' + (menyaring ? ' cocok' : ' tersedia di toko') +
+      (P && P.kat.length ? ' · kategori ' + P.kat.map(function (c) { return c.nama; }).join(', ') : '') + (CARI_LONGGAR && hasil.length ? ' · termasuk ejaan mirip' : '');
     gambarGrid();
   }
   function labelDiskon(d) { return el('span', { class: 'label-diskon' }, d + '%', el('small', { text: 'OFF' })); }
