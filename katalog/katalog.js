@@ -125,6 +125,27 @@
     return [Math.floor(d / 86400), Math.floor(d % 86400 / 3600), Math.floor(d % 3600 / 60), d % 60];
   }
   function dua(n) { return (n < 10 ? '0' : '') + n; }
+  /* Pesan tanya stok ke WhatsApp. b = [{ it, w: kode warna, u: ukuran, harga, pw: [diskon %, harga promo, harga normal] }] */
+  function rpSpasi(n) { return 'Rp ' + nf.format(Math.round(n)); }
+  function linkProduk(g, w) {
+    var resmi = 'https://eigerkartasura.github.io';
+    return (location.hostname === resmi.slice(8) ? resmi + '/p/' + g + '/' : location.href.split('#')[0]) + '#artikel-' + g + (w ? '-' + w : '');
+  }
+  function teksTanya(baris) {
+    var t = 'Halo Kak, saya lihat di katalog EIGER Kartasura dan mau tanya stok di EIGER Store A. Yani Kartasura Sukoharjo:\n';
+    baris.forEach(function (b, k) {
+      var it = b.it || {}, g = it.g || b.g;
+      t += '\n' + (baris.length > 1 ? (k + 1) + '. ' : '') + '*' + (it.n ? String(it.n).trim().toUpperCase() : 'Kode ' + g) + '*';
+      if (b.w) t += '\nWarna: ' + warnaInfo(b.w)[0] + ' (' + b.w + ')';
+      if (b.u && b.u !== 'NOS') t += '\nUkuran: ' + b.u;
+      t += '\nArtikel: ' + g;
+      if (b.pw && b.pw[1]) t += '\nHarga promo: ' + rpSpasi(b.pw[1]) + (b.pw[2] > b.pw[1] ? ' (diskon ' + b.pw[0] + '% dari ' + rpSpasi(b.pw[2]) + ')' : '');
+      else if (b.harga) t += '\nHarga: ' + rpSpasi(b.harga);
+      if (baris.length === 1) t += '\n\nApakah masih tersedia? Terima kasih.\n\n' + linkProduk(g, b.w);
+      else t += '\n' + linkProduk(g, b.w) + '\n';
+    });
+    return baris.length > 1 ? t.replace(/\n$/, '') + '\nApakah masih tersedia? Terima kasih.' : t;
+  }
   function waLink(teks) { return 'https://wa.me/' + (D && D.wa || '6281120022574') + '?text=' + encodeURIComponent(teks); }
 
   var IKON_JENIS = {
@@ -963,7 +984,7 @@
     if (!atas || !bb || !('IntersectionObserver' in window)) return;
     var asli = bb.querySelector('.tanya');
     var cta = kosong ? el('button', { class: 'tanya', type: 'button', text: 'Kabari saya', onclick: function () { var f = $('.form-kabari input'); if (f) { f.scrollIntoView({ behavior: 'smooth', block: 'center' }); f.focus(); } } })
-      : el('a', { class: 'tanya', href: asli && asli.href || waLink('Halo EIGER Kartasura, saya mau tanya ' + namaTampil(it.n) + ' (kode ' + it.g + ').'), target: '_blank', rel: 'noopener', onclick: function () { catat(it.g, 't'); } }, svg(IKON_WA), 'Tanya stok');
+      : el('a', { class: 'tanya', href: asli && asli.href || waLink(teksTanya([{ it: it, harga: it.h }])), target: '_blank', rel: 'noopener', onclick: function () { catat(it.g, 't'); } }, svg(IKON_WA), 'Tanya stok');
     var tempel = el('div', { class: 'bilah-tempel', 'aria-hidden': 'true' },
       fotos[0] ? imgKecil(fotos[0], '') : null,
       el('div', { class: 'tempel-teks' }, el('b', { text: namaTampil(it.n) }), el('span', { text: harga ? rp(harga) : 'Tanya harga' })), cta);
@@ -982,7 +1003,7 @@
     info.style.top = innerWidth >= 900 ? Math.min(72, box.clientHeight - info.offsetHeight - 16) + 'px' : '';
   }
   addEventListener('resize', aturTempelKanan);
-  function buka(it, dariHash) {
+  function buka(it, dariHash, warnaAwal) {
     var wi = Math.max(0, it.w.findIndex(function (w) { return prWarna(w); })), uk = '';
     var tersedia = function (w) { return w[1].filter(function (u) { return u[1]; }); };
     var pilihAwalUk = function () {
@@ -997,6 +1018,9 @@
       var wu = it.w.findIndex(function (w) { return tersedia(w).some(function (u) { return ukurankuUntuk(it).indexOf(u[0]) >= 0; }); });
       if (wu >= 0 && !prWarna(it.w[wi])) wi = wu;
     }
+    // warna dari link (mis. #artikel-910011855-DGR) didahulukan
+    var wl = warnaAwal ? it.w.findIndex(function (w) { return w[0] === warnaAwal; }) : -1;
+    if (wl >= 0) wi = wl;
     uk = pilihAwalUk();
     var fotos = fotoBersih(it);
     var sudah = false, warnaTerakhir = -1, galeri = null;
@@ -1014,8 +1038,7 @@
         return el('div', { class: 'status-stok ada' }, el('i'), 'Tersedia ' + ada.length + ' ukuran: ' + ada.map(function (u) { return u[0]; }).join(', '));
       }
       var hargaNormal = w[2] || it.h;
-      var teks = 'Halo EIGER Kartasura, saya mau tanya ' + namaTampil(it.n) + ' (kode ' + it.g + '), warna ' + wi2[0].toLowerCase() +
-        (uk && uk !== 'NOS' ? ', ukuran ' + uk : '') + (pw ? ', harga promo ' + rp(pw[1]) : '') + '. Apakah masih tersedia di toko?';
+      var teks = teksTanya([{ it: it, w: w[0], u: satuUkuran ? '' : uk, harga: hargaNormal, pw: pw }]);
       teksProdukKini = teks;
       // galeri dibuat ulang hanya saat produk dibuka / warna diganti (mulai lagi dari foto pertama)
       if (!galeri || warnaTerakhir !== wi) { galeri = buatGaleri(it, fotos); warnaTerakhir = wi; }
@@ -1103,7 +1126,7 @@
     }
     gambar();
     catat(it.g, 'l');
-    if (!dariHash && location.hash !== '#artikel-' + it.g) history.pushState(null, '', '#artikel-' + it.g);
+    if (!dariHash && location.hash.indexOf('#artikel-' + it.g) !== 0) history.pushState(null, '', '#artikel-' + it.g);
   }
 
   /* ---------- lembar: daftar promo (voucher) ---------- */
@@ -1171,9 +1194,9 @@
   function bukaDariHash() {
     if (!D) return;
     var seo = document.getElementById('seoProduk'); if (seo) seo.remove();
-    var h = location.hash, m = h.match(/^#artikel-(\d{9})$/);
+    var h = location.hash, m = h.match(/^#artikel-(\d{9})(?:-([A-Z0-9]{2,5}))?$/);
     if (!m && ARTIKEL_AWAL) { m = [0, ARTIKEL_AWAL]; ARTIKEL_AWAL = ''; }
-    if (m) { var it = D.items.filter(function (x) { return x.g === m[1]; })[0]; if (it) buka(it, true); else toast('Barang ini sedang tidak tersedia di toko'); return; }
+    if (m) { var it = D.items.filter(function (x) { return x.g === m[1]; })[0]; if (it) buka(it, true, m[2]); else toast('Barang ini sedang tidak tersedia di toko'); return; }
     if (h === '#promo') { bukaDaftarPromo(); return; }
     if (h === '#kategori') { bukaKategori(); return; }
     if (h === '#daftar') { bukaDaftar(); return; }
@@ -1290,12 +1313,10 @@
   }
   function teksDaftar(baris) {
     if (!baris.length) return '';
-    var t = 'Halo EIGER Kartasura, saya mau tanya ketersediaan barang berikut:\n';
-    baris.forEach(function (b, k) {
-      t += '\n' + (k + 1) + '. ' + (b.it ? namaTampil(b.it.n) : 'Kode ' + b.d.g) + ' (kode ' + b.d.g + ')\n   Warna ' + warnaInfo(b.d.w)[0].toLowerCase() +
-        (b.d.u && b.d.u !== 'NOS' ? ', ukuran ' + b.d.u : '') + (b.harga ? ', ' + rp(b.harga) + (b.promo ? ' (promo)' : '') : '');
-    });
-    return t + '\n\nTerima kasih.';
+    return teksTanya(baris.map(function (b) {
+      var w = b.it && b.it.w.filter(function (y) { return y[0] === b.d.w; })[0];
+      return { it: b.it, g: b.d.g, w: b.d.w, u: b.d.u, harga: b.harga, pw: w && prWarna(w) };
+    }));
   }
   function bukaDaftar() {
     var baris = barisDaftar();
