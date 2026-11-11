@@ -11,7 +11,7 @@
 /** Versi kode. WAJIB dinaikkan setiap kali Code.gs diubah (format yyyy-MM-dd.n),
  *  lalu simpan ke GitHub (alishobrun/hub-toko-2299) SEBELUM dipasang. Halaman Kesehatan Data
  *  membandingkan angka ini dengan GitHub supaya kode yang dipasang di luar GitHub ketahuan. */
-const KODE_VERSI = '2026-11-11.10';
+const KODE_VERSI = '2026-11-11.11';
 
 const CFG = {
   STORE: '2299',
@@ -4682,7 +4682,7 @@ Object.assign(API, {
     const last = K.safe[K.safe.length - 1];
     const users = u.role === 'admin' ? read_('users').filter(function (x) { return String(x.status) === 'aktif'; }).map(function (x) { return { username: String(x.username), nama: String(x.nama) }; }) : [];
     return { bulan: bulan, bulanAda: daftar, rows: rows, jual: jual, menunggu: D.rows.filter(function (r) { return r.status === 'menunggu'; }).length,
-      sampai: last ? last.waktu : null, bisaTahu: u.role === 'admin', users: users, tautan: bapTautan_() };
+      sampai: last ? last.waktu : null, bisaTahu: u.role === 'admin', users: users, tautan: bapTautan_(), sheet: serahTautan_() };
   },
   /** SL / admin: "Mengetahui" setoran RA (batal = true untuk membatalkan). */
   serahTahu: function (req) {
@@ -5085,6 +5085,7 @@ Object.assign(API, {
   /** Admin: bangun ulang sheet rekap / perbarui arsip BAP lama. */
   bapAdmin: function (req) {
     const a = auth_(req, true);
+    if (req.aksi === 'serah') { const r = serahSheet_(kasBacaUlang_()); log_(a.username, 'bangun sheet serah terima', r.bulan + ' bulan'); return r; }
     if (req.aksi === 'arsip') { const r = bapArsip_(); log_(a.username, 'perbarui arsip BAP lama', r.tab + ' tab'); return r; }
     if (req.aksi === 'impor') { const r = bapImpor_(!!req.cobaSaja); if (!req.cobaSaja) log_(a.username, 'impor BAP lama', r.baris + ' hari'); return r; }
     const r = rekapBangun_();
@@ -5375,16 +5376,64 @@ function tabSetoran_(ss, K) {
   });
   tulisTab_(ss, 'Setoran', rows, { uang: [4], lebar: [100, 140, 110, 110, 80, 130, 260, 220, 300], index: 1 });
 }
-/** Tab "Serah Terima": format seperti sheet lama (tanggal, pihak, nama, penjualan, nominal, PV, mengetahui SL). */
-function tabSerah_(ss, K) {
-  const D = serahData_(K);
-  const rows = [['Tanggal setor', 'Pihak', 'Nama', 'Penjualan', 'Nominal', 'Bank / cara', 'PV (CARE)', 'Mengetahui (SL)', 'Status', 'Keterangan']];
-  D.rows.slice().reverse().forEach(function (r) {
-    rows.push([r.tanggal, r.pihak, r.nama, r.tglJual ? tglPendek_(r.tglJual) + (r.sisa ? ' (sisa)' : '') : '', r.nominal, r.bank, r.kode,
-      r.tahu ? r.tahu.nama + ' · ' + r.tahu.waktu : (r.status === 'info' ? '— (disetor SL)' : ''), r.status === 'menunggu' ? 'Menunggu SL' : r.status === 'arsip' ? 'Arsip' : 'DONE', r.ket]);
+/* ---------- Sheet terpisah "SERAH TERIMA SETORAN 2299" (format sama dengan sheet lama, satu tab per bulan) ---------- */
+const SERAH_NAMA = 'SERAH TERIMA SETORAN 2299';
+const BULAN_BESAR_ = ['JANUARI', 'FEBRUARI', 'MARET', 'APRIL', 'MEI', 'JUNI', 'JULI', 'AGUSTUS', 'SEPTEMBER', 'OKTOBER', 'NOVEMBER', 'DESEMBER'];
+function serahFile_() {
+  const p = PropertiesService.getScriptProperties(), id = p.getProperty('SERAH_SHEET_ID');
+  if (id) { try { const f = DriveApp.getFileById(id); if (!f.isTrashed()) return SpreadsheetApp.openById(id); } catch (e) { /* buat ulang */ } }
+  const ss = SpreadsheetApp.create(SERAH_NAMA);
+  ss.setSpreadsheetTimeZone(CFG.TZ);
+  const f = DriveApp.getFileById(ss.getId());
+  f.moveTo(folderBasecamp_());
+  try { f.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW); } catch (e) { Logger.log('share serah: ' + e); }
+  p.setProperty('SERAH_SHEET_ID', ss.getId());
+  return ss;
+}
+function serahTautan_() { const id = PropertiesService.getScriptProperties().getProperty('SERAH_SHEET_ID'); return id ? 'https://docs.google.com/spreadsheets/d/' + id + '/edit' : ''; }
+const tglId_ = function (t) { return t ? t.slice(8, 10) + '/' + t.slice(5, 7) + '/' + t.slice(0, 4) : ''; };
+const namaPendek_ = function (n) { n = String(n || '').trim(); return /^NIK /.test(n) ? n : n.split(/\s+/)[0].toUpperCase(); };
+/** Baris sheet serah terima satu bulan: tanggal | Pihak | Nama | penjualan | Nominal | Tanda Tangan | Mengetahui (SL) | PV */
+function serahBaris_(rows) {
+  return rows.map(function (r) {
+    return [tglId_(r.tanggal), r.pihak, namaPendek_(r.nama), r.tglJual ? tglId_(r.tglJual) + (r.sisa ? ' (sisa)' : '') : '', 'Rp' + Number(r.nominal).toLocaleString('en-US'),
+      '✓ ' + namaPendek_(r.nama) + ' ' + r.waktu.slice(11, 16),
+      r.status === 'info' ? '— (setor SL)' : r.tahu ? '✓ ' + namaPendek_(r.tahu.nama) + ' ' + tglId_(r.tahu.waktu.slice(0, 10)) : r.status === 'arsip' ? '' : 'BELUM',
+      r.kode];
   });
-  if (rows.length === 1) rows.push(['Laporan Store Safe CARE belum diunggah', '', '', '', '', '', '', '', '', '']);
-  tulisTab_(ss, 'Serah Terima', rows, { uang: [5], lebar: [110, 50, 150, 120, 110, 130, 150, 200, 100, 320], index: 1 });
+}
+function serahSheet_(K) {
+  const D = serahData_(K), ss = serahFile_(), per = {};
+  D.rows.forEach(function (r) { if (r.tanggal >= '2026-08-01') (per[r.tanggal.slice(0, 7)] = per[r.tanggal.slice(0, 7)] || []).push(r); });
+  const bulan = Object.keys(per).sort().reverse();
+  bulan.forEach(function (b, i) {
+    const nama = BULAN_BESAR_[Number(b.slice(5)) - 1] + ' ' + b.slice(0, 4);
+    let sh = ss.getSheetByName(nama);
+    if (!sh) sh = ss.insertSheet(nama, i);
+    sh.clear(); sh.clearConditionalFormatRules();
+    const data = serahBaris_(per[b]);
+    const need = data.length + 4;
+    if (sh.getMaxRows() < need) sh.insertRowsAfter(sh.getMaxRows(), need - sh.getMaxRows());
+    try { sh.getRange(1, 1, 2, 8).breakApart(); } catch (e) {}
+    sh.getRange(1, 1, 2, 8).merge().setValue('SERAH TERIMA SETORAN ').setFontWeight('bold').setFontSize(14).setHorizontalAlignment('center').setVerticalAlignment('middle');
+    sh.getRange(3, 1, 1, 8).setValues([['tanggal', 'Pihak', 'Nama', 'penjualan', 'Nominal', 'Tanda Tangan', 'Mengetahui (SL)', 'PV']])
+      .setFontWeight('bold').setHorizontalAlignment('center').setBackground('#D9E1F2');
+    if (data.length) {
+      sh.getRange(4, 1, data.length, 8).setNumberFormat('@').setValues(data).setVerticalAlignment('middle');
+      sh.getRange(4, 1, data.length, 2).setHorizontalAlignment('center');
+      sh.getRange(4, 4, data.length, 1).setHorizontalAlignment('center');
+      sh.getRange(4, 5, data.length, 1).setHorizontalAlignment('right');
+      sh.getRange(4, 6, data.length, 2).setHorizontalAlignment('center');
+      const belum = data.map(function (r, k) { return r[6] === 'BELUM' ? k : -1; }).filter(function (k) { return k >= 0; });
+      belum.forEach(function (k) { sh.getRange(4 + k, 7).setBackground('#FFF2CC').setFontColor('#9C5700'); });
+    }
+    sh.getRange(3, 1, Math.max(1, data.length + 1), 8).setBorder(true, true, true, true, true, true, '#000000', SpreadsheetApp.BorderStyle.SOLID);
+    [100, 60, 110, 150, 120, 140, 150, 150].forEach(function (w, c) { sh.setColumnWidth(c + 1, w); });
+    sh.setFrozenRows(3);
+  });
+  // tab kosong bawaan / bulan tanpa data dihapus
+  ss.getSheets().forEach(function (sh) { if (ss.getSheets().length > 1 && bulan.map(function (b) { return BULAN_BESAR_[Number(b.slice(5)) - 1] + ' ' + b.slice(0, 4); }).indexOf(sh.getName()) < 0) ss.deleteSheet(sh); });
+  return { url: serahTautan_(), bulan: bulan.length };
 }
 function tabPetty_(ss, K) {
   const rows = [['Waktu', 'Kode', 'Akun / kategori', 'Masuk (debit)', 'Keluar (kredit)', 'Saldo CARE', 'Status', 'Keterangan']];
@@ -5425,7 +5474,7 @@ function rekapSekarang_(bulan, semuaTab) {
     const ss = rekapFile_(), K = kasBacaUlang_(), S = setoranHitung_(K);
     (bulan || []).forEach(function (b) { if (/^\d{4}-\d{2}$/.test(b)) { tabBulan_(ss, b, K, S); tabPecahan_(ss, b, K, S); } });
     tabRingkasan_(ss, K, S);
-    if (semuaTab) { tabSetoran_(ss, K); tabPetty_(ss, K); tabSerah_(ss, K); }
+    if (semuaTab) { tabSetoran_(ss, K); tabPetty_(ss, K); try { const t = ss.getSheetByName('Serah Terima'); if (t) ss.deleteSheet(t); serahSheet_(K); } catch (e) { Logger.log('serah sheet: ' + e); } }
   } catch (e) { Logger.log('rekap BAP: ' + e); }
 }
 function rekapBangun_() {
@@ -5434,7 +5483,8 @@ function rekapBangun_() {
   K.bap.forEach(function (b) { bulan[b.tanggal.slice(0, 7)] = 1; });
   // hapus tab bulan lama yang tidak ada datanya
   ss.getSheets().forEach(function (s) { const m = s.getName().match(/^(\w{3}) (\d{4})$/); if (m && !bulan[m[2] + '-' + pad_(BLN_.indexOf(m[1]) + 1)] && ss.getSheets().length > 1) ss.deleteSheet(s); });
-  tabRingkasan_(ss, K, S); tabSetoran_(ss, K); tabPetty_(ss, K); tabSerah_(ss, K);
+  tabRingkasan_(ss, K, S); tabSetoran_(ss, K); tabPetty_(ss, K);
+  try { const t = ss.getSheetByName('Serah Terima'); if (t) ss.deleteSheet(t); serahSheet_(K); } catch (e) { Logger.log('serah sheet: ' + e); }
   Object.keys(bulan).sort().forEach(function (b) { tabBulan_(ss, b, K, S); tabPecahan_(ss, b, K, S); });
   return { bulan: Object.keys(bulan).length, url: bapTautan_().rekap };
 }
