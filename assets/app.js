@@ -7198,7 +7198,7 @@
           D.banner && D.banner.galat ? el('b', { class: 'kt-galat', text: ' ' + D.banner.galat }) : null));
     }
     function drawList() {
-      var F = { belum: function (x) { return !x.f.length; }, otomatis: function (x) { return x.f.length && x.sumber === 'otomatis'; }, manual: function (x) { return x.sumber === 'manual'; }, semua: function () { return true; } };
+      var F = { belum: function (x) { return !x.f.length; }, otomatis: function (x) { return x.f.length && x.sumber !== 'manual'; }, manual: function (x) { return x.sumber === 'manual'; }, semua: function () { return true; } };
       var seg = el('div', { class: 'seg', role: 'group', 'aria-label': 'Saring foto' }, [['belum', 'Belum ada foto'], ['otomatis', 'Otomatis'], ['manual', 'Diisi manual'], ['semua', 'Semua']].map(function (p) {
         var n = D.items.filter(F[p[0]]).length;
         return el('button', { type: 'button', 'aria-pressed': String(saring === p[0]), text: p[1] + ' (' + n + ')', onclick: function () { saring = p[0]; tampil = 60; drawList(); } });
@@ -7231,7 +7231,7 @@
         el('div', { class: 'kt-main' },
           el('b', { text: x.n }),
           el('small', null, x.g + ' · ' + titleCase(x.k3) + ' / ' + titleCase(x.k4) + ' · ',
-            x.sumber === 'manual' ? 'diisi manual' : x.f.length ? 'otomatis' : x.status === 'tidak ketemu' ? 'tidak ketemu di web (dicek ' + fTime(x.dicek) + ')' : 'belum dicek',
+            x.sumber === 'manual' ? 'diisi manual' : x.sumber === 'mirip' ? 'otomatis · foto model serupa (nama sama)' : x.f.length ? 'otomatis' : x.status === 'tidak ketemu' ? 'tidak ketemu di web (dicek ' + fTime(x.dicek) + ')' : 'belum dicek',
             x.url ? [' · ', el('a', { href: x.url, target: '_blank', rel: 'noopener', text: 'halaman web' })] : [' · ', el('a', { href: cariWeb, target: '_blank', rel: 'noopener', text: 'cari di eigeradventure' })]),
           el('div', { class: 'inline' }, inp,
             el('button', { class: 'btn btn-primary btn-sm', type: 'button', text: 'Simpan', onclick: function () { simpan(inp.value); } }),

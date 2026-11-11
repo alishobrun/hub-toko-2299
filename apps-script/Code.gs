@@ -11,7 +11,7 @@
 /** Versi kode. WAJIB dinaikkan setiap kali Code.gs diubah (format yyyy-MM-dd.n),
  *  lalu simpan ke GitHub (alishobrun/hub-toko-2299) SEBELUM dipasang. Halaman Kesehatan Data
  *  membandingkan angka ini dengan GitHub supaya kode yang dipasang di luar GitHub ketahuan. */
-const KODE_VERSI = '2026-11-11.14';
+const KODE_VERSI = '2026-11-11.15';
 
 const CFG = {
   STORE: '2299',
@@ -5676,7 +5676,7 @@ const KATALOG = {
   BATCH: 8,                      // permintaan bersamaan (dibuat kecil supaya sopan ke situs eigeradventure)
   WAKTU_MS: 4.5 * 60e3,          // batas satu putaran (Apps Script maks 6 menit)
   CACHE_DETIK: 21600,
-  METODE: 'otomatis2',            // dinaikkan bila cara pencarian berubah → artikel yang belum ketemu dicoba lagi
+  METODE: 'otomatis3',            // dinaikkan bila cara pencarian berubah → artikel yang belum ketemu dicoba lagi
   LOG_HARI: 90,                  // jejak lihat/tanya disimpan 90 hari
   LOG_MAKS_MENIT: 400,           // batas kiriman jejak per menit (cegah spam)
   TUNGGU_MAKS_JAM: 40,           // batas permintaan "kabari saya" per jam (cegah spam)
@@ -5768,9 +5768,11 @@ function katalogSusun_(fotoIkut) {
     (run[r[0]] || (run[r[0]] = {}))[String(r[1]).trim().toUpperCase()] = 1;
   });
   const F = {};
+  const FM = {}; // foto dari model serupa (nama sama, kode artikel lain)
   const PG = {}; // panduan ukuran per generic (gambar resmi eigeradventure)
   if (fotoIkut) read_('katalog_foto').forEach(function (f) {
     if (f.foto) F[String(f.generic)] = String(f.foto).split(/\s+/).map(fotoRingkas_).filter(String);
+    if (f.foto && String(f.sumber) === 'mirip') FM[String(f.generic)] = 1;
     if (/^https:\/\//.test(String(f.panduan || ''))) PG[String(f.generic)] = String(f.panduan);
   });
   let INF = {};
@@ -5798,7 +5800,7 @@ function katalogSusun_(fotoIkut) {
     if (!w.length) return;
     w.sort(function (p, q) { return p[0] < q[0] ? -1 : 1; });
     const it = { g: g, n: a.n, k3: a.k3, k4: a.k4, gd: a.gd, ac: a.ac, h: a.h, hm: a.hMin && a.hMin < a.h ? a.hMin : 0, b: (a.baru && a.baru >= batasBaru) || masukToko[g] ? 1 : 0, w: w };
-    if (fotoIkut && F[g]) it.f = F[g];
+    if (fotoIkut && F[g]) { it.f = F[g]; if (FM[g]) it.fm = 1; }
     if (fotoIkut && PG[g]) it.sg = PG[g];
     if (fotoIkut && INF[g]) { it.i = 1; if (INF[g].w) it.wg = 1; } // ada info resmi / garansi seumur hidup
     const pw = w.filter(function (r) { return r[3]; });
@@ -5858,6 +5860,22 @@ function slugKandidat_(nama) {
 
 
 /** Kata pencarian: r=0 nama lengkap, r=1 dua kata pertama (tanpa awalan EIGER/WS). */
+/** Nama artikel toko → nama gaya eigeradventure: singkatan dibuka (JR→JUNIOR, WS→WOMEN, MENS→MEN, JKT→JACKET). */
+function namaEiger_(nama) {
+  return (' ' + String(nama || '').toUpperCase().replace(/[^A-Z0-9.]+/g, ' ') + ' ')
+    .replace(/ JR /g, ' JUNIOR ').replace(/ WS /g, ' WOMEN ').replace(/ (MENS?|MS) /g, ' MEN ').replace(/ K\. ?/g, ' ').replace(/^ K /, ' ')
+    .replace(/ JKT /g, ' JACKET ').replace(/ TEES? /g, ' TEE ').replace(/ T SHIRT /g, ' TEE ').replace(/\s+/g, ' ').trim();
+}
+/** Nama tanpa nomor versi di belakang (mis. "2.0") untuk mencocokkan model serupa. */
+function namaInti_(nama) { return namaEiger_(nama).replace(/ \d+\.\d+$/, '').trim(); }
+/** Daftar kata pencarian foto berdasarkan nama artikel (dicoba berurutan sampai ketemu). */
+function kataCariFoto_(nama) {
+  const n = String(nama || '').replace(/["']/g, ' ').replace(/\s+/g, ' ').trim();
+  const inti = namaInti_(n);
+  const pendek = inti.split(' ').filter(function (w) { return w.length > 1 && !/^(JUNIOR|WOMEN|MEN|EIGER)$/.test(w); }).slice(0, 3).join(' ');
+  const out = [n, namaEiger_(n), inti, pendek, cariKata_(n, 1)];
+  return out.filter(function (q, i) { return q && q.length > 2 && out.indexOf(q) === i; }).slice(0, 5);
+}
 function cariKata_(nama, r) {
   const n = String(nama || '').replace(/["']/g, ' ').replace(/\s+/g, ' ').trim();
   if (r === 0) return n;
@@ -5975,21 +5993,25 @@ function cariFotoKatalog() {
       const batch = antre.slice(i, i + KATALOG.BATCH);
       i += batch.length;
       // putaran per kandidat alamat: hanya artikel yang belum ketemu yang dicoba alamat berikutnya
-      const sisa = batch.map(function (it) { return { it: it, slugs: slugKandidat_(it.n), ok: null, url: '' }; });
-      // 1–2) pencarian situs eigeradventure (nama lengkap, lalu nama pendek): cocokkan lewat kode artikel (skuProduct)
-      [0, 1].forEach(function (r) {
-        const coba = sisa.filter(function (x) { return !x.ok && cariKata_(x.it.n, r); });
-        if (!coba.length || st.galat) return;
+      const sisa = batch.map(function (it) { return { it: it, slugs: slugKandidat_(it.n), kata: kataCariFoto_(it.n), ok: null, url: '', mirip: null }; });
+      // 1) pencarian situs eigeradventure memakai nama artikel (nama asli, singkatan dibuka, tanpa versi, nama pendek).
+      //    Cocok lewat kode artikel (skuProduct); bila kode tidak ada di web, nama yang sama persis (tanpa nomor versi)
+      //    dipakai sebagai foto model serupa.
+      for (let r = 0; r < 5; r++) {
+        const coba = sisa.filter(function (x) { return !x.ok && x.kata[r]; });
+        if (!coba.length || st.galat) break;
         let res;
-        try { res = cariEiger_(coba.map(function (x) { return cariKata_(x.it.n, r); })); } catch (e) { st.galat = String(e.message || e).slice(0, 150); return; }
+        try { res = cariEiger_(coba.map(function (x) { return x.kata[r]; })); } catch (e) { st.galat = String(e.message || e).slice(0, 150); break; }
         res.forEach(function (h, k) {
           if (h.blokir) blokir++;
-          const x = coba[k], p = (h.produk || []).filter(function (a) { return String(a.skuProduct || '').slice(0, 9) === x.it.g; })[0];
-          if (!p) return;
-          const foto = fotoProduk_(p);
-          if (foto.length) { x.ok = foto; x.url = KATALOG.WEB + (p.slug || ''); }
+          const x = coba[k], produk = h.produk || [];
+          const p = produk.filter(function (a) { return String(a.skuProduct || '').slice(0, 9) === x.it.g; })[0];
+          if (p) { const foto = fotoProduk_(p); if (foto.length) { x.ok = foto; x.url = KATALOG.WEB + (p.slug || ''); } return; }
+          if (x.mirip) return;
+          const sama = produk.filter(function (a) { return namaEiger_(a.name) === namaEiger_(x.it.n) || namaInti_(a.name) === namaInti_(x.it.n); })[0];
+          if (sama && fotoProduk_(sama).length) x.mirip = fotoProduk_(sama);
         });
-      });
+      }
       // 3) cadangan: tebak alamat halaman dari nama artikel
       for (let r = 0; r < 3; r++) {
         const coba = sisa.filter(function (x) { return !x.ok && x.slugs[r]; });
@@ -6012,8 +6034,12 @@ function cariFotoKatalog() {
       }
       sisa.forEach(function (x) {
         st.cek++;
-        if (x.ok) st.ketemu++;
-        hasil[x.it.g] = { generic: x.it.g, foto: x.ok ? x.ok.join(' ') : '', sumber: x.ok ? 'otomatis' : '', url: x.url, status: x.ok ? 'ketemu' : 'tidak ketemu', dicek: now_(), oleh: KATALOG.METODE };
+        if (x.ok || x.mirip) st.ketemu++;
+        // foto model serupa (nama sama, kode lain): alamat produk tidak disimpan supaya deskripsi & panduan ukuran
+        // model lain tidak ikut terambil
+        hasil[x.it.g] = x.ok ? { generic: x.it.g, foto: x.ok.join(' '), sumber: 'otomatis', url: x.url, status: 'ketemu', dicek: now_(), oleh: KATALOG.METODE }
+          : x.mirip ? { generic: x.it.g, foto: x.mirip.join(' '), sumber: 'mirip', url: '', status: 'ketemu (model serupa)', dicek: now_(), oleh: KATALOG.METODE }
+            : { generic: x.it.g, foto: '', sumber: '', url: '', status: 'tidak ketemu', dicek: now_(), oleh: KATALOG.METODE };
       });
       if (blokir >= KATALOG.BATCH * 2) { st.galat = 'eigeradventure.com menolak akses otomatis (403/429). Isi foto manual.'; break; }
     }

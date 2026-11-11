@@ -154,10 +154,14 @@
     return it._f;
   }
   /** Versi 360 px dari CDN eigeradventure untuk kartu & foto kecil (foto asli 1000 px hanya di halaman detail). */
-  function fotoKecil(u) { return /\/media\/web\/[^/]+$/.test(u) ? u.replace('/media/web/', '/media/web/small/') : u; }
-  function gagalKecil() { var a = this.getAttribute('data-asli'); if (a && this.src !== a) { this.src = a; this.removeAttribute('data-asli'); } }
-  function imgKecil(u, alt, lain) {
-    var x = el('img', Object.assign({ src: fotoKecil(u), 'data-asli': u, alt: alt || '', loading: 'lazy', decoding: 'async', referrerpolicy: 'no-referrer' }, lain || {}));
+  // versi small hanya tersedia untuk foto varian bernama hash (product/variant/media/web/<32 hex>.webp)
+  function fotoKecil(u) { return /\/product\/variant\/media\/web\/[0-9a-f]{32}\.webp$/.test(u) ? u.replace('/media/web/', '/media/web/small/') : u; }
+  /** Foto kecil gagal → pakai foto asli; foto asli juga gagal → panggil gagal() (mis. tampilkan kotak tanpa foto). */
+  function gagalKecil() { var a = this.getAttribute('data-asli'); if (a && this.src !== a) { this.removeAttribute('data-asli'); this.src = a; return; } if (this._gagal) this._gagal(); }
+  function imgKecil(u, alt, gagal) {
+    var src = fotoKecil(u);
+    var x = el('img', { src: src, 'data-asli': src !== u ? u : null, alt: alt || '', loading: 'lazy', decoding: 'async', referrerpolicy: 'no-referrer' });
+    x._gagal = gagal || null;
     x.addEventListener('error', gagalKecil);
     return x;
   }
@@ -544,9 +548,7 @@
       if (bawah.length) gb.append(el('span', { class: 'tanda-bawah' }, bawah));
     };
     if (foto) {
-      var img = imgKecil(foto, namaTampil(it.n));
-      img.addEventListener('error', function () { if (!img.getAttribute('data-asli')) ganti(); });
-      gb.append(img);
+      gb.append(imgKecil(foto, namaTampil(it.n), ganti));
       if (fotos[1]) gb.append(el('img', { class: 'gb-2', 'data-src': fotoKecil(fotos[1]), alt: '', decoding: 'async', referrerpolicy: 'no-referrer', 'aria-hidden': 'true' }));
       tandai();
     } else ganti();
@@ -654,7 +656,7 @@
     var no = n > 1 ? el('span', { class: 'galeri-no', text: '1/' + n }) : null;
     var mini = n > 1 ? el('div', { class: 'galeri-mini' }, fotos.map(function (f, i) {
       return el('button', { type: 'button', 'aria-label': 'Foto ' + (i + 1), 'aria-pressed': String(!i), onclick: function () { ke(i); } },
-        el('img', { src: fotoKecil(f), alt: '', loading: 'lazy', draggable: 'false', referrerpolicy: 'no-referrer', onerror: gagalKecil }));
+        imgKecil(f, ''));
     })) : null;
     function tandai(i) {
       fi = i;
@@ -712,7 +714,8 @@
       el('button', { class: 'mini-naik', type: 'button', 'aria-label': 'Foto kecil sebelumnya', onclick: function () { geserMini(-1); } }, svg('<path d="m6 15 6-6 6 6"/>')),
       mini,
       el('button', { class: 'mini-turun', type: 'button', 'aria-label': 'Foto kecil berikutnya', onclick: function () { geserMini(1); } }, svg('<path d="m6 9 6 6 6-6"/>'))) : null;
-    var node = el('div', { class: 'galeri' + (n > 1 ? ' banyak' : '') }, samping, el('div', { class: 'galeri-panggung' }, utama, no, panah));
+    var catatan = it.fm && n ? el('span', { class: 'galeri-catatan', text: 'Foto model serupa · warna & detail bisa sedikit berbeda' }) : null;
+    var node = el('div', { class: 'galeri' + (n > 1 ? ' banyak' : '') }, samping, el('div', { class: 'galeri-panggung' }, utama, catatan, no, panah));
     return { node: node, ke: ke, maju: function () { ke(fi + 1); }, mundur: function () { ke(fi - 1); } };
   }
   document.addEventListener('keydown', function (e) {
