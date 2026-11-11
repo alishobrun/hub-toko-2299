@@ -7,7 +7,7 @@ Keluaran: data/katalog.json      salinan data katalog (satu artikel per baris) s
                                  & media sosial, lalu langsung membuka katalog di produk itu.
 Berkas hanya ditulis ulang bila isinya berubah, supaya riwayat git tetap kecil.
 """
-import glob, html, json, os, re, shutil, time, urllib.parse
+import glob, html, io, json, os, re, shutil, time, urllib.parse, urllib.request
 
 SITUS = 'https://eigerkartasura.github.io'
 CDN = 'https://d1yutv2xslo29o.cloudfront.net/'
@@ -301,3 +301,73 @@ try:
     potong_produk(k)
 except Exception as e:
     print('potong produk dilewati:', e)
+
+
+# ---------- ikon web: logo EIGER + tulisan KARTASURA (latar putih) ----------
+# Logo diambil dari CDN EIGER (sama dengan logo di header katalog); huruf Barlow Condensed ExtraBold Italic (OFL).
+# Hasil menimpa ikon-*.png yang disalin dari repo Basecamp. Gagal = ikon lama tetap dipakai.
+LOGO_EIGER = 'https://d1yutv2xslo29o.cloudfront.net/8a4bf8a3-1d4b-4a86-9d5e-dfd5935a38e5.png'
+HURUF_IKON = 'https://raw.githubusercontent.com/google/fonts/main/ofl/barlowcondensed/BarlowCondensed-ExtraBoldItalic.ttf'
+
+
+def gambar_ikon(logo, huruf_bytes, s, isi=1.0, sudut=0, teks=True):
+    """Ikon persegi s×s, latar putih. isi = skala konten (maskable butuh area aman), sudut = radius sudut."""
+    from PIL import Image, ImageDraw, ImageFont
+    S = s * 4  # gambar besar lalu diperkecil supaya tepinya halus
+    kanvas = Image.new('RGBA', (S, S), (255, 255, 255, 255))
+    lg = logo.crop(logo.getbbox())
+    skala = min(S * (0.62 if teks else 0.80) * isi / lg.width, S * (0.40 if teks else 0.80) * isi / lg.height)
+    lg = lg.resize((max(1, round(lg.width * skala)), max(1, round(lg.height * skala))), Image.LANCZOS)
+    if teks:
+        f = ImageFont.truetype(io.BytesIO(huruf_bytes), int(S * 0.15 * isi))
+        kata = 'KARTASURA'
+        jarak = S * 0.012 * isi
+        lebar_teks = sum(f.getlength(c) for c in kata) + jarak * (len(kata) - 1)
+        t_atas, t_bawah = f.getbbox(kata)[1], f.getbbox(kata)[3]
+        tinggi_teks = t_bawah - t_atas
+        sela = S * 0.07 * isi
+        total = lg.height + sela + tinggi_teks
+        y0 = (S - total) / 2
+        kanvas.alpha_composite(lg, ((S - lg.width) // 2, int(y0)))
+        d = ImageDraw.Draw(kanvas)
+        x = (S - lebar_teks) / 2
+        y = y0 + lg.height + sela - t_atas
+        for c in kata:
+            d.text((x, y), c, font=f, fill=(10, 26, 79, 255))
+            x += f.getlength(c) + jarak
+    else:
+        kanvas.alpha_composite(lg, ((S - lg.width) // 2, (S - lg.height) // 2))
+    if sudut:
+        m = Image.new('L', (S, S), 0)
+        ImageDraw.Draw(m).rounded_rectangle((0, 0, S - 1, S - 1), radius=int(S * sudut), fill=255)
+        kanvas.putalpha(m)
+    return kanvas.resize((s, s), Image.LANCZOS)
+
+
+def buat_ikon():
+    from PIL import Image
+    ua = {'User-Agent': 'Mozilla/5.0'}
+    logo = Image.open(io.BytesIO(urllib.request.urlopen(urllib.request.Request(LOGO_EIGER, headers=ua), timeout=60).read())).convert('RGBA')
+    # logo hitam di atas transparan; pastikan benar-benar hitam pekat
+    alfa = logo.getchannel('A')
+    logo = Image.new('RGBA', logo.size, (0, 0, 0, 255)); logo.putalpha(alfa)
+    huruf = urllib.request.urlopen(urllib.request.Request(HURUF_IKON, headers=ua), timeout=60).read()
+    hasil = {
+        'ikon-512.png': gambar_ikon(logo, huruf, 512, sudut=0.2),
+        'ikon-192.png': gambar_ikon(logo, huruf, 192, sudut=0.2),
+        'ikon-180.png': gambar_ikon(logo, huruf, 180),               # iPhone memotong sudutnya sendiri
+        'ikon-maskable-512.png': gambar_ikon(logo, huruf, 512, isi=0.78),
+        'ikon-32.png': gambar_ikon(logo, huruf, 32, teks=False, sudut=0.18),  # tab browser: logo saja
+    }
+    for nama, gb in hasil.items():
+        b = io.BytesIO(); gb.save(b, 'PNG', optimize=True)
+        lama = open(nama, 'rb').read() if os.path.exists(nama) else b''
+        if lama != b.getvalue():
+            open(nama, 'wb').write(b.getvalue())
+    print('ikon web:', ', '.join(hasil))
+
+
+try:
+    buat_ikon()
+except Exception as e:
+    print('ikon dilewati:', e)

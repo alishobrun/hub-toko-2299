@@ -1159,3 +1159,24 @@ button.tanya { cursor: pointer; }
   .slide.s-foto img { object-fit: contain; }
   .slide .slide-sumber { left: 50%; right: auto; bottom: 22px; transform: translateX(-50%); max-width: calc(100% - 24px); background: none; padding: 0; font-size: 10.5px; font-weight: 500; color: rgba(255, 255, 255, .85); }
 }
+
+/* ---------- info toko di HP: kotak jam & rating + tombol petunjuk arah ---------- */
+.it-hp { display: none; }
+@media (max-width: 699px) {
+  .info-toko { display: block; padding: 12px; }
+  .info-toko > :not(.it-hp):not(.info-pasang) { display: none !important; }
+  .info-toko .info-pasang { display: inline-flex; margin-top: 10px; }
+  .it-hp { display: block; }
+  .it-kotak-baris { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .it-kotak { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 12px; border: 0; border-radius: 10px; background: #F5F6F8; color: var(--tinta); text-align: left; font: inherit; text-decoration: none; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+  .it-kotak:active { background: #ECEEF2; }
+  .it-besar { font-size: 17px; font-weight: 700; line-height: 1.2; color: var(--tinta); }
+  .it-besar.buka { color: #0E6B54; }
+  .it-besar.tutup { color: #C0392B; }
+  .it-besar { white-space: nowrap; }
+  .it-besar .bintang { display: inline !important; color: #F2A900; font-size: inherit; margin: 0; }
+  .it-kotak small { font-size: 12.5px; color: #5B6170; }
+  .it-arah { display: flex; align-items: center; justify-content: center; gap: 6px; margin-top: 8px; padding: 11px; border-radius: 99px; background: #0A1A4F; color: #fff; font-size: 14px; font-weight: 600; text-decoration: none; }
+  .it-arah:active { background: #13286E; }
+  .it-arah svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 2; }
+}

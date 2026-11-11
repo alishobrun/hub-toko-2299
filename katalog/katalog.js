@@ -1482,7 +1482,8 @@
     var now = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Jakarta' })), m = now.getHours() * 60 + now.getMinutes();
     var mBuka = jBuka[0] * 60 + jBuka[1], mTutup = jTutup[0] * 60 + jTutup[1], buka = m >= mBuka && m < mTutup;
     var jam = function (a) { return dua(a[0]) + '.' + dua(a[1]); };
-    return { buka: buka, teks: buka ? 'Buka · tutup ' + jam(jTutup) : 'Tutup · buka ' + jam(jBuka) + (m >= mTutup ? ' besok' : '') };
+    return { buka: buka, teks: buka ? 'Buka · tutup ' + jam(jTutup) : 'Tutup · buka ' + jam(jBuka) + (m >= mTutup ? ' besok' : ''),
+      judul: buka ? 'Buka' : 'Tutup', ket: buka ? 'Sampai ' + jam(jTutup) : 'Buka ' + jam(jBuka) };
   }
   function waTampil() { return '0' + String(D.wa || '6281120022574').replace(/^62/, '').replace(/(\d{3})(\d{4})(\d+)/, '$1-$2-$3'); }
   /** Info toko ringkas satu baris; detail lengkap di lembar "Info toko". */
@@ -1490,7 +1491,15 @@
     var I = D.infoToko || {}, box = $('#infoToko');
     if (!box) return;
     var J = jamToko();
-    isiUlang(box,
+    // HP: dua kotak (jam toko & rating Google) + tombol petunjuk arah; laptop: satu baris
+    var hp = el('div', { class: 'it-hp' },
+      el('div', { class: 'it-kotak-baris' },
+        el('button', { class: 'it-kotak', type: 'button', onclick: bukaInfoToko, 'aria-label': J.teks + '. Buka info toko' },
+          el('b', { class: 'it-besar ' + (J.buka ? 'buka' : 'tutup'), text: J.judul }), el('small', { text: J.ket })),
+        el(I.ulasan ? 'a' : 'button', I.ulasan ? { class: 'it-kotak', href: I.ulasan, target: '_blank', rel: 'noopener' } : { class: 'it-kotak', type: 'button', onclick: bukaInfoToko },
+          el('b', { class: 'it-besar' }, (I.rating || '4,9') + ' ', el('span', { class: 'bintang', 'aria-hidden': 'true', text: '★' })), el('small', { text: 'Ulasan Google' }))),
+      I.maps ? el('a', { class: 'it-arah', href: I.maps, target: '_blank', rel: 'noopener' }, svg(IKON_LOKASI), 'Petunjuk arah') : null);
+    isiUlang(box, hp,
       el('span', { class: 'status-buka' + (J.buka ? '' : ' tutup') }, el('i'), J.teks),
       I.maps ? el('a', { class: 'info-link', href: I.maps, target: '_blank', rel: 'noopener' }, svg(IKON_LOKASI), 'Petunjuk arah') : null,
       I.ulasan ? el('a', { class: 'info-link info-rating', href: I.ulasan, target: '_blank', rel: 'noopener' }, el('span', { class: 'bintang', 'aria-hidden': 'true', text: '★' }), (I.rating ? I.rating + ' · ' : '') + 'Ulasan Google') : null,
