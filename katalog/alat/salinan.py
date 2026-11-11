@@ -345,7 +345,21 @@ def gambar_ikon(logo, huruf_bytes, s, isi=1.0, sudut=0, teks=True):
 
 
 def buat_ikon():
-    from PIL import Image
+    try:
+        from PIL import Image
+    except ImportError:
+        import subprocess, sys, site, importlib
+        for extra in ([], ['--user']):
+            r = subprocess.run([sys.executable, '-m', 'pip', 'install', '-q', '--break-system-packages', *extra, 'pillow'], capture_output=True, text=True)
+            if not r.returncode:
+                break
+        print('pasang pillow:', r.returncode, (r.stderr or '')[-200:])
+        importlib.invalidate_caches()
+        try:
+            sys.path.append(site.getusersitepackages())
+        except Exception:
+            pass
+        from PIL import Image
     ua = {'User-Agent': 'Mozilla/5.0'}
     logo = Image.open(io.BytesIO(urllib.request.urlopen(urllib.request.Request(LOGO_EIGER, headers=ua), timeout=60).read())).convert('RGBA')
     # logo hitam di atas transparan; pastikan benar-benar hitam pekat
