@@ -262,7 +262,7 @@
     });
     // banner kampanye resmi dari eigeradventure.com, diselipkan setelah slide promo pertama
     var kampanye = (D.banner || []).map(function (b) {
-      return el('button', { class: 'slide s-foto', type: 'button', 'aria-label': b.n || 'Kampanye EIGER', onclick: function () { cariKampanye(b); } },
+      return el('button', { class: 'slide s-foto', type: 'button', 'aria-label': b.n || 'Kampanye EIGER', style: '--latar-foto:url("' + String(b.m || '').replace(/["()\\]/g, '') + '")', onclick: function () { cariKampanye(b); } },
         el('picture', null, el('source', { media: '(min-width: 700px)', srcset: b.d }), el('img', { src: b.m, alt: '', loading: 'lazy', decoding: 'async', referrerpolicy: 'no-referrer' })),
         el('span', { class: 'slide-sumber', text: 'eigeradventure.com · harga & promo online bisa beda dengan toko' }));
     });
