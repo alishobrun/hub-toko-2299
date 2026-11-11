@@ -470,8 +470,26 @@
       return;
     }
     isiUlang(g, hasil.slice(0, tampil).map(kartu));
-    var s = hasil.length - tampil;
-    isiUlang($('#lagi'), s > 0 ? el('button', { class: 'tombol garis', type: 'button', text: 'Lihat lainnya', onclick: function () { tampil += PER_HALAMAN; gambarGrid(); } }) : null);
+    tandaLagi();
+  }
+  /** Tambah halaman berikutnya ke bawah daftar (tanpa menggambar ulang kartu yang sudah ada). */
+  function muatLagi() {
+    if (tampil >= hasil.length) return;
+    var dari = tampil;
+    tampil += PER_HALAMAN;
+    tambah($('#grid'), hasil.slice(dari, tampil).map(kartu));
+    tandaLagi();
+  }
+  /* "Lihat lainnya" terbuka otomatis saat pelanggan menggulir sampai bawah; tombol tetap ada sebagai cadangan */
+  var pengamatLagi = 'IntersectionObserver' in window ? new IntersectionObserver(function (xs) {
+    if (xs.some(function (x) { return x.isIntersecting; })) muatLagi();
+  }, { rootMargin: '600px 0px' }) : null;
+  function tandaLagi() {
+    var s = hasil.length - tampil, box = $('#lagi');
+    isiUlang(box, s > 0 ? [el('span', { class: 'memuat', 'aria-hidden': 'true' }, el('i'), el('i'), el('i')),
+      el('button', { class: 'tombol garis', type: 'button', text: 'Lihat ' + Math.min(s, PER_HALAMAN) + ' barang lainnya', onclick: muatLagi })]
+      : (hasil.length > PER_HALAMAN ? el('p', { class: 'habis-semua', text: 'Sudah semua · ' + hasil.length + ' barang' }) : null));
+    if (pengamatLagi) { pengamatLagi.disconnect(); if (s > 0) pengamatLagi.observe(box); }
   }
 
   /* tab urutan */
