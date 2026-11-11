@@ -243,17 +243,16 @@
     var slides = [];
     var nPromo = D.items.filter(prItem).length;
     var maxD = D.items.reduce(function (m, it) { var p = prItem(it); return p ? Math.max(m, p.d) : m; }, 0);
-    if (nPromo) slides.push(el('button', { class: 'slide s-oranye', type: 'button', onclick: function () { pilihPromo(true); } },
-      el('small', { text: 'Promo ' + (D.promoSampai ? BULAN_PENUH[Number(D.promoSampai.slice(5, 7)) - 1] + ' ' : '') + 'di toko' }), el('b', { text: 'Diskon s/d ' + maxD + '%' }),
-      el('span', { text: nPromo + ' artikel promo tersedia di toko, berlaku s/d ' + tglPendek(D.promoSampai) + '.' }), el('em', { text: 'Lihat barang promo' })));
+    if (nPromo) slides.push(slideGaya({ warna: 's-oranye', tag: 'Promo toko', status: D.promoSampai ? BULAN_PENUH[Number(D.promoSampai.slice(5, 7)) - 1] : '',
+      judul: 'Diskon s/d', angka: maxD, produk: D.items.filter(function (it) { return prItem(it) && fotoBersih(it).length; }).sort(function (a, b) { return (prItem(b).d - prItem(a).d) || ((TERLARIS[a.g] || 999) - (TERLARIS[b.g] || 999)); }).slice(0, 3), sub: nPromo + ' artikel promo tersedia di toko · berlaku s/d ' + tglPendek(D.promoSampai), cta: 'Belanja barang promo', onclick: function () { pilihPromo(true); } }));
     var warna = ['', 's-hijau', 's-ungu', ''];
     var slidePromo = [];
     promoTokoAktif().filter(function (p) { return p.mulai <= hariIni(); }).slice(0, 1).forEach(function (p, i) {
       var st = statusPromo(p.mulai, p.selesai);
-      slidePromo.push(el('button', { class: 'slide ' + warna[(i + 1) % warna.length], type: 'button', onclick: function () { bukaPromo(p); } },
-        el('small', { text: (String(p.jenis || 'Promo').toUpperCase() === 'EAC' ? 'EAC' : judul(p.jenis || 'Promo')) + ' · ' + st.teks }),
-        el('b', { text: p.judul.replace(/^(Promo Banking|EAC|Promo)\s*:\s*/i, '') }),
-        el('span', { text: (p.ket || p.syarat || '').split(/\s*•\s*/)[0] }), el('em', { text: 'Lihat syarat' })));
+      var J = pecahJudulPromo(p.judul);
+      slidePromo.push(slideGaya({ warna: warna[(i + 1) % warna.length], tag: String(p.jenis || 'Promo').toUpperCase() === 'EAC' ? 'Member EAC' : judul(p.jenis || 'Promo'), status: st.teks, akhir: /akhir/.test(st.kelas),
+        judul: J.judul, angka: J.angka, awalan: J.awalan,
+        produk: /non.?promo|all item/i.test(p.produk || p.syarat || '') ? D.items.filter(function (it) { return !prItem(it) && TERLARIS[it.g] && fotoBersih(it).length; }).sort(function (a, b) { return TERLARIS[a.g] - TERLARIS[b.g]; }).slice(0, 3) : [], sub: (p.ket || p.syarat || '').split(/\s*•\s*/)[0], cta: 'Lihat syarat', onclick: function () { bukaPromo(p); } }));
     });
     // banner kampanye resmi dari eigeradventure.com, diselipkan setelah slide promo pertama
     var kampanye = (D.banner || []).map(function (b) {
@@ -279,6 +278,30 @@
       if (document.hidden || dlg.open) return;
       rel.scrollTo({ left: ((ke + 1) % slides.length) * rel.clientWidth, behavior: 'smooth' });
     }, 4500);
+  }
+
+  /** Judul promo → { judul tanpa angka diskon, angka diskon terbesar, awalan "Disc"/"s/d" }. */
+  function pecahJudulPromo(t) {
+    t = String(t || '').replace(/^(Promo Banking|Promo)\s*:\s*/i, '').trim();
+    var semua = (t.match(/\d+(?:[.,]\d+)?\s*%/g) || []).map(function (x) { return parseFloat(x.replace(',', '.')); });
+    if (!semua.length) return { judul: t, angka: 0 };
+    var maks = Math.max.apply(null, semua);
+    var bersih = semua.length === 1 ? t.replace(/[,:\-–]?\s*(?:disc(?:ount)?|diskon|potongan|off)?\s*(?:s\/d|hingga|up to)?\s*\d+(?:[.,]\d+)?\s*%\s*(?:off)?/i, '').replace(/[\s,:\-–]+$/, '').trim() : t.split(':')[0].trim();
+    return { judul: bersih || t, angka: maks, awalan: semua.length > 1 || /s\/d|hingga|up to/i.test(t) ? 's/d' : 'Disc' };
+  }
+  /** Slide promo bergaya poster: label, judul tebal miring, angka diskon besar, tombol. */
+  function slideGaya(o) {
+    var angka = o.angka ? String(o.angka).replace('.', ',') : '';
+    return el('button', { class: 'slide gaya-promo ' + (o.warna || ''), type: 'button', onclick: o.onclick },
+      el('span', { class: 'sl-atas' }, el('span', { class: 'sl-tag', text: o.tag }), o.status ? el('span', { class: 'sl-status' + (o.akhir ? ' akhir' : ''), text: o.status }) : null),
+      el('b', { class: 'sl-judul', text: o.judul }),
+      angka ? el('span', { class: 'sl-angka' }, el('small', { text: o.awalan || '' }), el('strong', { text: angka }), el('i', { text: '%' })) : null,
+      o.sub ? el('span', { class: 'sl-sub', text: o.sub }) : null,
+      o.cta ? el('em', { class: 'sl-cta' }, o.cta, el('span', { 'aria-hidden': 'true', text: ' ›' })) : null,
+      o.produk && o.produk.length >= 2 ? el('span', { class: 'sl-produk', 'aria-hidden': 'true' }, o.produk.map(function (it) {
+        var p = prItem(it);
+        return el('span', { class: 'sl-kartu' }, imgKecil(fotoBersih(it)[0], ''), p ? el('i', { text: '-' + p.d + '%' }) : null);
+      })) : null);
   }
 
   /** Ketuk banner kampanye → cari barang yang serupa di toko (bukan pindah ke toko online). */
