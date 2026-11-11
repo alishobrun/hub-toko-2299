@@ -900,7 +900,7 @@
       }).catch(function () {});
   }
   function barisTeks(t) { return String(t || '').split('\n').map(function (b) { return b.trim(); }).filter(Boolean); }
-  function poinTeks(t) { return barisTeks(t).map(function (b) { return b.replace(/^[•\-–*]\s*/, ''); }).filter(Boolean); }
+  function poinTeks(t) { return barisTeks(t).map(function (b) { return b.replace(/^(?:[•\-–*]|\d{1,2}[.)])\s*/, ''); }).filter(Boolean); }
   function lipat(judulTeks, isi, terbuka) {
     var d = el('details', { class: 'lipat' }, el('summary', null, el('span', { text: judulTeks }), svg('<path d="m6 9 6 6 6-6"/>')), el('div', { class: 'lipat-isi' }, isi));
     if (terbuka) d.open = true;
@@ -943,7 +943,7 @@
       var kode = dl.querySelector('dt:nth-last-of-type(2)');
       var tambahan = [];
       if (dm) tambahan.push(el('dt', { class: 'dari-info', text: 'Dimensi' }), el('dd', { text: dm }));
-      if (b > 0) tambahan.push(el('dt', { class: 'dari-info', text: 'Berat' }), el('dd', { text: b >= 1000 ? nf.format(b / 1000) + ' kg' : nf.format(b) + ' gram' }));
+      if (b > 0) tambahan.push(el('dt', { class: 'dari-info', text: 'Berat paket' }), el('dd', { text: b >= 1000 ? nf.format(b / 1000) + ' kg' : nf.format(b) + ' gram' }));
       tambahan.forEach(function (n) { dl.insertBefore(n, kode); });
     }
   }
