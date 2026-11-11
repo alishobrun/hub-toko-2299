@@ -6426,7 +6426,8 @@
         var q = inp.value.trim().toLowerCase();
         if (q.length < 2) { hasil.replaceChildren(); return; }
         ktData().then(function (d) {
-          var xs = d.items.filter(function (it) { return (it.n + ' ' + it.g).toLowerCase().indexOf(q) >= 0; }).slice(0, 12);
+          var kata = q.split(/\s+/);
+          var xs = d.items.filter(function (it) { var t = (it.n + ' ' + it.g + ' ' + it.k4).toLowerCase(); return kata.every(function (k) { return t.indexOf(k) >= 0; }); }).slice(0, 12);
           hasil.replaceChildren.apply(hasil, xs.length ? xs.map(function (it) {
             var f = ktFoto(it);
             return el('button', { type: 'button', class: 'kt-cari-baris', onclick: function () { onPilih(it); } },
