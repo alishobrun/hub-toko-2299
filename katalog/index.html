@@ -26,8 +26,8 @@
   <meta name="apple-mobile-web-app-title" content="EIGER Kartasura">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="katalog.css?v=202611122200">
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:ital,wght@1,800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="katalog.css?v=202611122300">
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"Store","name":"EIGER Store A. Yani Kartasura","brand":{"@type":"Brand","name":"EIGER"},"url":"https://eigerkartasura.github.io/","image":"https://eigerkartasura.github.io/og-katalog.jpg","telephone":"+62-811-2002-2574","address":{"@type":"PostalAddress","streetAddress":"Jl. A. Yani Km 7, Banaran, Pabelan","addressLocality":"Kartasura","addressRegion":"Jawa Tengah","addressCountry":"ID"},"openingHoursSpecification":[{"@type":"OpeningHoursSpecification","dayOfWeek":["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"],"opens":"08:30","closes":"21:45"}],"hasMap":"https://www.google.com/maps/search/?api=1&query=EIGER%20STORE%20A.YANI%20KARTASURA%20SUKOHARJO&query_place_id=ChIJ6bf1AHkVei4RSA6CwOUUCqA"}</script>
 </head>
 <body>
@@ -66,11 +66,25 @@
       </div>
       <section class="kotak panduan-awal" id="panduanAwal" hidden></section>
 
-      <section class="kotak">
+      <section class="kotak kategori-kotak">
         <div class="kotak-kepala"><h2>Kategori</h2></div>
         <div class="kategori" id="kategori"></div>
       </section>
-
+      <section class="kotak promo-strip" id="stripPromo" hidden>
+        <div class="kotak-kepala strip-kepala">
+          <h2 class="judul-promo"><span class="petir" aria-hidden="true">⚡</span>PROMO TOKO</h2>
+          <span class="hitung-mundur" id="hitungMundur" aria-label="Sisa waktu promo"></span>
+          <button class="lihat" type="button" id="stripSemua">Lihat semua ›</button>
+        </div>
+        <div class="strip-rel deret" id="stripRel"></div>
+      </section>
+      <section class="kotak gaya-kotak">
+        <div class="gaya-rel" id="gaya"></div>
+      </section>
+      <section class="kotak terlaris-kotak" id="terlarisKotak" hidden>
+        <div class="kotak-kepala"><h2 class="judul-tebal">PRODUK TERLARIS</h2><span class="kepala-ket">di toko, 30 hari terakhir</span></div>
+        <div class="strip-rel deret" id="terlarisRel"></div>
+      </section>
       <section class="kotak populer-kotak" id="populerKotak" hidden>
         <div class="kotak-kepala"><h2>Paling banyak dilihat minggu ini</h2></div>
         <div class="strip-rel" id="populerRel"></div>
@@ -83,20 +97,13 @@
         <div class="kotak-kepala"><h2>Pilihan toko</h2></div>
         <div class="koleksi-rel" id="koleksi"></div>
       </section>
-
       <section class="kotak">
         <div class="kotak-kepala"><h2>Untuk aktivitas</h2></div>
         <div class="aktivitas" id="aktivitas"></div>
       </section>
 
-      <section class="kotak promo-strip" id="stripPromo" hidden>
-        <div class="kotak-kepala strip-kepala">
-          <h2><span class="petir" aria-hidden="true">⚡</span>Promo toko</h2>
-          <span class="hitung-mundur" id="hitungMundur" aria-label="Sisa waktu promo"></span>
-          <button class="lihat" type="button" id="stripSemua">Lihat semua ›</button>
-        </div>
-        <div class="strip-rel" id="stripRel"></div>
-      </section>
+
+
     </section>
 
     <!-- daftar produk -->
@@ -117,7 +124,7 @@
       <b>EIGER Store A. Yani Kartasura</b>
       <p>Ketersediaan dan harga promo mengikuti data terakhir di toko dan bisa berubah. Pastikan lewat WhatsApp sebelum datang.</p>
       <p class="aman-kaki">Katalog resmi hanya di <b>eigerkartasura.github.io</b>. Pembayaran hanya di kasir toko; kami tidak pernah meminta transfer ke rekening pribadi.</p>
-      <p class="kredit">Foto alam Merbabu &amp; Merapi dari <a href="https://unsplash.com/?utm_source=katalog_eiger_kartasura&amp;utm_medium=referral" target="_blank" rel="noopener">Unsplash</a>: Dan Gilmour, Fajruddin Mudzakkir, Irfan Bayuaji, Bayu Syaits, Kukuh Himawan Samudro, Fahrul Razi.</p>
+      <p class="kredit">Foto alam Merbabu &amp; Merapi dari <a href="https://unsplash.com/?utm_source=katalog_eiger_kartasura&amp;utm_medium=referral" target="_blank" rel="noopener">Unsplash</a>: Dan Gilmour, Fajruddin Mudzakkir, Irfan Bayuaji, Bayu Syaits, Kukuh Himawan Samudro, Fahrul Razi, Reki Agung Rediana, yudhisthira lk, Yayan Mulyana.</p>
     </footer>
   </div>
 
@@ -145,7 +152,7 @@
     <div class="lembar-in" id="lembar2Isi"></div>
   </dialog>
 
-  <script src="../assets/config.js?v=202611122200"></script>
-  <script src="katalog.js?v=202611122200"></script>
+  <script src="../assets/config.js?v=202611122300"></script>
+  <script src="katalog.js?v=202611122300"></script>
 </body>
 </html>

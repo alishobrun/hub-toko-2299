@@ -11,7 +11,7 @@
 /** Versi kode. WAJIB dinaikkan setiap kali Code.gs diubah (format yyyy-MM-dd.n),
  *  lalu simpan ke GitHub (alishobrun/hub-toko-2299) SEBELUM dipasang. Halaman Kesehatan Data
  *  membandingkan angka ini dengan GitHub supaya kode yang dipasang di luar GitHub ketahuan. */
-const KODE_VERSI = '2026-11-11.16';
+const KODE_VERSI = '2026-11-11.17';
 
 const CFG = {
   STORE: '2299',
@@ -5831,6 +5831,7 @@ function katalogSusun_(fotoIkut) {
     promoSampai: promoSampai, promoToko: fotoIkut ? promoTokoAktif_() : [], banner: fotoIkut ? bannerEiger_() : [], panduan: panduan,
     koleksi: fotoIkut ? koleksiAktif_(items) : [],
     populer: fotoIkut ? populerKatalog_(items) : [],
+    terlaris: fotoIkut ? terlarisKatalog_(items) : [],
     infoToko: KATALOG.INFO };
 }
 
@@ -6188,6 +6189,23 @@ function infoKatalogPeta_() {
   return peta;
 }
 
+/** Artikel terlaris di toko 30 hari terakhir (dari DSR), hanya yang masih ada di katalog.
+ *  Yang dikirim ke katalog publik HANYA urutan kode artikel — jumlah terjual tidak pernah keluar. */
+function terlarisKatalog_(items) {
+  const ada = {};
+  items.forEach(function (it) { ada[it.g] = 1; });
+  const qty = {};
+  try {
+    const akhir = latestDate_();
+    if (!akhir) return [];
+    dsrRange_(addDays_(akhir, -29), akhir).forEach(function (r) {
+      if (!isSalesLine_(r)) return;
+      const g = String(r.sku || '').slice(0, 9);
+      if (ada[g]) qty[g] = (qty[g] || 0) + (Number(r.qty) || 0);
+    });
+  } catch (e) { Logger.log('terlaris katalog: ' + e); }
+  return Object.keys(qty).filter(function (g) { return qty[g] > 0; }).sort(function (a, b) { return qty[b] - qty[a]; }).slice(0, 40);
+}
 /** Artikel paling banyak dilihat/ditanya pelanggan 7 hari terakhir (jejak anonim). Ditanya = 3 kali bobot dilihat. */
 function populerKatalog_(items) {
   const ada = {};

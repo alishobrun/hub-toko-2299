@@ -217,6 +217,7 @@
     ADA_I = D.items.some(function (x) { return x.i; });
     var yLama = scrollY, bukaLama = dlg.open;
     $('#update').textContent = D.diperbarui ? 'Stok per ' + tglUpdate(D.diperbarui) : '';
+    gambarTerlaris();
     gambarInfoToko();
     gambarPanduanAwal();
     hitungDaftar();
@@ -225,6 +226,7 @@
     gambarKoleksi();
     gambarStrip();
     gambarTerakhir();
+    gambarGaya();
     gambarPopuler();
     gambarMenuAtas();
     gambarBandingBar();
@@ -353,18 +355,7 @@
     D.items.forEach(function (it) { hit3[it.k3] = (hit3[it.k3] || 0) + 1; var k = it.k3 + '|' + it.k4; hit4[k] = (hit4[k] || 0) + 1; });
     var k3s = Object.keys(hit3).sort(function (a, b) { return ((KAT[a] || {}).urut || 9) - ((KAT[b] || {}).urut || 9); });
     var maxD = D.items.reduce(function (m, it) { var p = prItem(it); return p ? Math.max(m, p.d) : m; }, 0);
-    var isi = [];
-    if (maxD) isi.push(ikonKat('Barang promo', maxD + '%', 'promo', F.promo, function () { pilihPromo(!F.promo); }));
-    isi.push(ikonKat('Baru di toko', svg('<path d="m12 3 2.6 5.6 6 .7-4.5 4.1 1.2 6L12 16.4 6.7 19.4l1.2-6L3.4 9.3l6-.7Z"/>'), 'baru', F.baru, function () { F.baru = !F.baru; gulirKeDaftar(); saring(); gambarKategori(); }));
-    k3s.forEach(function (k) {
-      isi.push(ikonKat(katNama(k), svg((KAT[k] || {}).ikon || IKON_SEMUA), '', F.k3 === k && !F.k4, function () { pilihKat(k, ''); }));
-    });
-    // sub-kategori terbanyak ikut tampil, ikonnya garis seragam
-    Object.keys(hit4).filter(function (k) { var p = k.split('|'); return subNama(p[1]) !== katNama(p[0]); }).sort(function (a, b) { return hit4[b] - hit4[a]; }).slice(0, 12).forEach(function (k) {
-      var p = k.split('|');
-      isi.push(ikonKat(subNama(p[1]), svg(IKON_K4[p[1]] || (KAT[p[0]] || {}).ikon || IKON_SEMUA), '', F.k3 === p[0] && F.k4 === p[1], function () { pilihKat(p[0], p[1]); }));
-    });
-    isiUlang($('#kategori'), isi);
+    gambarKotakKategori();
     var akt = $('#aktivitas');
     if (akt) isiUlang(akt, AKTIVITAS.map(function (a) {
       var n = D.items.filter(a.cocok).length;
@@ -392,12 +383,8 @@
     var xs = D.items.filter(function (it) { return prItem(it) && fotoBersih(it).length; })
       .sort(function (a, b) { return prItem(b).d - prItem(a).d; }).slice(0, 18);
     $('#stripPromo').hidden = !xs.length;
-    isiUlang($('#stripRel'), xs.map(function (it) {
-      var p = prItem(it);
-      return el('button', { class: 'mini', type: 'button', onclick: function () { buka(it); } },
-        el('div', { class: 'gb' }, imgKecil(fotoBersih(it)[0], namaTampil(it.n)), labelDiskon(p.d)),
-        hargaEl(p.n), el('span', { class: 'label-hemat', text: 'Hemat ' + p.d + '%' }));
-    }));
+    isiUlang($('#stripRel'), xs.map(function (it) { return kartuDeret(it, { varian: true }); }));
+    pasangPanah($('#stripRel'));
     clearInterval(stripTimer);
     if (!xs.length || !D.promoSampai) return;
     var jam = function () {
@@ -750,6 +737,7 @@
     var tandai = function () {
       if (pr) gb.append(labelDiskon(pr.d));
       if (it.b) gb.append(el('span', { class: 'label-baru', text: 'Baru' }));
+      else if (peringkatLaris(it) && peringkatLaris(it) <= 20) gb.append(el('span', { class: 'label-baru laris', text: 'Terlaris' }));
       var bawah = [it.wg ? el('span', { class: 'tanda-garansi', title: 'Garansi seumur hidup' }, svg(IKON_PERISAI), 'Garansi seumur hidup') : null,
         ukuranTerbatas(it) ? el('span', { class: 'tanda-terbatas', text: 'Ukuran terbatas' }) : null].filter(Boolean);
       if (bawah.length) gb.append(el('span', { class: 'tanda-bawah' }, bawah));
@@ -1014,6 +1002,7 @@
       var kanan = el('div', { class: 'info' },
         el('div', { class: 'blok blok-nama' },
           el('div', { class: 'label-produk' }, label.map(function (l) { return el('span', { text: l }); }),
+            peringkatLaris(it) && peringkatLaris(it) <= 20 ? el('em', { class: 'label-laris-teks', text: 'Terlaris di toko' }) : null,
             pw ? el('em', { class: 'label-diskon-teks', text: 'Diskon ' + pw[0] + '%' }) : it.b ? el('em', { class: 'label-baru-teks', text: 'Baru di toko' }) : null),
           el('h1', { text: namaTampil(it.n) }),
           el('div', { class: 'sub', text: katNama(it.k3) + ' › ' + subNama(it.k4) + ' · Kode ' + it.g }),
@@ -1599,6 +1588,7 @@
     D.items.forEach(function (it) { G[it.g] = it; });
     var xs = bacaLihat().map(function (g) { return G[g]; }).filter(Boolean).slice(0, 12);
     box.hidden = !xs.length;
+    pasangPanah($('#terakhirRel'));
     isiUlang($('#terakhirRel'), xs.map(function (it) {
       var p = prItem(it), f = fotoBersih(it)[0], h = hargaKini(it);
       return el('button', { class: 'mini', type: 'button', onclick: function () { buka(it); }, onpointerenter: function () { siapkanInfo(it); } },
@@ -1803,6 +1793,7 @@
     D.items.forEach(function (it) { G[it.g] = it; });
     var xs = (D.populer || []).map(function (g) { return G[g]; }).filter(function (it) { return it && fotoBersih(it).length; }).slice(0, 12);
     box.hidden = xs.length < 4;
+    pasangPanah($('#populerRel'));
     isiUlang($('#populerRel'), xs.map(function (it, i) {
       var p = prItem(it), h = hargaKini(it);
       return el('button', { class: 'mini mini-populer', type: 'button', onclick: function () { buka(it); }, onpointerenter: function () { siapkanInfo(it); } },
@@ -1865,6 +1856,123 @@
       if (s !== susut && Date.now() - t > 250) { susut = s; t = Date.now(); document.body.classList.toggle('menyusut', s); setTimeout(ukurAtas, 220); }
     }, { passive: true });
   })();
+
+  /* ================= beranda bergaya eigeradventure ================= */
+  var TERLARIS = {}; // kode → peringkat (1 = paling laris), dari DSR toko; tanpa jumlah terjual
+  function peringkatLaris(it) { return TERLARIS[it.g] || 0; }
+
+  /** Bungkus deretan geser dengan tombol ‹ › (komputer). */
+  function pasangPanah(rel) {
+    if (!rel || rel.parentNode.classList.contains('geser')) return;
+    var w = el('div', { class: 'geser' });
+    rel.parentNode.insertBefore(w, rel); w.appendChild(rel);
+    var kiri = el('button', { class: 'geser-panah kiri', type: 'button', 'aria-label': 'Geser ke kiri', onclick: function () { rel.scrollBy({ left: -rel.clientWidth * 0.85, behavior: 'smooth' }); } }, svg('<path d="m15 5-7 7 7 7"/>'));
+    var kanan = el('button', { class: 'geser-panah kanan', type: 'button', 'aria-label': 'Geser ke kanan', onclick: function () { rel.scrollBy({ left: rel.clientWidth * 0.85, behavior: 'smooth' }); } }, svg('<path d="m9 5 7 7-7 7"/>'));
+    w.appendChild(kiri); w.appendChild(kanan);
+    var cek = function () { kiri.hidden = rel.scrollLeft < 8; kanan.hidden = rel.scrollLeft + rel.clientWidth >= rel.scrollWidth - 8; };
+    rel.addEventListener('scroll', cek, { passive: true }); addEventListener('resize', cek);
+    new MutationObserver(function () { setTimeout(cek, 50); }).observe(rel, { childList: true });
+    setTimeout(cek, 100);
+  }
+
+  /** Kartu produk untuk deretan (promo & terlaris): foto, bilah diskon, foto kecil, nama, kategori, harga. */
+  function kartuDeret(it, opsi) {
+    opsi = opsi || {};
+    var p = prItem(it), fotos = fotoBersih(it), h = hargaKini(it);
+    var utama = fotos[0] ? imgKecil(fotos[0], namaTampil(it.n)) : null;
+    var gb = el('div', { class: 'kd-foto' }, utama || el('div', { class: 'tanpa-foto' }, svg((KAT[it.k3] || {}).ikon || IKON_SEMUA)),
+      opsi.lencana ? el('span', { class: 'kd-lencana', text: opsi.lencana }) : null);
+    var bar = p ? el('div', { class: 'kd-diskon', text: 'DISKON ' + p.d + '%' }) : el('div', { class: 'kd-diskon kosong' });
+    var thumbs = fotos.length > 1 && opsi.thumb ? el('div', { class: 'kd-thumb' }, fotos.slice(0, 3).map(function (f, i) {
+      return el('span', { class: i ? '' : 'aktif', onpointerenter: function (e) {
+        if (!utama) return; utama.removeAttribute('data-asli'); utama.src = fotoKecil(f); utama.setAttribute('data-asli', f);
+        [].forEach.call(e.currentTarget.parentNode.children, function (x, j) { x.className = j === i ? 'aktif' : ''; });
+      } }, imgKecil(f, ''));
+    }), fotos.length > 3 ? el('em', { text: '+' + (fotos.length - 3) }) : null) : null;
+    var uk = ukItem(it).filter(function (u) { return u !== 'NOS'; }).sort(urutUk);
+    var varian = [it.w.length > 1 ? it.w.length + ' warna' : warnaInfo(it.w[0][0])[0], uk.length ? (uk.length > 3 ? uk[0] + '–' + uk[uk.length - 1] : uk.join(', ')) : ''].filter(Boolean).join(', ');
+    return el('button', { class: 'kartu-deret', type: 'button', onclick: function () { buka(it); }, onpointerenter: function () { siapkanInfo(it); } },
+      gb, bar, thumbs,
+      el('div', { class: 'kd-isi' },
+        el('b', { class: 'kd-nama', text: it.n }),
+        opsi.varian ? el('span', { class: 'kd-varian', text: varian }) : null,
+        el('span', { class: 'kd-kat', text: katNama(it.k3) + ' · ' + subNama(it.k4) }),
+        el('span', { class: 'kd-harga' }, p && p.h > p.n ? el('s', { text: rp(p.h) }) : null,
+          el('b', { class: p ? 'promo' : '', text: h ? rp(h) : 'Tanya harga' }))));
+  }
+
+  /* kotak kategori bergambar */
+  var KOTAK_KAT = [
+    ['Tas', function (it) { return it.k3 === 'BAGS'; }, { k3: 'BAGS' }],
+    ['Carrier', tasCarrier, { q: 'carrier' }],
+    ['Sepatu', function (it) { return it.k4 === 'SHOES' || it.k4 === 'BOOTS'; }, { q: 'sepatu' }],
+    ['Sandal', function (it) { return /SANDAL|SLIPPER/.test(it.k4); }, { q: 'sandal' }],
+    ['Jaket', function (it) { return it.k4 === 'JACKET'; }, { k3: 'APPAREL', k4: 'JACKET' }],
+    ['Kemeja', function (it) { return it.k4 === 'SHIRT'; }, { k3: 'APPAREL', k4: 'SHIRT' }],
+    ['Kaos', function (it) { return it.k4 === 'TOP' || it.k4 === 'T-SHIRT'; }, { q: 'kaos' }],
+    ['Celana', function (it) { return it.k4 === 'PANTS' || it.k4 === 'SHORTS'; }, { q: 'celana' }],
+    ['Topi', function (it) { return /^(CAPS?|HATS?|BEANIES?)$/.test(it.k4); }, { q: 'topi' }],
+    ['Jam tangan', function (it) { return it.k4 === 'WATCHES'; }, { k3: 'ACCESSORIES', k4: 'WATCHES' }],
+    ['Dompet', function (it) { return /WALLET/.test(it.k4); }, { q: 'dompet' }],
+    ['Aksesoris', function (it) { return it.k3 === 'ACCESSORIES'; }, { k3: 'ACCESSORIES' }],
+    ['Perlengkapan', function (it) { return it.k3 === 'EQUIPMENT'; }, { k3: 'EQUIPMENT' }]
+  ];
+  function wakilKategori(xs) {
+    // foto wakil: barang terlaris di kategori itu, bila tidak ada pakai barang berfoto pertama
+    var berfoto = xs.filter(function (it) { return fotoBersih(it).length; });
+    berfoto.sort(function (a, b) { return (peringkatLaris(a) || 999) - (peringkatLaris(b) || 999); });
+    return berfoto[0];
+  }
+  function gambarKotakKategori() {
+    var box = $('#kategori'); if (!box) return;
+    var isi = [];
+    var maxD = D.items.reduce(function (m, it) { var p = prItem(it); return p ? Math.max(m, p.d) : m; }, 0);
+    if (maxD) isi.push(el('button', { class: 'kotak-kat promo', type: 'button', 'aria-pressed': String(F.promo), onclick: function () { pilihPromo(!F.promo); } },
+      el('span', { class: 'kk-foto' }, el('b', { text: maxD + '%' }), el('small', { text: 'diskon s/d' })), el('span', { class: 'kk-label', text: 'Promo' })));
+    KOTAK_KAT.forEach(function (k) {
+      var xs = D.items.filter(k[1]);
+      if (xs.length < 3) return;
+      var w = wakilKategori(xs);
+      isi.push(el('button', { class: 'kotak-kat', type: 'button', onclick: function () {
+        if (k[2].q) { F = fAwal(k[2].q); $('#q').value = k[2].q; tandaiTab(); gambarKategori(); saring(); gulirKeDaftar(); }
+        else pilihKat(k[2].k3, k[2].k4 || '');
+      } }, el('span', { class: 'kk-foto' }, w ? imgKecil(fotoBersih(w)[0], '') : svg(IKON_SEMUA)), el('span', { class: 'kk-label', text: k[0] })));
+    });
+    isi.push(el('button', { class: 'kotak-kat baru', type: 'button', 'aria-pressed': String(F.baru), onclick: function () { F.baru = !F.baru; gulirKeDaftar(); saring(); gambarKategori(); } },
+      el('span', { class: 'kk-foto' }, svg('<path d="m12 3 2.6 5.6 6 .7-4.5 4.1 1.2 6L12 16.4 6.7 19.4l1.2-6L3.4 9.3l6-.7Z"/>')), el('span', { class: 'kk-label', text: 'Baru' })));
+    isi.push(el('button', { class: 'kotak-kat semua', type: 'button', onclick: bukaKategori },
+      el('span', { class: 'kk-foto' }, svg(IKON_SEMUA)), el('span', { class: 'kk-label', text: 'Semua' })));
+    isiUlang(box, isi);
+    pasangPanah(box);
+  }
+
+  /* Pria / Wanita / Anak */
+  var FOTO_GAYA = {
+    Pria: 'https://images.unsplash.com/photo-1698129878421-836a6b1cecd2?w=640&h=520&fit=crop&crop=focalpoint&fp-x=.5&fp-y=.6&fp-z=1.5&q=60&auto=format',
+    Wanita: 'https://images.unsplash.com/photo-1604320462838-2d4b8c1b882c?w=640&h=520&fit=crop&crop=faces,center&q=60&auto=format',
+    Anak: 'https://images.unsplash.com/photo-1700937521110-2d9b24b1cee6?w=640&h=520&fit=crop&crop=focalpoint&fp-x=.5&fp-y=.62&fp-z=1.8&q=60&auto=format'
+  };
+  function gambarGaya() {
+    var box = $('#gaya'); if (!box) return;
+    isiUlang(box, ['Pria', 'Wanita', 'Anak'].map(function (g) {
+      var n = D.items.filter(function (it) { return cocokGender(it, g); }).length;
+      if (n < 3) return null;
+      return el('button', { class: 'gaya', type: 'button', style: "background-image:linear-gradient(rgba(0,0,0,.18),rgba(0,0,0,.42)),url('" + FOTO_GAYA[g] + "')", onclick: function () { terapkan({ gds: [g] }); } },
+        el('b', { text: g }), el('small', { text: n + ' barang' }));
+    }));
+  }
+
+  /* produk terlaris (DSR 30 hari) */
+  function gambarTerlaris() {
+    TERLARIS = {};
+    (D.terlaris || []).forEach(function (g, i) { TERLARIS[g] = i + 1; });
+    var box = $('#terlarisKotak'); if (!box) return;
+    var G = {}; D.items.forEach(function (it) { G[it.g] = it; });
+    var xs = (D.terlaris || []).map(function (g) { return G[g]; }).filter(function (it) { return it && fotoBersih(it).length; }).slice(0, 16);
+    box.hidden = xs.length < 4;
+    isiUlang($('#terlarisRel'), xs.map(function (it) { return kartuDeret(it, { thumb: true }); }));
+    pasangPanah($('#terlarisRel'));
+  }
 
   /* ---------- menu bawah & kontrol ---------- */
   function tandaiMenu(m) { [].forEach.call(document.querySelectorAll('.menu-bawah button'), function (b) { if (b.getAttribute('data-m') === m) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current'); }); }
