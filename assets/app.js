@@ -6493,7 +6493,9 @@
     return api('katalog').then(function (d) { KT_DATA = d; return d; });
   }
   function ktNama(s) { return String(s || '').toLowerCase().replace(/(^|[\s\-(\/])([a-z])/g, function (m, a, b) { return a + b.toUpperCase(); }); }
-  function ktFoto(it) { return (it.f || []).filter(function (u) { return !/\/(thumbnail|small)\//.test(u); })[0] || ''; }
+  /** Alamat foto katalog bisa dipendekkan mesin (lihat fotoRingkas_ di Code.gs) → kembalikan ke alamat lengkap. */
+  function ktFotoPenuh(u) { u = String(u || ''); return !u || /^https?:/.test(u) ? u : 'https://d1yutv2xslo29o.cloudfront.net/' + u.replace(/^~/, 'product/variant/media/web/'); }
+  function ktFoto(it) { return (it.f || []).map(ktFotoPenuh).filter(function (u) { return u && !/\/(thumbnail|small)\//.test(u); })[0] || ''; }
   /** Kotak cari artikel: ketik nama/kode → klik hasil. */
   function ktPemilih(onPilih, placeholder) {
     var hasil = el('div', { class: 'kt-cari-hasil' });

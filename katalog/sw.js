@@ -1,7 +1,7 @@
 /* Service worker katalog EIGER Kartasura: halaman tetap terbuka cepat dan saat sinyal lemah.
  * Berkas halaman: tampilkan salinan tersimpan dulu, perbarui diam-diam di belakang.
  * Data stok (API) tidak disimpan di sini; katalog sudah menyimpan data terakhir sendiri. */
-var VERSI = 'katalog-v1';
+var VERSI = 'katalog-v2';
 var INTI = ['./', 'index.html', 'katalog.css', 'katalog.js', 'assets/config.js', 'ikon-192.png', 'ikon-512.png'];
 
 self.addEventListener('install', function (e) {
@@ -16,6 +16,7 @@ self.addEventListener('fetch', function (e) {
   if (r.method !== 'GET') return;
   var url = new URL(r.url);
   if (url.origin !== location.origin) return; // gambar & API dari luar dibiarkan lewat jaringan
+  if (url.pathname.indexOf('/data/') >= 0) return; // salinan data selalu diambil baru (halaman menyimpan data terakhir sendiri)
   if (r.mode === 'navigate') {
     e.respondWith(fetch(r).then(function (res) {
       var salin = res.clone(); caches.open(VERSI).then(function (c) { c.put('index.html', salin); });

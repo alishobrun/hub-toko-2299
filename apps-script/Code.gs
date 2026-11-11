@@ -11,7 +11,7 @@
 /** Versi kode. WAJIB dinaikkan setiap kali Code.gs diubah (format yyyy-MM-dd.n),
  *  lalu simpan ke GitHub (alishobrun/hub-toko-2299) SEBELUM dipasang. Halaman Kesehatan Data
  *  membandingkan angka ini dengan GitHub supaya kode yang dipasang di luar GitHub ketahuan. */
-const KODE_VERSI = '2026-11-11.13';
+const KODE_VERSI = '2026-11-11.14';
 
 const CFG = {
   STORE: '2299',
@@ -5770,9 +5770,11 @@ function katalogSusun_(fotoIkut) {
   const F = {};
   const PG = {}; // panduan ukuran per generic (gambar resmi eigeradventure)
   if (fotoIkut) read_('katalog_foto').forEach(function (f) {
-    if (f.foto) F[String(f.generic)] = String(f.foto).split(/\s+/).filter(String);
+    if (f.foto) F[String(f.generic)] = String(f.foto).split(/\s+/).map(fotoRingkas_).filter(String);
     if (/^https:\/\//.test(String(f.panduan || ''))) PG[String(f.generic)] = String(f.panduan);
   });
+  let INF = {};
+  if (fotoIkut) try { INF = infoKatalogPeta_(); } catch (e) { Logger.log('katalog info: ' + e); }
   const naHari = Number(settings_().na_hari) || CFG.NA_HARI, batasBaru = addDays_(today_(), -naHari);
   // "Baru" juga untuk artikel yang pertama kali ada stok di toko ≤ BARU_TOKO_HARI (bukan stok awal/baseline)
   const batasToko = addDays_(today_(), -CFG.BARU_TOKO_HARI), masukToko = {};
@@ -5798,6 +5800,7 @@ function katalogSusun_(fotoIkut) {
     const it = { g: g, n: a.n, k3: a.k3, k4: a.k4, gd: a.gd, ac: a.ac, h: a.h, hm: a.hMin && a.hMin < a.h ? a.hMin : 0, b: (a.baru && a.baru >= batasBaru) || masukToko[g] ? 1 : 0, w: w };
     if (fotoIkut && F[g]) it.f = F[g];
     if (fotoIkut && PG[g]) it.sg = PG[g];
+    if (fotoIkut && INF[g]) { it.i = 1; if (INF[g].w) it.wg = 1; } // ada info resmi / garansi seumur hidup
     const pw = w.filter(function (r) { return r[3]; });
     if (pw.length) {
       const murah = pw.reduce(function (m, r) { return !m || r[3][1] < m[3][1] ? r : m; }, null);
@@ -6085,6 +6088,14 @@ function cariPanduanKatalog_(mulai) {
   return Math.max(0, antre.length - i);
 }
 
+/** Alamat foto dipendekkan supaya data katalog ringan: awalan CDN eigeradventure dibuang, folder foto varian
+ *  ditulis '~'. Versi thumbnail/small tidak dikirim (halaman katalog memilih ukuran sendiri). Dibalik di katalog.js & app.js. */
+function fotoRingkas_(u) {
+  u = String(u || '').trim();
+  if (!u || /\/(thumbnail|small)\//.test(u)) return '';
+  const CDN = 'https://d1yutv2xslo29o.cloudfront.net/';
+  return u.indexOf(CDN) === 0 ? u.slice(CDN.length).replace(/^product\/variant\/media\/web\//, '~') : u;
+}
 /** HTML deskripsi eigeradventure → teks polos per baris (poin '•' dipertahankan sebagai baris). */
 function teksBersih_(html) {
   return String(html || '')
@@ -6274,6 +6285,17 @@ Object.assign(API, {
     let t = [];
     try { t = x.t ? JSON.parse(x.t) : []; } catch (e) { t = []; }
     return { d: x.d, f: x.f, m: x.m, dm: x.dm, b: x.b, p: x.p, t: t, w: x.w, a: x.a, y: x.y };
+  },
+
+  /** PUBLIK: semua info produk sekaligus — dipakai workflow situs katalog untuk membuat salinan statis per artikel. */
+  katalogInfoSemua: function () {
+    const P = infoKatalogPeta_(), out = {};
+    Object.keys(P).forEach(function (g) {
+      const x = P[g]; let t = [];
+      try { t = x.t ? JSON.parse(x.t) : []; } catch (e) { t = []; }
+      out[g] = { d: x.d, f: x.f, m: x.m, dm: x.dm, b: x.b, p: x.p, t: t, w: x.w, a: x.a, y: x.y };
+    });
+    return out;
   },
 
   /** PUBLIK: jejak anonim dari katalog. e = [[generic, 'l'|'t'], ...] (maks 25 per kiriman). Tanpa data pribadi. */

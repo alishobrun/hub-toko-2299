@@ -26,7 +26,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="katalog.css?v=202611121300">
+  <link rel="stylesheet" href="katalog.css?v=202611121900">
 </head>
 <body>
   <header class="atas" id="atas">
@@ -68,6 +68,10 @@
         <div class="kategori" id="kategori"></div>
       </section>
 
+      <section class="kotak terakhir-kotak" id="terakhirKotak" hidden>
+        <div class="kotak-kepala"><h2>Baru kamu lihat</h2><button class="lihat" type="button" id="terakhirHapus">Hapus</button></div>
+        <div class="strip-rel" id="terakhirRel"></div>
+      </section>
       <section class="kotak koleksi-kotak" id="koleksiKotak" hidden>
         <div class="kotak-kepala"><h2>Pilihan toko</h2></div>
         <div class="koleksi-rel" id="koleksi"></div>
@@ -121,6 +125,12 @@
     <a id="waBawah" href="#" target="_blank" rel="noopener"><svg viewBox="0 0 24 24"><path d="M12 3a9 9 0 0 0-7.8 13.5L3 21l4.6-1.2A9 9 0 1 0 12 3Z"/></svg>Chat</a>
   </nav>
 
+  <!-- bilah bandingkan & WhatsApp melayang (komputer) -->
+  <div class="banding-bar" id="bandingBar" hidden></div>
+  <a class="wa-melayang" id="waMelayang" href="https://wa.me/6281120022574" target="_blank" rel="noopener" aria-label="Chat toko di WhatsApp">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a9 9 0 0 0-7.8 13.5L3 21l4.6-1.2A9 9 0 1 0 12 3Z"/><path d="M9 9.5c0 3 2.5 5.5 5.5 5.5l1-1.5-2-1-1 1c-1-.5-1.5-1-2-2l1-1-1-2Z"/></svg>
+    <span>Chat toko</span>
+  </a>
   <!-- lembar: detail produk / daftar promo / kategori -->
   <dialog class="lembar" id="lembar">
     <div class="lembar-in" id="lembarIsi"></div>
@@ -130,7 +140,7 @@
     <div class="lembar-in" id="lembar2Isi"></div>
   </dialog>
 
-  <script src="../assets/config.js?v=202611121300"></script>
-  <script src="katalog.js?v=202611121300"></script>
+  <script src="../assets/config.js?v=202611121900"></script>
+  <script src="katalog.js?v=202611121900"></script>
 </body>
 </html>
