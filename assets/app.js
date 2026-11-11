@@ -281,7 +281,6 @@
       ] },
     { id: 'tim', label: 'Tim', icon: 'users', color: '#FB923C', items: [
       { icon: 'bell', id: 'pengumuman', label: 'Pengumuman', desc: 'Info tim + tanda sudah baca' },
-      { icon: 'store', id: 'kabari', label: 'Kabari Pelanggan', desc: 'Pelanggan katalog yang menunggu ukuran' },
       { icon: 'clip', id: 'handover', label: 'Handover', desc: 'Serah terima shift dari foto buku' },
       { icon: 'star', id: 'apresiasi', label: 'Apresiasi', desc: 'Ucapan terima kasih untuk rekan' },
       { icon: 'heart', id: 'feedback', label: 'Feedback Anonim', desc: 'Saran & apresiasi tanpa nama' },
@@ -290,13 +289,16 @@
       { icon: 'swap', id: 'tukar', label: 'Tukar Shift', desc: 'Tukar shift dengan rekan' },
       { icon: 'bookmark', id: 'simpanan', label: 'Simpanan OFF', desc: 'OFF yang belum diambil' },
       { icon: 'user', id: 'akun', label: 'Akun', desc: 'Ganti password' }] },
+    { id: 'katalogg', label: 'Katalog', icon: 'store', color: '#C0392B', items: [
+      { icon: 'spark', id: 'studio', label: 'Studio Promo', desc: 'Poster & story WA/IG dari stok toko' },
+      { icon: 'bell', id: 'kabari', label: 'Kabari Pelanggan', desc: 'Pelanggan yang menunggu ukuran datang' },
+      { icon: 'store', id: 'katalog', label: 'Atur Katalog', desc: 'Link, QR, statistik, promo, foto & koleksi', admin: true }] },
     { id: 'adm', label: 'Admin', icon: 'shield', color: '#E11D48', items: [
       { icon: 'inbox', id: 'persetujuan', label: 'Persetujuan', desc: 'Pendaftaran, request & tukar shift', admin: true },
       { icon: 'cal', id: 'jadwaldraf', label: 'Susun Jadwal', desc: 'Draf otomatis & terbitkan', admin: true },
       { icon: 'users', id: 'admin', label: 'Akun Tim', desc: 'Akun, nama di jadwal & reset password', admin: true },
       { icon: 'award', id: 'targetadm', label: 'Target', desc: 'Target RA, UPT & basket', admin: true },
       { icon: 'shield', id: 'pengaturan', label: 'Pengaturan', desc: 'Kas, video dokumentasi & mesin upload', admin: true },
-      { icon: 'store', id: 'katalog', label: 'Katalog Pelanggan', desc: 'Link katalog untuk pelanggan & foto artikel', admin: true },
       { icon: 'gauge', id: 'kesehatan', label: 'Kesehatan Data', desc: 'Data, otomatisasi, cadangan & versi kode', admin: true },
       { icon: 'list', id: 'aktivitas', label: 'Aktivitas', desc: 'Catatan siapa melakukan apa', admin: true }] }
   ];
@@ -6567,11 +6569,17 @@
     ctx.fillStyle = '#fff'; ctx.font = '800 ' + Math.round(58 * k) + 'px ' + F; ctx.fillText('EIGER', pad, pad);
     var lebarEiger = ctx.measureText('EIGER').width;
     ctx.font = '500 ' + Math.round(34 * k) + 'px ' + F; ctx.globalAlpha = .9;
-    ctx.fillText('Store A. Yani Kartasura', pad + lebarEiger + 18, pad + Math.round(16 * k)); ctx.globalAlpha = 1;
-    if (p.diskon) {
-      var bw = Math.round(230 * k), bh = Math.round(100 * k), bx = W - pad - bw, by = pad - 10;
-      ctx.fillStyle = bata; ktRound(ctx, bx, by, bw, bh, 22); ctx.fill();
-      ctx.fillStyle = '#fff'; ctx.textAlign = 'center'; ctx.font = '800 ' + Math.round(54 * k) + 'px ' + F; ctx.fillText('-' + p.diskon + '%', bx + bw / 2, by + Math.round(20 * k)); ctx.textAlign = 'left';
+    ctx.fillRect(pad + lebarEiger + 18, pad + Math.round(10 * k), 3, Math.round(46 * k));
+    ctx.fillText('Store A. Yani Kartasura', pad + lebarEiger + 36, pad + Math.round(16 * k)); ctx.globalAlpha = 1;
+    if (p.diskon) { // lencana bulat
+      var br = Math.round(92 * k), bcx = W - pad - br, bcy = pad + br - 18;
+      ctx.save(); ctx.shadowColor = 'rgba(0,0,0,.35)'; ctx.shadowBlur = 24; ctx.shadowOffsetY = 8;
+      ctx.fillStyle = bata; ctx.beginPath(); ctx.arc(bcx, bcy, br, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+      ctx.strokeStyle = 'rgba(255,255,255,.6)'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(bcx, bcy, br - 10, 0, Math.PI * 2); ctx.stroke();
+      ctx.fillStyle = '#fff'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.font = '800 ' + Math.round(62 * k) + 'px ' + F; ctx.fillText(p.diskon + '%', bcx, bcy - Math.round(10 * k));
+      ctx.font = '700 ' + Math.round(26 * k) + 'px ' + F; ctx.fillText('OFF', bcx, bcy + Math.round(38 * k));
+      ctx.textAlign = 'left'; ctx.textBaseline = 'top';
     }
     // ---- dari bawah ke atas ----
     var kakiY = H - pad - Math.round(30 * k);
@@ -6614,14 +6622,31 @@
     var nm = ktBungkus(ctx, p.nama, W - pad * 2, 2), nmLH = Math.round(84 * k);
     y -= nm.length * nmLH;
     nm.forEach(function (b, i) { ctx.fillText(b, pad, y + i * nmLH); });
-    // foto produk mengisi sisa ruang di atas
-    var atas = pad + Math.round(130 * k), bawah = y - 36, ph = Math.max(200, bawah - atas), pw = W - pad * 2;
-    if (desain.id === 'senja') {
-      var r = Math.min(pw, ph) / 2; ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(W / 2, atas + ph / 2, r, 0, Math.PI * 2); ctx.fill();
-      if (foto) ktContain(ctx, foto, W / 2 - r * .7, atas + ph / 2 - r * .7, r * 1.4, r * 1.4);
-    } else {
-      ctx.fillStyle = '#fff'; ktRound(ctx, pad, atas, pw, ph, 36); ctx.fill();
-      if (foto) ktContain(ctx, foto, pad + 40, atas + 40, pw - 80, ph - 80);
+    // foto produk (latar sudah dihapus) melayang di sisa ruang atas, dengan cahaya & alas
+    var atas = pad + Math.round(150 * k), bawah = y - 40, ph = Math.max(200, bawah - atas), pw = W - pad * 2;
+    var cx = W / 2, cy = atas + ph * .46, alasY = atas + ph * .9;
+    if (desain.id === 'senja') { // lingkaran cahaya hangat
+      var hr = Math.min(pw, ph) * .52, halo = ctx.createRadialGradient(cx, cy, hr * .1, cx, cy, hr);
+      halo.addColorStop(0, 'rgba(255,236,200,.95)'); halo.addColorStop(.55, 'rgba(255,190,120,.45)'); halo.addColorStop(1, 'rgba(255,160,90,0)');
+      ctx.fillStyle = halo; ctx.beginPath(); ctx.arc(cx, cy, hr, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = 'rgba(255,230,190,.55)'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(cx, cy, hr * .82, 0, Math.PI * 2); ctx.stroke();
+    } else if (desain.id === 'navy') { // alas bulat bercahaya
+      var ag = ctx.createLinearGradient(0, alasY - 40, 0, alasY + 60); ag.addColorStop(0, '#2B4CB0'); ag.addColorStop(1, '#0A1A4F');
+      ctx.fillStyle = ag; ctx.beginPath(); ctx.ellipse(cx, alasY + 20, pw * .42, 70 * k, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = 'rgba(255,255,255,.18)'; ctx.beginPath(); ctx.ellipse(cx, alasY, pw * .42, 56 * k, 0, 0, Math.PI * 2); ctx.fill();
+      var sg = ctx.createRadialGradient(cx, cy, 10, cx, cy, ph * .55); sg.addColorStop(0, 'rgba(120,160,255,.35)'); sg.addColorStop(1, 'rgba(120,160,255,0)');
+      ctx.fillStyle = sg; ctx.fillRect(pad, atas, pw, ph);
+    } else { // merbabu: sorotan lembut
+      var mg = ctx.createRadialGradient(cx, cy, 10, cx, cy, ph * .6); mg.addColorStop(0, 'rgba(255,240,215,.55)'); mg.addColorStop(1, 'rgba(255,240,215,0)');
+      ctx.fillStyle = mg; ctx.fillRect(0, atas - 40, W, ph + 80);
+    }
+    // bayangan jatuh di bawah produk
+    var bs = ctx.createRadialGradient(cx, alasY, 4, cx, alasY, pw * .36); bs.addColorStop(0, 'rgba(0,0,0,.45)'); bs.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.save(); ctx.translate(cx, alasY); ctx.scale(1, .16); ctx.translate(-cx, -alasY); ctx.fillStyle = bs; ctx.beginPath(); ctx.arc(cx, alasY, pw * .36, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+    if (foto) {
+      var mw = pw * .86, mh = ph * .82, sk = Math.min(mw / foto.width, mh / foto.height), fw = foto.width * sk, fh = foto.height * sk;
+      ctx.save(); ctx.shadowColor = 'rgba(0,0,0,.4)'; ctx.shadowBlur = 40; ctx.shadowOffsetY = 26;
+      ctx.drawImage(foto, cx - fw / 2, alasY - fh - 10, fw, fh); ctx.restore();
     }
   }
 
@@ -6836,7 +6861,7 @@
       pratinjau.replaceChildren(skel(2));
       var foto = ktFoto(it);
       Promise.all([loadScript(QR_LIB), document.fonts && document.fonts.load ? document.fonts.load("800 40px 'Plus Jakarta Sans'") : null,
-        foto ? ktGambarData(foto).catch(function () { return null; }) : null].concat(KT_POSTER_DESAIN.map(function (d) { return ktGambarData(ktLatarUrl(d.latar, 1080)).catch(function () { return null; }); })))
+        foto ? ktGambarData(foto).then(ktTanpaLatar).catch(function () { return null; }) : null].concat(KT_POSTER_DESAIN.map(function (d) { return ktGambarData(ktLatarUrl(d.latar, 1080)).catch(function () { return null; }); })))
         .then(function (r) {
           var img = r[2];
           pratinjau.replaceChildren.apply(pratinjau, KT_POSTER_DESAIN.map(function (d, i) {
@@ -6862,6 +6887,44 @@
       el('div', { class: 'kt-poster-atas' }, info, seg), pratinjau);
   }
 
+
+  /* ---------- Studio Promo: semua anggota tim membuat poster & story dari stok toko ---------- */
+  function viewStudio(v) {
+    var URL_KATALOG = 'https://eigerkartasura.github.io/';
+    var qr = el('div', { class: 'st-qr', 'aria-label': 'QR katalog' });
+    loadScript(QR_LIB).then(function () { qr.innerHTML = qrSvg(URL_KATALOG + '?dari=qr', 140); }).catch(function () { /* QR opsional */ });
+    var teksBagi = 'Cek stok, ukuran & promo EIGER Store A. Yani Kartasura langsung dari HP: ' + URL_KATALOG + ' — tanya stok lewat WhatsApp toko 0811-2002-2574.';
+    var hero = el('section', { class: 'st-hero', style: "background-image:linear-gradient(110deg,rgba(10,26,79,.96) 0%,rgba(10,26,79,.82) 45%,rgba(120,28,20,.55) 100%),url('" + ktLatarUrl('merbabu', 1400) + "')" },
+      el('div', { class: 'st-hero-teks' },
+        el('span', { class: 'st-kicker', text: 'Katalog EIGER Kartasura' }),
+        el('h2', { text: 'Studio Promo' }),
+        el('p', { text: 'Buat poster dan story promo dari barang yang benar-benar ada di toko. Harga, diskon, dan QR ke halaman produk terisi otomatis, latar foto produk dihapus otomatis.' }),
+        el('div', { class: 'st-hero-aksi' },
+          el('button', { class: 'st-btn st-btn-terang', type: 'button', text: 'Salin link katalog', onclick: function () { copyText(URL_KATALOG); toast('Link katalog disalin'); } }),
+          el('a', { class: 'st-btn st-btn-garis', href: 'https://wa.me/?text=' + encodeURIComponent(teksBagi), target: '_blank', rel: 'noopener', text: 'Bagikan ke WhatsApp' }),
+          el('a', { class: 'st-btn st-btn-garis', href: URL_KATALOG, target: '_blank', rel: 'noopener', text: 'Buka katalog' }))),
+      el('div', { class: 'st-hero-qr' }, qr, el('small', { text: 'Scan untuk membuka katalog' })));
+    var langkah = el('ol', { class: 'st-langkah' },
+      el('li', null, el('b', { text: 'Pilih jenis' }), el('span', { text: 'Poster 1 produk atau story beberapa produk.' })),
+      el('li', null, el('b', { text: 'Cari artikel' }), el('span', { text: 'Ketik nama atau kode, lalu klik.' })),
+      el('li', null, el('b', { text: 'Unduh & unggah' }), el('span', { text: 'Simpan PNG, pasang di Status WA atau Story IG.' })));
+    var isi = el('div');
+    var mode = 'poster';
+    var tab = el('div', { class: 'st-tab', role: 'tablist', 'aria-label': 'Jenis materi' });
+    function gambarTab() {
+      tab.replaceChildren(
+        el('button', { type: 'button', role: 'tab', 'aria-selected': String(mode === 'poster'), onclick: function () { mode = 'poster'; gambarTab(); } },
+          el('b', { text: 'Poster 1 produk' }), el('small', { text: '3 desain · Story 9:16 atau Feed 4:5' })),
+        el('button', { type: 'button', role: 'tab', 'aria-selected': String(mode === 'kejutan'), onclick: function () { mode = 'kejutan'; gambarTab(); } },
+          el('b', { text: 'Story kejutan' }), el('small', { text: '3–5 produk melayang · 9:16' })));
+      var kartu = el('div', { class: 'card section st-kartu' });
+      isi.replaceChildren(kartu);
+      if (mode === 'poster') katalogPoster(kartu); else katalogStoryKejutan(kartu);
+    }
+    gambarTab();
+    v.append(hero, langkah, tab, isi);
+  }
+
   function viewKatalog(v) {
     pageHead(v, 'Katalog Pelanggan', 'Halaman katalog untuk pelanggan: barang yang tersedia di toko, tanpa jumlah stok. Foto dicari otomatis dari eigeradventure.com; yang tidak ketemu bisa diisi di sini.');
     var url = 'https://eigerkartasura.github.io/'; // situs katalog terpisah (tanpa nama pribadi), disalin otomatis tiap jam dari folder katalog/
@@ -6876,12 +6939,9 @@
     v.append(qrBox, statistikBox);
     katalogQR(qrBox, url);
     katalogStatistik(statistikBox);
-    var posterBox = el('div', { class: 'card section' }), koleksiBox = el('div', { class: 'card section' }, skel(2));
-    v.append(posterBox, koleksiBox);
-    katalogPoster(posterBox);
-    var kejutanBox = el('div', { class: 'card section' });
-    posterBox.after(kejutanBox);
-    katalogStoryKejutan(kejutanBox);
+    var koleksiBox = el('div', { class: 'card section' }, skel(2));
+    v.append(el('a', { class: 'card section st-tautan', href: '#/studio' }, el('div', null, el('b', { text: 'Poster & story promo pindah ke menu Katalog → Studio Promo' }),
+      el('span', { class: 'sub', text: 'Semua anggota tim bisa membuatnya di sana.' })), el('span', { text: 'Buka ›' })), koleksiBox);
     katalogKoleksi(koleksiBox);
     var stat = el('div', { class: 'card section' }, skel(1));
     var promoBox = el('div', { class: 'card section' }, skel(1));
@@ -6959,7 +7019,7 @@
     beranda: viewBeranda, briefing: viewBriefing, mingguan: viewMingguan, omni: viewOmni, kesehatan: viewKesehatan, pengumuman: viewPengumuman, handover: viewHandover, feedback: viewFeedback, apresiasi: viewApresiasi, dokumentasi: viewDokumentasi, monitoring: viewMonitoring, trend: viewTrend, ra: viewRA, produk: viewProduk, customer: viewCustomer,
     stok: viewStok, stokart: viewStokArt, saranreq: viewSaranReq, display: viewDisplay, cari: viewCari, unggahbin: viewUnggahBin, unggahdata: viewUnggahData, newarrival: viewNewArrival, putaway: viewPutaway, kas: viewKas, 'kas-rekap': viewKasRekap, 'kas-setor': viewKasSetor, 'kas-petty': viewKasPetty, unggah: viewUnggah,
     jadwal: viewJadwal, jadwaldraf: viewJadwalDraf, persetujuan: viewPersetujuan, targetadm: viewTargetAdm, pengaturan: viewPengaturan, request: viewRequest, tukar: viewTukar, simpanan: viewSimpanan,
-    akun: viewAkun, admin: viewAdmin, aktivitas: viewAktivitas, pica: viewPica, katalog: viewKatalog, kabari: viewKabari
+    akun: viewAkun, admin: viewAdmin, aktivitas: viewAktivitas, pica: viewPica, katalog: viewKatalog, kabari: viewKabari, studio: viewStudio
   });
   render();
 })();
