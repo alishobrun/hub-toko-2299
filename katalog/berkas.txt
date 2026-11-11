@@ -11,3 +11,5 @@ katalog/ikon-512.png ikon-512.png
 katalog/ikon-maskable-512.png ikon-maskable-512.png
 assets/config.js assets/config.js
 katalog/og-katalog.jpg og-katalog.jpg
+# verifikasi kepemilikan Google Search Console (jangan dihapus)
+katalog/googlefc116ce86adcd49a.html googlefc116ce86adcd49a.html
