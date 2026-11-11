@@ -106,38 +106,85 @@ def foto_penuh(u):
     return CDN + re.sub(r'^~', 'product/variant/media/web/', u)
 
 
-HALAMAN = '''<!doctype html>
-<html lang="id">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{judul}</title>
-<meta name="description" content="{desk}">
-<meta property="og:type" content="product">
-<meta property="og:site_name" content="EIGER Store A. Yani Kartasura">
-<meta property="og:locale" content="id_ID">
-<meta property="og:url" content="{url}">
-<meta property="og:title" content="{judul}">
-<meta property="og:description" content="{desk}">
-<meta property="og:image" content="{gambar}">
-<meta property="og:image:width" content="800">
-<meta property="og:image:height" content="800">
-<meta property="og:image:alt" content="{nama}">
-<meta name="twitter:card" content="summary_large_image">
-<link rel="canonical" href="{url}">
-<link rel="icon" type="image/png" href="/ikon-192.png">
-<meta http-equiv="refresh" content="0; url=/#artikel-{g}">
-<script>location.replace('/#artikel-{g}' + (location.search || ''));</script>
-<style>body{{font:15px/1.5 system-ui,sans-serif;margin:0;display:grid;place-items:center;min-height:100vh;background:#F5F5F5;color:#222}}a{{color:#0F2A7A;font-weight:700}}</style>
-</head>
-<body><p>Membuka <a href="/#artikel-{g}">{nama}</a> di katalog EIGER Kartasura…</p></body>
-</html>
-'''
+def isi_info(g):
+    try:
+        return json.load(open(f'data/info/{g}.json', encoding='utf-8'))
+    except Exception:
+        return {}
 
-if k and k.get('items'):
+
+def baris(t):
+    return [re.sub(r'^(?:[•\-–*]|\d{1,2}[.)])\s*', '', b.strip()) for b in str(t or '').split('\n') if b.strip()]
+
+
+def ganti_meta(h, nama, isi):
+    """Ganti isi <meta name/property=nama> (bila ada) di template."""
+    pola = re.compile(r'(<meta (?:name|property)="' + re.escape(nama) + r'" content=")[^"]*(")')
+    return pola.sub(lambda m: m.group(1) + isi + m.group(2), h, count=1)
+
+
+def halaman_produk(tpl, it, g, nama, judul, desk, gambar, foto, harga_angka, uk, promo):
+    e = lambda x: html.escape(str(x), quote=True)
+    url = f'{SITUS}/p/{g}/'
+    inf = isi_info(g)
+    h = tpl
+    # jalur relatif (katalog.css, data/, assets/) tetap dari akar situs
+    h = h.replace('<head>', '<head>\n  <base href="/">', 1)
+    h = re.sub(r'<title>[^<]*</title>', '<title>' + e(judul) + '</title>', h, count=1)
+    h = ganti_meta(h, 'description', e(desk))
+    h = ganti_meta(h, 'og:type', 'product')
+    h = ganti_meta(h, 'og:url', e(url))
+    h = ganti_meta(h, 'og:title', e(judul))
+    h = ganti_meta(h, 'og:description', e(desk))
+    h = ganti_meta(h, 'og:image', e(gambar))
+    h = ganti_meta(h, 'og:image:width', '800')
+    h = ganti_meta(h, 'og:image:height', '800')
+    h = ganti_meta(h, 'og:image:alt', e(nama))
+    h = re.sub(r'<link rel="canonical" href="[^"]*">', '<link rel="canonical" href="' + e(url) + '">', h, count=1)
+    # data terstruktur Product untuk Google
+    ld = {'@context': 'https://schema.org', '@type': 'Product', 'name': nama, 'sku': g, 'brand': {'@type': 'Brand', 'name': 'EIGER'},
+          'url': url, 'category': it.get('k4') or it.get('k3') or ''}
+    if foto:
+        ld['image'] = foto[:5]
+    d = ' '.join(baris(inf.get('d')))[:500]
+    if d:
+        ld['description'] = d
+    if harga_angka:
+        ld['offers'] = {'@type': 'Offer', 'priceCurrency': 'IDR', 'price': int(harga_angka), 'availability': 'https://schema.org/InStoreOnly',
+                        'url': url, 'seller': {'@type': 'Store', 'name': 'EIGER Store A. Yani Kartasura'}}
+    skrip = '<script type="application/ld+json">' + json.dumps(ld, ensure_ascii=False).replace('</', '<\\/') + '</script>'
+    h = h.replace('</head>', '  ' + skrip + '\n</head>', 1)
+    # isi produk statis: terbaca mesin pencari & tampil sebelum katalog selesai dimuat (lalu diganti halaman produk katalog)
+    fitur = baris(inf.get('f'))[:8]
+    statis = ['<section class="seo-produk" id="seoProduk">']
+    if foto:
+        statis.append(f'<img src="{e(foto[0])}" alt="{e(nama)}" width="320" height="320" referrerpolicy="no-referrer">')
+    statis.append(f'<div><h1>{e(nama)}</h1>')
+    if promo:
+        statis.append(f'<p class="seo-harga">{e(promo)}</p>')
+    elif harga_angka:
+        statis.append(f'<p class="seo-harga">{e(rp(harga_angka))}</p>')
+    statis.append('<p>' + e(('Ukuran tersedia di toko: ' + ', '.join(uk)) if uk else 'Tersedia di toko') + ' · EIGER Store A. Yani Kartasura, Sukoharjo.</p>')
+    if d:
+        statis.append(f'<p>{e(d)}</p>')
+    if fitur:
+        statis.append('<ul>' + ''.join(f'<li>{e(x)}</li>' for x in fitur) + '</ul>')
+    statis.append(f'<p><a href="/#artikel-{g}">Lihat di katalog</a> · <a href="https://wa.me/6281120022574?text={urllib.parse.quote("Halo EIGER Kartasura, saya mau tanya " + nama + " (kode " + g + ").")}">Tanya lewat WhatsApp</a></p></div></section>')
+    h = h.replace('<body>', f'<body data-artikel="{g}">', 1)
+    h = h.replace('</header>', '</header>\n  ' + ''.join(statis), 1)
+    return h
+
+
+try:
+    TEMPLATE = open('index.html', encoding='utf-8').read()
+except Exception:
+    TEMPLATE = None
+
+if k and k.get('items') and TEMPLATE:
     ada = set()
     promo_sampai = k.get('promoSampai') or ''
     promo_aktif = promo_sampai >= time.strftime('%Y-%m-%d', time.gmtime(time.time() + 7 * 3600))
+    peta = [f'  <url><loc>{SITUS}/</loc><changefreq>daily</changefreq><priority>1.0</priority></url>']
     for it in k['items']:
         g = str(it.get('g', ''))
         if not re.fullmatch(r'9\d{8}', g):
@@ -146,12 +193,9 @@ if k and k.get('items'):
         nama = nama_tampil(it.get('n'))
         pr = it.get('pr') if promo_aktif else None
         uk = sorted({u[0] for w in it.get('w', []) for u in w[1] if u[1] and u[0] != 'NOS'}, key=kunci_uk)
-        if pr:
-            harga = f"{rp(pr['n'])} (promo -{pr['d']}%, normal {rp(pr['h'])})"
-        elif it.get('h'):
-            harga = rp(it.get('hm') or it['h'])
-        else:
-            harga = ''
+        harga_angka = pr['n'] if pr else (it.get('hm') or it.get('h') or 0)
+        promo = f"{rp(pr['n'])} (promo -{pr['d']}%, normal {rp(pr['h'])})" if pr else ''
+        harga = promo or (rp(harga_angka) if harga_angka else '')
         bagian = [harga] if harga else []
         bagian.append(('Tersedia ukuran ' + ', '.join(uk[:8]) + (' dll.' if len(uk) > 8 else '')) if uk else 'Tersedia di toko')
         desk = ' · '.join(bagian) + ' di EIGER Store A. Yani Kartasura. Tanya stok lewat WhatsApp.'
@@ -161,10 +205,12 @@ if k and k.get('items'):
             gambar = 'https://images.weserv.nl/?url=' + urllib.parse.quote(fotos[0], safe='') + '&w=800&h=800&fit=contain&cbg=white&bg=white&output=jpg&q=82'
         else:
             gambar = SITUS + '/og-katalog.jpg'
-        e = lambda s: html.escape(str(s), quote=True)
-        judul = f"{nama}{' · ' + (rp(pr['n']) if pr else harga) if harga else ''} | EIGER Kartasura"
-        tulis(f'p/{g}/index.html', HALAMAN.format(judul=e(judul), desk=e(desk), url=e(f'{SITUS}/p/{g}/'), gambar=e(gambar), nama=e(nama), g=g))
+        judul = f"{nama}{' · ' + rp(harga_angka) if harga_angka else ''} | EIGER Kartasura"
+        tulis(f'p/{g}/index.html', halaman_produk(TEMPLATE, it, g, nama, judul, desk, gambar, fotos, harga_angka, uk, promo))
+        peta.append(f'  <url><loc>{SITUS}/p/{g}/</loc><changefreq>daily</changefreq><priority>0.7</priority></url>')
     for d in glob.glob('p/*/'):
         if os.path.basename(os.path.dirname(d)) not in ada:
             shutil.rmtree(d, ignore_errors=True)
+    tulis('sitemap.xml', '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n' + '\n'.join(peta) + '\n</urlset>\n')
+    tulis('robots.txt', f'User-agent: *\nAllow: /\nSitemap: {SITUS}/sitemap.xml\n')
     print('halaman produk:', len(ada))

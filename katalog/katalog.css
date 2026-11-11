@@ -915,3 +915,10 @@ button.tanya { cursor: pointer; }
   body.menyusut .logo-eiger { width: 30px; height: 30px; }
 }
 .opsi span { white-space: normal; line-height: 1.25; }
+
+/* isi statis halaman produk /p/<kode>/ (sebelum katalog selesai dimuat; dibaca mesin pencari) */
+.seo-produk { display: flex; flex-wrap: wrap; gap: 16px; max-width: var(--lebar); margin: 12px auto; padding: 16px; background: #fff; font-size: 14px; line-height: 1.55; }
+.seo-produk img { width: 160px; height: 160px; object-fit: contain; background: #F4F4F5; border-radius: 8px; }
+.seo-produk > div { flex: 1; min-width: 240px; }
+.seo-produk h1 { margin: 0 0 4px; font-size: 20px; }
+.seo-harga { color: var(--harga); font-weight: 700; font-size: 18px; margin: 0 0 6px; }

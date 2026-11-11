@@ -1140,14 +1140,19 @@
   dlg.addEventListener('close', function () {
     clearInterval(detailTimer);
     if (/^#(artikel-|promo|kategori|daftar|banding|ukuranku|filter)/.test(location.hash)) history.pushState(null, '', location.pathname + location.search);
+    if (/^\/p\/\d{9}\/?$/.test(location.pathname)) history.pushState(null, '', '/' + location.search.replace(/^\?$/, ''));
     tandaiMenu('beranda');
     galeriKini = null; teksProdukKini = '';
     if (lihatBerubah) gambarTerakhir();
   });
   dlg.addEventListener('click', function (e) { if (e.target === dlg) tutup(); });
+  // halaman produk /p/<kode>/ (untuk Google & link bagikan): katalog dibuka langsung di produk itu
+  var ARTIKEL_AWAL = document.body.getAttribute('data-artikel') || '';
   function bukaDariHash() {
     if (!D) return;
+    var seo = document.getElementById('seoProduk'); if (seo) seo.remove();
     var h = location.hash, m = h.match(/^#artikel-(\d{9})$/);
+    if (!m && ARTIKEL_AWAL) { m = [0, ARTIKEL_AWAL]; ARTIKEL_AWAL = ''; }
     if (m) { var it = D.items.filter(function (x) { return x.g === m[1]; })[0]; if (it) buka(it, true); else toast('Barang ini sedang tidak tersedia di toko'); return; }
     if (h === '#promo') { bukaDaftarPromo(); return; }
     if (h === '#kategori') { bukaKategori(); return; }
