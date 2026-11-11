@@ -665,13 +665,21 @@
       if (tegak) { if (b.offsetTop < mini.scrollTop || b.offsetTop + b.offsetHeight > mini.scrollTop + mini.clientHeight) mini.scrollTo({ top: b.offsetTop - mini.clientHeight / 2 + b.offsetHeight / 2, behavior: 'smooth' }); }
       else if (b.offsetLeft < mini.scrollLeft || b.offsetLeft + b.offsetWidth > mini.scrollLeft + mini.clientWidth) mini.scrollTo({ left: b.offsetLeft - mini.clientWidth / 2 + b.offsetWidth / 2, behavior: 'smooth' });
     }
+    // saat bergeser karena tombol/keyboard, posisi antara diabaikan sampai tujuan tercapai
+    var tujuan = null, tujuanT;
     function ke(i, langsung) {
       if (n < 2) return;
       i = (i % n + n) % n;
+      tujuan = langsung ? null : i;
+      clearTimeout(tujuanT); tujuanT = setTimeout(function () { tujuan = null; }, 900);
       utama.scrollTo({ left: i * utama.clientWidth, behavior: langsung ? 'auto' : 'smooth' });
       tandai(i);
     }
-    utama.addEventListener('scroll', function () { var i = Math.round(utama.scrollLeft / Math.max(1, utama.clientWidth)); if (i !== fi && i >= 0 && i < n) tandai(i); }, { passive: true });
+    utama.addEventListener('scroll', function () {
+      var i = Math.round(utama.scrollLeft / Math.max(1, utama.clientWidth));
+      if (tujuan != null) { if (i === tujuan && Math.abs(utama.scrollLeft - i * utama.clientWidth) < 2) tujuan = null; return; }
+      if (i !== fi && i >= 0 && i < n) tandai(i);
+    }, { passive: true });
     // seret dengan mouse (komputer)
     var x0 = null;
     utama.addEventListener('pointerdown', function (e) {
