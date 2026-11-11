@@ -214,3 +214,81 @@ if k and k.get('items') and TEMPLATE:
     tulis('sitemap.xml', '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n' + '\n'.join(peta) + '\n</urlset>\n')
     tulis('robots.txt', f'User-agent: *\nAllow: /\nSitemap: {SITUS}/sitemap.xml\n')
     print('halaman produk:', len(ada))
+
+# ---------- foto produk tanpa latar (untuk slide promo & barang terlaris) ----------
+# Dibuat dengan rembg (model isnet-general-use) hanya untuk artikel yang tampil di slide/beranda, dan hanya bila
+# fotonya baru/berubah. Hasil: data/potong/<kode>.webp (transparan) + data/potong/daftar.json {kode: alamat foto asal}.
+def potong_produk(k):
+    if not k or not k.get('items'):
+        return
+    items = {str(it.get('g')): it for it in k['items']}
+    promo_sampai = k.get('promoSampai') or ''
+    promo_aktif = promo_sampai >= time.strftime('%Y-%m-%d', time.gmtime(time.time() + 7 * 3600))
+    laris = {g: i for i, g in enumerate(k.get('terlaris') or [])}
+
+    def foto1(it):
+        fs = [foto_penuh(u) for u in (it.get('f') or [])]
+        fs = [u for u in fs if u and not re.search(r'/(thumbnail|small)/', u)]
+        return fs[0] if fs else ''
+    promo = [it for it in k['items'] if promo_aktif and it.get('pr') and foto1(it)]
+    promo.sort(key=lambda it: (-it['pr'].get('d', 0), laris.get(str(it['g']), 999)))
+    target = [str(it['g']) for it in promo[:12]]
+    for g in (k.get('terlaris') or [])[:20]:
+        if g in items and foto1(items[g]) and g not in target:
+            target.append(g)
+    try:
+        daftar = json.load(open('data/potong/daftar.json'))
+    except Exception:
+        daftar = {}
+    perlu = [g for g in target if daftar.get(g) != foto1(items[g]) or not os.path.exists(f'data/potong/{g}.webp')]
+    # yang sudah tidak tampil dihapus supaya repo tetap kecil
+    for g in list(daftar):
+        if g not in target:
+            daftar.pop(g, None)
+            try:
+                os.remove(f'data/potong/{g}.webp')
+            except OSError:
+                pass
+    if perlu:
+        import subprocess, sys, io, urllib.request
+        try:
+            import rembg  # noqa
+        except ImportError:
+            subprocess.run([sys.executable, '-m', 'pip', 'install', '-q', 'rembg[cpu]'], check=False)
+        try:
+            from rembg import remove, new_session
+            from PIL import Image
+            sesi = new_session('isnet-general-use')
+        except Exception as e:
+            print('rembg tidak tersedia:', e)
+            sesi = None
+        if sesi:
+            os.makedirs('data/potong', exist_ok=True)
+            for g in perlu:
+                src = foto1(items[g])
+                try:
+                    req = urllib.request.Request(src, headers={'User-Agent': 'Mozilla/5.0 (katalog EIGER Kartasura)'})
+                    gb = Image.open(io.BytesIO(urllib.request.urlopen(req, timeout=60).read())).convert('RGB')
+                    o = remove(gb, session=sesi)
+                    a = o.getchannel('A')
+                    kotak = a.point(lambda v: 255 if v > 12 else 0).getbbox()
+                    if not kotak:
+                        continue
+                    o = o.crop(kotak)
+                    tepi = int(max(o.size) * 0.04)
+                    kanvas = Image.new('RGBA', (o.size[0] + 2 * tepi, o.size[1] + 2 * tepi), (0, 0, 0, 0))
+                    kanvas.paste(o, (tepi, tepi))
+                    kanvas.thumbnail((640, 640), Image.LANCZOS)
+                    kanvas.save(f'data/potong/{g}.webp', 'WEBP', quality=82, method=6)
+                    daftar[g] = src
+                except Exception as e:
+                    print('gagal memotong', g, e)
+    os.makedirs('data/potong', exist_ok=True)
+    tulis('data/potong/daftar.json', j(dict(sorted(daftar.items()))))
+    print('foto tanpa latar:', len(daftar), '(baru', len(perlu), ')')
+
+
+try:
+    potong_produk(k)
+except Exception as e:
+    print('potong produk dilewati:', e)

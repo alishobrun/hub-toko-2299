@@ -173,6 +173,12 @@
    * 2) salinan data di situs ini (data/katalog.json, dibuat workflow tiap 30 menit) → cepat dari server GitHub;
    * 3) data langsung dari mesin Basecamp di belakang layar, hanya bila salinan lebih tua dari 20 menit. */
   var SALINAN_MAKS_DETIK = 20 * 60;
+  /* foto produk tanpa latar (dibuat workflow situs): kode → 1 */
+  var POTONG = {};
+  fetch('data/potong/daftar.json', { cache: 'no-cache' }).then(function (r) { return r.ok ? r.json() : {}; }).then(function (x) {
+    POTONG = {}; Object.keys(x || {}).forEach(function (g) { POTONG[g] = 1; });
+    if (D && Object.keys(POTONG).length) gambarBanner();
+  }).catch(function () {});
   function ambil() {
     var lama = null, kini = '';
     try { kini = localStorage.getItem(SIMPAN) || ''; lama = JSON.parse(kini || 'null'); } catch (e) { lama = null; }
@@ -244,7 +250,7 @@
     var nPromo = D.items.filter(prItem).length;
     var maxD = D.items.reduce(function (m, it) { var p = prItem(it); return p ? Math.max(m, p.d) : m; }, 0);
     if (nPromo) slides.push(slideGaya({ warna: 's-oranye', tag: 'Promo toko', status: D.promoSampai ? BULAN_PENUH[Number(D.promoSampai.slice(5, 7)) - 1] : '',
-      judul: 'Diskon s/d', angka: maxD, produk: D.items.filter(function (it) { return prItem(it) && fotoBersih(it).length; }).sort(function (a, b) { return (prItem(b).d - prItem(a).d) || ((TERLARIS[a.g] || 999) - (TERLARIS[b.g] || 999)); }).slice(0, 3), sub: nPromo + ' artikel promo tersedia di toko · berlaku s/d ' + tglPendek(D.promoSampai), cta: 'Belanja barang promo', onclick: function () { pilihPromo(true); } }));
+      judul: 'Diskon s/d', angka: maxD, produk: D.items.filter(function (it) { return prItem(it) && fotoBersih(it).length; }).sort(function (a, b) { return ((POTONG[b.g] ? 1 : 0) - (POTONG[a.g] ? 1 : 0)) || (prItem(b).d - prItem(a).d) || ((TERLARIS[a.g] || 999) - (TERLARIS[b.g] || 999)); }).slice(0, 3), sub: nPromo + ' artikel promo tersedia di toko · berlaku s/d ' + tglPendek(D.promoSampai), cta: 'Belanja barang promo', onclick: function () { pilihPromo(true); } }));
     var warna = ['', 's-hijau', 's-ungu', ''];
     var slidePromo = [];
     promoTokoAktif().filter(function (p) { return p.mulai <= hariIni(); }).slice(0, 1).forEach(function (p, i) {
@@ -252,7 +258,7 @@
       var J = pecahJudulPromo(p.judul);
       slidePromo.push(slideGaya({ warna: warna[(i + 1) % warna.length], tag: String(p.jenis || 'Promo').toUpperCase() === 'EAC' ? 'Member EAC' : judul(p.jenis || 'Promo'), status: st.teks, akhir: /akhir/.test(st.kelas),
         judul: J.judul, angka: J.angka, awalan: J.awalan,
-        produk: /non.?promo|all item/i.test(p.produk || p.syarat || '') ? D.items.filter(function (it) { return !prItem(it) && TERLARIS[it.g] && fotoBersih(it).length; }).sort(function (a, b) { return TERLARIS[a.g] - TERLARIS[b.g]; }).slice(0, 3) : [], sub: (p.ket || p.syarat || '').split(/\s*•\s*/)[0], cta: 'Lihat syarat', onclick: function () { bukaPromo(p); } }));
+        produk: /non.?promo|all item/i.test(p.produk || p.syarat || '') ? D.items.filter(function (it) { return !prItem(it) && TERLARIS[it.g] && fotoBersih(it).length; }).sort(function (a, b) { return ((POTONG[b.g] ? 1 : 0) - (POTONG[a.g] ? 1 : 0)) || (TERLARIS[a.g] - TERLARIS[b.g]); }).slice(0, 3) : [], sub: (p.ket || p.syarat || '').split(/\s*•\s*/)[0], cta: 'Lihat syarat', onclick: function () { bukaPromo(p); } }));
     });
     // banner kampanye resmi dari eigeradventure.com, diselipkan setelah slide promo pertama
     var kampanye = (D.banner || []).map(function (b) {
@@ -298,8 +304,10 @@
       angka ? el('span', { class: 'sl-angka' }, el('small', { text: o.awalan || '' }), el('strong', { text: angka }), el('i', { text: '%' })) : null,
       o.sub ? el('span', { class: 'sl-sub', text: o.sub }) : null,
       o.cta ? el('em', { class: 'sl-cta' }, o.cta, el('span', { 'aria-hidden': 'true', text: ' ›' })) : null,
-      o.produk && o.produk.length >= 2 ? el('span', { class: 'sl-produk', 'aria-hidden': 'true' }, o.produk.map(function (it) {
+      o.produk && o.produk.length >= 2 ? el('span', { class: 'sl-produk' + (o.produk.every(function (it) { return POTONG[it.g]; }) ? ' tanpa-latar' : ''), 'aria-hidden': 'true' }, o.produk.map(function (it) {
         var p = prItem(it);
+        // foto tanpa latar bila sudah dibuat; bila belum, foto biasa di kartu putih
+        if (POTONG[it.g]) return el('span', { class: 'sl-potong' }, el('img', { src: 'data/potong/' + it.g + '.webp', alt: '', decoding: 'async' }), p ? el('i', { text: '-' + p.d + '%' }) : null);
         return el('span', { class: 'sl-kartu' }, imgKecil(fotoBersih(it)[0], ''), p ? el('i', { text: '-' + p.d + '%' }) : null);
       })) : null);
   }

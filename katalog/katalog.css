@@ -1074,3 +1074,16 @@ button.tanya { cursor: pointer; }
 }
 @media (min-width: 700px) and (max-width: 1000px) { .slide.gaya-promo .sl-kartu:nth-child(3) { display: none; } }
 .slide.gaya-promo .sl-produk, .slide.gaya-promo .sl-kartu, .slide.gaya-promo .sl-kartu i { opacity: 1 !important; text-shadow: none !important; }
+
+/* produk tanpa latar di slide: melayang dengan bayangan lembut, menyatu dengan latar */
+@media (min-width: 700px) {
+  .slide.gaya-promo .sl-produk.tanpa-latar { gap: 0; right: 4%; }
+  .slide.gaya-promo .sl-produk.tanpa-latar::before { content: ''; position: absolute; inset: -12% -8%; z-index: -1; background: radial-gradient(closest-side, rgba(255, 255, 255, .38), rgba(255, 255, 255, 0)); }
+  .slide.gaya-promo .sl-potong { position: relative; width: clamp(150px, 17vw, 230px); aspect-ratio: 1; display: grid; place-items: center; margin-left: -4%; opacity: 1 !important; }
+  .slide.gaya-promo .sl-potong:first-child { margin-left: 0; transform: rotate(-6deg) translateY(6%); }
+  .slide.gaya-promo .sl-potong:nth-child(2) { z-index: 2; transform: scale(1.12) translateY(-4%); }
+  .slide.gaya-promo .sl-potong:nth-child(3) { transform: rotate(6deg) translateY(6%); }
+  .slide.gaya-promo .sl-potong img { max-width: 100%; max-height: 100%; object-fit: contain; filter: drop-shadow(0 18px 18px rgba(0, 0, 0, .35)) drop-shadow(0 2px 3px rgba(0, 0, 0, .25)); }
+  .slide.gaya-promo .sl-potong i { position: absolute; top: 8%; right: 6%; font-style: normal; font-weight: 800; font-size: 13px; background: var(--harga); color: #fff; padding: 4px 8px; border-radius: 99px; box-shadow: 0 2px 6px rgba(0, 0, 0, .25); opacity: 1 !important; text-shadow: none !important; }
+}
+@media (min-width: 700px) and (max-width: 1000px) { .slide.gaya-promo .sl-potong:nth-child(3) { display: none; } }
