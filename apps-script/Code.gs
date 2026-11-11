@@ -11,7 +11,7 @@
 /** Versi kode. WAJIB dinaikkan setiap kali Code.gs diubah (format yyyy-MM-dd.n),
  *  lalu simpan ke GitHub (alishobrun/hub-toko-2299) SEBELUM dipasang. Halaman Kesehatan Data
  *  membandingkan angka ini dengan GitHub supaya kode yang dipasang di luar GitHub ketahuan. */
-const KODE_VERSI = '2026-11-11.7';
+const KODE_VERSI = '2026-11-11.8';
 
 const CFG = {
   STORE: '2299',
@@ -101,6 +101,8 @@ const TABS = {
   katalog_log: ['waktu', 'generic', 'jenis'],
   // pelanggan minta dikabari saat ukuran kosong tersedia lagi (diisi pelanggan lewat katalog)
   katalog_tunggu: ['id', 'waktu', 'nama', 'wa', 'generic', 'artikel', 'warna', 'ukuran', 'status', 'diubah', 'oleh'],
+  // koleksi pilihan toko (etalase tematik di beranda katalog), disusun staf di Basecamp
+  katalog_koleksi: ['id', 'judul', 'sub', 'latar', 'artikel', 'urut', 'aktif', 'diubah', 'oleh'],
   // promo umum toko untuk katalog pelanggan (dari juknis promo / web Integrated Hub), diisi admin
   katalog_promo: ['id', 'judul', 'jenis', 'mulai', 'selesai', 'syarat', 'produk', 'aktif', 'diubah', 'oleh', 'sumber', 'ket']
 };
@@ -5522,7 +5524,9 @@ const KATALOG = {
   TUNGGU_MAKS_JAM: 40,           // batas permintaan "kabari saya" per jam (cegah spam)
   // info toko di beranda katalog (jam buka dari Google Maps, Nov 2026 — ubah di sini bila berubah)
   INFO: { alamat: 'Jl. A. Yani Km 7, Banaran, Pabelan, Kartasura, Sukoharjo', jam: 'Setiap hari 08.30–21.45',
-    maps: 'https://www.google.com/maps/search/?api=1&query=EIGER%20STORE%20A.YANI%20KARTASURA%20SUKOHARJO&query_place_id=ChIJ6bf1AHkVei4RSA6CwOUUCqA' }
+    maps: 'https://www.google.com/maps/search/?api=1&query=EIGER%20STORE%20A.YANI%20KARTASURA%20SUKOHARJO&query_place_id=ChIJ6bf1AHkVei4RSA6CwOUUCqA',
+    ulasan: 'https://search.google.com/local/reviews?placeid=ChIJ6bf1AHkVei4RSA6CwOUUCqA',
+    rating: '4,9', jmlUlasan: '180+' /* dari Google Maps, Nov 2026 — perbarui sesekali */ }
 };
 const KAT3_OK_ = { ACCESSORIES: 1, APPAREL: 1, BAGS: 1, EQUIPMENT: 1, FOOTWEAR: 1, HEADWEAR: 1 };
 
@@ -5662,6 +5666,7 @@ function katalogSusun_(fotoIkut) {
   const ups = read_('bin_upload'), last = ups.length ? ups[ups.length - 1] : null;
   return { toko: CFG.STORE_NAME, wa: KATALOG.WA, diperbarui: last ? String(last.waktu) : '', items: items,
     promoSampai: promoSampai, promoToko: fotoIkut ? promoTokoAktif_() : [], banner: fotoIkut ? bannerEiger_() : [], panduan: panduan,
+    koleksi: fotoIkut ? koleksiAktif_(items) : [],
     infoToko: KATALOG.INFO };
 }
 
@@ -5946,6 +5951,23 @@ function katalogPerGeneric_() {
   return G;
 }
 
+/* ---------- koleksi pilihan toko (tab katalog_koleksi) ---------- */
+const LATAR_KOLEKSI = ['merbabu', 'awan', 'senja', 'hijau', 'puncak', 'malam'];
+function koleksiOut_(r) {
+  return { id: String(r.id), judul: String(r.judul || ''), sub: String(r.sub || ''), latar: String(r.latar || 'merbabu'),
+    artikel: String(r.artikel || '').split(/[\s,]+/).filter(function (g) { return /^9\d{8}$/.test(g); }),
+    urut: Number(r.urut) || 0, aktif: r.aktif === true || String(r.aktif).toUpperCase() === 'TRUE' };
+}
+/** Koleksi aktif untuk katalog publik: hanya artikel yang masih ada di toko; koleksi < 2 artikel disembunyikan. */
+function koleksiAktif_(items) {
+  const ada = {};
+  items.forEach(function (it) { ada[it.g] = 1; });
+  return read_('katalog_koleksi').map(koleksiOut_).filter(function (k) { return k.aktif && k.judul; })
+    .map(function (k) { return { id: k.id, j: k.judul, s: k.sub, bg: k.latar, g: k.artikel.filter(function (g) { return ada[g]; }), u: k.urut }; })
+    .filter(function (k) { return k.g.length >= 2; })
+    .sort(function (a, b) { return a.u - b.u; });
+}
+
 /* ---------- promo umum toko (tab katalog_promo) ---------- */
 function promoTokoOut_(r) {
   return { id: String(r.id), sumber: String(r.sumber || ''), judul: String(r.judul || ''), jenis: String(r.jenis || ''), mulai: toIsoDate_(r.mulai) || String(r.mulai || ''),
@@ -6022,11 +6044,14 @@ Object.assign(API, {
   /** PUBLIK: jejak anonim dari katalog. e = [[generic, 'l'|'t'], ...] (maks 25 per kiriman). Tanpa data pribadi. */
   katalogCatat: function (req) {
     const e = Array.isArray(req.e) ? req.e.slice(0, 25) : [];
-    const ok = e.filter(function (x) { return Array.isArray(x) && ((/^9\d{8}$/.test(String(x[0])) && (x[1] === 'l' || x[1] === 't')) || (x[0] === 'qr' && x[1] === 's')); });
+    const bersihKata = function (k) { return String(k || '').toLowerCase().replace(/[^a-z0-9 .\-\/]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 40); };
+    const ok = e.filter(function (x) {
+      return Array.isArray(x) && ((/^9\d{8}$/.test(String(x[0])) && (x[1] === 'l' || x[1] === 't')) || (x[0] === 'qr' && x[1] === 's') || (x[1] === 'c' && bersihKata(x[0]).length >= 2));
+    });
     if (!ok.length) return 0;
     if (!kuotaPublik_('catat', KATALOG.LOG_MAKS_MENIT, 60, ok.length)) return 0; // diam-diam diabaikan bila banjir
     const w = now_();
-    withLock_(function () { appendRows_('katalog_log', ok.map(function (x) { return { waktu: w, generic: String(x[0]), jenis: x[1] === 't' ? 'tanya' : x[1] === 's' ? 'scan qr' : 'lihat' }; })); }, 10000);
+    withLock_(function () { appendRows_('katalog_log', ok.map(function (x) { return x[1] === 'c' ? { waktu: w, generic: bersihKata(x[0]), jenis: 'cari kosong' } : { waktu: w, generic: String(x[0]), jenis: x[1] === 't' ? 'tanya' : x[1] === 's' ? 'scan qr' : 'lihat' }; })); }, 10000);
     return ok.length;
   },
 
@@ -6084,6 +6109,64 @@ Object.assign(API, {
     return true;
   },
 
+  /** Admin: daftar koleksi pilihan toko. */
+  katalogKoleksiList: function (req) {
+    auth_(req, true);
+    return read_('katalog_koleksi').map(koleksiOut_).sort(function (a, b) { return a.urut - b.urut; });
+  },
+
+  /** Admin: tambah / ubah koleksi. */
+  katalogKoleksiSimpan: function (req) {
+    const u = auth_(req, true), k = req.koleksi || {};
+    const judul = String(k.judul || '').trim().slice(0, 50);
+    if (!judul) throw new Error('Judul koleksi wajib diisi.');
+    const artikel = (Array.isArray(k.artikel) ? k.artikel : String(k.artikel || '').split(/[\s,]+/)).map(String).filter(function (g) { return /^9\d{8}$/.test(g); });
+    const unik = artikel.filter(function (g, i) { return artikel.indexOf(g) === i; }).slice(0, 60);
+    if (unik.length < 2) throw new Error('Pilih minimal 2 artikel.');
+    const latar = LATAR_KOLEKSI.indexOf(String(k.latar)) >= 0 ? String(k.latar) : 'merbabu';
+    let id = String(k.id || '');
+    withLock_(function () {
+      const rows = read_('katalog_koleksi');
+      const baris = { judul: judul, sub: String(k.sub || '').trim().slice(0, 80), latar: latar, artikel: unik.join(' '),
+        urut: Number(k.urut) || 0, aktif: k.aktif !== false, diubah: now_(), oleh: u.username };
+      const ada = id && rows.filter(function (r) { return String(r.id) === id; })[0];
+      if (ada) Object.keys(baris).forEach(function (x) { ada[x] = baris[x]; });
+      else { id = 'kol' + Date.now().toString(36); baris.id = id; if (!baris.urut) baris.urut = rows.length + 1; rows.push(baris); }
+      writeAll_('katalog_koleksi', rows);
+      katalogBaru_();
+    });
+    log_(u.username, 'simpan koleksi katalog', judul);
+    return { id: id };
+  },
+
+  /** Admin: hapus koleksi (baris di tab katalog_koleksi). */
+  katalogKoleksiHapus: function (req) {
+    const u = auth_(req, true), id = String(req.id || '');
+    withLock_(function () {
+      writeAll_('katalog_koleksi', read_('katalog_koleksi').filter(function (r) { return String(r.id) !== id; }));
+      katalogBaru_();
+    });
+    log_(u.username, 'hapus koleksi katalog', id);
+    return true;
+  },
+
+  /** Staf: gambar produk / foto alam sebagai data URL agar bisa digambar di kanvas poster (hanya dari sumber yang diizinkan). */
+  katalogGambar: function (req) {
+    auth_(req);
+    const url = String(req.url || '');
+    if (!/^https:\/\/(d1yutv2xslo29o\.cloudfront\.net|images\.unsplash\.com|lh3\.googleusercontent\.com)\//.test(url)) throw new Error('Sumber gambar tidak diizinkan.');
+    const c = CacheService.getScriptCache(), k = 'img_' + Utilities.base64EncodeWebSafe(Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, url)).slice(0, 22);
+    const lama = c.get(k);
+    if (lama) return lama;
+    const r = UrlFetchApp.fetch(url, { muteHttpExceptions: true });
+    if (r.getResponseCode() !== 200) throw new Error('Gambar tidak bisa diambil (' + r.getResponseCode() + ').');
+    const b = r.getBlob();
+    const tipe = b.getContentType() || 'image/jpeg';
+    const data = 'data:' + tipe + ';base64,' + Utilities.base64Encode(b.getBytes());
+    if (data.length < 95000) c.put(k, data, 21600);
+    return data;
+  },
+
   /** Admin: artikel paling sering dilihat dan ditanya di katalog (hari = 7/30/90). */
   katalogStatistik: function (req) {
     auth_(req, true);
@@ -6091,10 +6174,12 @@ Object.assign(API, {
     const batas = addDays_(today_(), -hari + 1);
     const H = {}, perHari = {};
     let lihat = 0, tanya = 0, scan = 0;
+    const CK = {};
     read_('katalog_log').forEach(function (r) {
       const t = String(r.waktu).slice(0, 10);
       if (t < batas) return;
       if (String(r.jenis) === 'scan qr') { scan++; return; }
+      if (String(r.jenis) === 'cari kosong') { const k = String(r.generic); CK[k] = (CK[k] || 0) + 1; return; }
       const x = H[r.generic] || (H[r.generic] = { l: 0, t: 0 });
       const ph = perHari[t] || (perHari[t] = { l: 0, t: 0 });
       if (String(r.jenis) === 'tanya') { x.t++; tanya++; ph.t++; } else { x.l++; lihat++; ph.l++; }
@@ -6102,7 +6187,8 @@ Object.assign(API, {
     const G = katalogPerGeneric_();
     const daftar = Object.keys(H).map(function (g) { const it = G[g] || {}; return { g: g, n: it.n || '(tidak ada di toko)', k4: it.k4 || '', lihat: H[g].l, tanya: H[g].t, ada: !!G[g] }; });
     const top = function (k) { return daftar.filter(function (x) { return x[k]; }).sort(function (a, b) { return b[k] - a[k]; }).slice(0, 20); };
-    return { hari: hari, lihat: lihat, tanya: tanya, scan: scan, artikel: daftar.length, topLihat: top('lihat'), topTanya: top('tanya'),
+    const cariKosong = Object.keys(CK).sort(function (a, b) { return CK[b] - CK[a]; }).slice(0, 30).map(function (k) { return { kata: k, n: CK[k] }; });
+    return { hari: hari, lihat: lihat, tanya: tanya, scan: scan, artikel: daftar.length, cariKosong: cariKosong, topLihat: top('lihat'), topTanya: top('tanya'),
       perHari: Object.keys(perHari).sort().map(function (t) { return [t, perHari[t].l, perHari[t].t]; }) };
   },
 

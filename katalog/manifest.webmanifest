@@ -1,0 +1,16 @@
+{
+  "name": "Katalog EIGER Kartasura",
+  "short_name": "EIGER Kartasura",
+  "description": "Cek stok, ukuran dan promo EIGER Store A. Yani Kartasura, lalu tanya lewat WhatsApp.",
+  "lang": "id",
+  "start_url": "./?dari=aplikasi",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#F5F5F5",
+  "theme_color": "#0A1A4F",
+  "icons": [
+    { "src": "ikon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "ikon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "ikon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

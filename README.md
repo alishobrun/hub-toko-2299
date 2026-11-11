@@ -37,6 +37,8 @@ Login per orang: anggota tim mendaftar sendiri, lalu admin menyetujui. Akun pert
 
 ## Katalog pelanggan
 
+- **Pilihan toko (koleksi), poster & aplikasi (Nov 2026):** koleksi disusun di Basecamp → Katalog Pelanggan (tab `katalog_koleksi`, latar foto alam Unsplash); poster Status WA / Story IG dibuat di halaman yang sama (3 desain, kanvas di browser, gambar diambil lewat `katalogGambar`); pencarian pelanggan tanpa hasil tercatat sebagai `cari kosong` di `katalog_log` dan tampil di statistik; katalog bisa dipasang di layar utama (`manifest.webmanifest`, `sw.js`, `ikon-*.png`). Daftar berkas yang disalin ke situs katalog ada di `katalog/berkas.txt`.
+
 - **Fitur pelanggan (Nov 2026):** daftar tanya (beberapa barang dalam satu pesan WA, tersimpan di HP pelanggan), "Kabari saya" untuk ukuran kosong (tab `katalog_tunggu`, staf menindaklanjuti di menu **Kabari Pelanggan**), panduan ukuran resmi dari eigeradventure (`katalog_foto.panduan`, dicari bertahap tiap malam), barang serupa, info toko (jam buka & peta di `KATALOG.INFO`), dan peringatan anti-penipuan (alamat resmi, WA resmi, pembayaran hanya di kasir; halaman yang dibuka di alamat lain menampilkan peringatan merah).
 - **Statistik & QR:** katalog mengirim jejak anonim (artikel dibuka / tanya stok / scan QR) ke tab `katalog_log` (disimpan 90 hari, dibatasi per menit). Basecamp → Katalog Pelanggan menampilkan statistik dan QR (cetak poster A5 / unduh PNG) yang mengarah ke `https://eigerkartasura.github.io/?dari=qr`.
 

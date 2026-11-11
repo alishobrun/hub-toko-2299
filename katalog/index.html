@@ -9,13 +9,16 @@
   <meta name="description" content="Cek barang dan promo yang tersedia di EIGER Store A. Yani Kartasura, Sukoharjo, lalu tanya langsung lewat WhatsApp.">
   <meta property="og:title" content="Katalog EIGER Kartasura">
   <meta property="og:description" content="Tas, pakaian, sepatu, perlengkapan outdoor dan promo yang tersedia di toko. Tanya langsung lewat WhatsApp.">
-  <meta property="og:image" content="../assets/icon-512.png">
-  <link rel="icon" type="image/png" sizes="64x64" href="../assets/favicon-64.png">
-  <link rel="apple-touch-icon" href="../assets/icon-180.png">
+  <meta property="og:image" content="https://eigerkartasura.github.io/ikon-512.png">
+  <link rel="icon" type="image/png" sizes="192x192" href="ikon-192.png">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="apple-touch-icon" href="ikon-180.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="EIGER Kartasura">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="katalog.css?v=202611111900">
+  <link rel="stylesheet" href="katalog.css?v=202611112000">
 </head>
 <body>
   <header class="atas" id="atas">
@@ -55,6 +58,11 @@
       <section class="kotak">
         <div class="kotak-kepala"><h2>Kategori</h2></div>
         <div class="kategori" id="kategori"></div>
+      </section>
+
+      <section class="kotak koleksi-kotak" id="koleksiKotak" hidden>
+        <div class="kotak-kepala"><h2>Pilihan toko</h2></div>
+        <div class="koleksi-rel" id="koleksi"></div>
       </section>
 
       <section class="kotak">
@@ -114,7 +122,7 @@
     <div class="lembar-in" id="lembar2Isi"></div>
   </dialog>
 
-  <script src="../assets/config.js?v=202611111900"></script>
-  <script src="katalog.js?v=202611111900"></script>
+  <script src="../assets/config.js?v=202611112000"></script>
+  <script src="katalog.js?v=202611112000"></script>
 </body>
 </html>

@@ -139,7 +139,7 @@
 
   /* ---------- keadaan ---------- */
   var D = null;
-  function fAwal(q) { return { k3: '', k4: '', q: q || '', gd: '', urut: 'pilihan', arah: 'naik', promo: false, baru: false, akt: '', harga: '' }; }
+  function fAwal(q) { return { k3: '', k4: '', q: q || '', gd: '', urut: 'pilihan', arah: 'naik', promo: false, baru: false, akt: '', harga: '', kol: '' }; }
   var F = fAwal();
   var tampil = PER_HALAMAN, hasil = [];
 
@@ -185,6 +185,7 @@
     hitungDaftar();
     gambarBanner();
     gambarKategori();
+    gambarKoleksi();
     gambarStrip();
     saring();
     bukaDariHash();
@@ -374,6 +375,7 @@
     if (F.promo) chips.push(el('button', { class: 'chip hapus', type: 'button', 'aria-pressed': 'true', text: 'Barang promo ✕', onclick: function () { pilihPromo(false); } }));
     if (F.baru) chips.push(el('button', { class: 'chip hapus', type: 'button', 'aria-pressed': 'true', text: 'Baru di toko ✕', onclick: function () { F.baru = false; gambarKategori(); saring(); } }));
     if (F.k3) chips.push(el('button', { class: 'chip hapus', type: 'button', 'aria-pressed': 'true', text: (F.k4 ? subNama(F.k4) : katNama(F.k3)) + ' ✕', onclick: function () { F.k3 = ''; F.k4 = ''; gambarKategori(); saring(); } }));
+    if (F.kol) chips.push(el('button', { class: 'chip hapus', type: 'button', 'aria-pressed': 'true', text: ((D.koleksi || []).filter(function (k) { return k.id === F.kol; })[0] || { j: 'Koleksi' }).j + ' ✕', onclick: function () { F.kol = ''; saring(); } }));
     if (F.akt) chips.push(el('button', { class: 'chip hapus', type: 'button', 'aria-pressed': 'true', text: aktivitasDari(F.akt).nama + ' ✕', onclick: function () { F.akt = ''; gambarKategori(); saring(); } }));
     if (chips.length) chips.push(el('span', { class: 'saring-garis', 'aria-hidden': 'true' }));
     chips.push(el('span', { class: 'saring-label', text: 'Harga' }));
@@ -399,15 +401,18 @@
   function hargaKini(it) { var p = prItem(it); return p ? p.n : (it.hm || it.h || 0); }
   function saring() {
     var q = F.q.trim().toLowerCase();
-    var menyaring = !!(q || F.k3 || F.promo || F.baru || F.gd || F.akt || F.harga);
+    var K = F.kol ? (D.koleksi || []).filter(function (k) { return k.id === F.kol; })[0] : null;
+    var menyaring = !!(q || F.k3 || F.promo || F.baru || F.gd || F.akt || F.harga || K);
     var A = F.akt ? aktivitasDari(F.akt) : null, R = HARGA.filter(function (r) { return r[0] === F.harga; })[0];
-    $('#beranda').hidden = !!(q || F.k3 || F.promo || F.baru || F.akt);
-    $('#judulDaftar').textContent = q ? 'Hasil pencarian "' + F.q.trim() + '"' : F.promo ? 'Barang promo' : F.baru ? 'Baru di toko' : F.k3 ? (F.k4 ? subNama(F.k4) : katNama(F.k3)) : A ? 'Untuk ' + A.nama.toLowerCase() : 'Rekomendasi untukmu';
+    $('#beranda').hidden = !!(q || F.k3 || F.promo || F.baru || F.akt || K);
+    $('#judulDaftar').textContent = q ? 'Hasil pencarian "' + F.q.trim() + '"' : K ? K.j : F.promo ? 'Barang promo' : F.baru ? 'Baru di toko' : F.k3 ? (F.k4 ? subNama(F.k4) : katNama(F.k3)) : A ? 'Untuk ' + A.nama.toLowerCase() : 'Rekomendasi untukmu';
     hasil = D.items.filter(function (it) {
       var hk = hargaKini(it);
       return (!F.k3 || it.k3 === F.k3) && (!F.k4 || it.k4 === F.k4) && (!F.gd || genderNama(it.gd) === F.gd) && (!F.promo || prItem(it)) && (!F.baru || it.b) &&
-        (!A || A.cocok(it)) && (!R || (hk >= R[2] && hk < R[3])) && cocokCari(it, q);
+        (!A || A.cocok(it)) && (!R || (hk >= R[2] && hk < R[3])) && (!K || K.g.indexOf(it.g) >= 0) && cocokCari(it, q);
     });
+    if (K && F.urut === 'pilihan') hasil.sort(function (a, b) { return K.g.indexOf(a.g) - K.g.indexOf(b.g); });
+    if (q.length >= 3 && !hasil.length) catatCariKosong(q);
     var h = hargaKini;
     var dk = function (it) { var p = prItem(it); return p ? p.d : 0; };
     var ada = function (it) { return fotoBersih(it).length ? 1 : 0; };
@@ -417,7 +422,7 @@
       diskon: function (a, b) { return (dk(b) - dk(a)) || (ada(b) - ada(a)) || (a.n < b.n ? -1 : 1); },
       harga: function (a, b) { var x = h(a) || 9e9, y = h(b) || 9e9; return F.arah === 'naik' ? x - y : (h(b) || 0) - (h(a) || 0); }
     }[F.urut];
-    hasil.sort(urut);
+    if (!(K && F.urut === 'pilihan')) hasil.sort(urut);
     tampil = PER_HALAMAN;
     gambarSaring();
     $('#hitung').textContent = hasil.length + ' barang' + (menyaring ? ' cocok' : ' tersedia di toko');
@@ -712,6 +717,59 @@
   document.addEventListener('visibilitychange', function () { if (document.hidden) kirimCatat(); });
   try { if (/[?&]dari=qr\b/.test(location.search)) { antreCatat.push(['qr', 's']); catatT = setTimeout(kirimCatat, 1500); history.replaceState(null, '', location.pathname + location.hash); } } catch (x) { /* abaikan */ }
 
+
+  /* ---- foto alam (Unsplash License) untuk latar koleksi ---- */
+  var LATAR = { merbabu: '1575573685828-7c1e20f05124', awan: '1685360594641-91fb52833b3b', senja: '1651890044335-a55d59f5b167',
+    hijau: '1647067379984-9e0e069b097a', puncak: '1724076150462-8fcb67d8abb3', malam: '1501600696725-895c50e7ae0a' };
+  function fotoLatar(k, w) { return 'https://images.unsplash.com/photo-' + (LATAR[k] || LATAR.merbabu) + '?w=' + (w || 700) + '&q=65&auto=format&fit=crop'; }
+
+  /* ---- koleksi pilihan toko (disusun staf di Basecamp) ---- */
+  function gambarKoleksi() {
+    var xs = D.koleksi || [], box = $('#koleksiKotak');
+    if (!box) return;
+    box.hidden = !xs.length;
+    var G = {};
+    D.items.forEach(function (it) { G[it.g] = it; });
+    isiUlang($('#koleksi'), xs.map(function (k) {
+      var foto = k.g.map(function (g) { return G[g] && fotoBersih(G[g])[0]; }).filter(Boolean).slice(0, 3);
+      return el('button', { class: 'koleksi', type: 'button', style: "background-image:linear-gradient(100deg,rgba(10,26,79,.88) 0%,rgba(10,26,79,.55) 55%,rgba(10,26,79,.15) 100%),url('" + fotoLatar(k.bg) + "')",
+        onclick: function () { F = fAwal(); F.kol = k.id; $('#q').value = ''; tandaiTab(); gambarKategori(); saring(); gulirKeDaftar(); } },
+        el('span', { class: 'koleksi-teks' }, el('b', { text: k.j }), k.s ? el('span', { text: k.s }) : null, el('small', { text: k.g.length + ' barang ›' })),
+        foto.length ? el('span', { class: 'koleksi-foto' }, foto.map(function (f) { return el('img', { src: f, alt: '', loading: 'lazy', referrerpolicy: 'no-referrer' }); })) : null);
+    }));
+  }
+
+  /* ---- pencarian yang tidak menemukan barang: dicatat anonim untuk bahan order toko ---- */
+  var cariTerkirim = {}, cariT;
+  function catatCariKosong(q) {
+    clearTimeout(cariT);
+    cariT = setTimeout(function () {
+      var k = String(q).trim().toLowerCase();
+      if (k.length < 3 || cariTerkirim[k] || F.q.trim().toLowerCase() !== k || hasil.length) return;
+      cariTerkirim[k] = 1; antreCatat.push([k, 'c']); kirimCatat();
+    }, 1800);
+  }
+
+  /* ---- pasang sebagai aplikasi di layar utama HP ---- */
+  var mintaPasang = null;
+  var sudahAplikasi = (window.matchMedia && matchMedia('(display-mode: standalone)').matches) || navigator.standalone === true;
+  var iOS = /iphone|ipad|ipod/i.test(navigator.userAgent) && !window.MSStream;
+  if ('serviceWorker' in navigator && location.hostname === 'eigerkartasura.github.io') {
+    addEventListener('load', function () { navigator.serviceWorker.register('sw.js').catch(function () { /* abaikan */ }); });
+  }
+  addEventListener('beforeinstallprompt', function (e) { e.preventDefault(); mintaPasang = e; if (D) gambarInfoToko(); });
+  addEventListener('appinstalled', function () { mintaPasang = null; sudahAplikasi = true; toast('Katalog terpasang di layar utama'); if (D) gambarInfoToko(); });
+  function bisaPasang() { return !sudahAplikasi && (!!mintaPasang || iOS); }
+  function pasangAplikasi() {
+    if (mintaPasang) { mintaPasang.prompt(); mintaPasang.userChoice.then(function () { mintaPasang = null; if (D) gambarInfoToko(); }); return; }
+    bukaLembar([kepalaLembar('Pasang di layar utama'), el('div', { class: 'aman' },
+      el('p', { text: 'Buka katalog seperti aplikasi, langsung dari ikon EIGER Kartasura di layar utama HP.' }),
+      el('ol', { class: 'langkah langkah-pasang' },
+        el('li', null, el('b', { text: 'Ketuk tombol Bagikan' }), el('span', { text: 'Ikon kotak dengan panah ke atas di bawah layar Safari.' })),
+        el('li', null, el('b', { text: 'Pilih "Tambahkan ke Layar Utama"' }), el('span', { text: 'Gulir daftar pilihan bila belum terlihat.' })),
+        el('li', null, el('b', { text: 'Ketuk "Tambah"' }), el('span', { text: 'Ikon katalog muncul di layar utama.' }))))], true);
+  }
+
   /* ---- daftar tanya: beberapa barang sekaligus dalam satu pesan WhatsApp ---- */
   var KUNCI_DAFTAR = 'katalog2299.daftar';
   function bacaDaftar() { try { var x = JSON.parse(localStorage.getItem(KUNCI_DAFTAR) || '[]'); return Array.isArray(x) ? x : []; } catch (e) { return []; } }
@@ -854,7 +912,9 @@
     isiUlang(box,
       el('span', { class: 'status-buka' + (J.buka ? '' : ' tutup') }, el('i'), J.teks),
       I.maps ? el('a', { class: 'info-link', href: I.maps, target: '_blank', rel: 'noopener' }, svg(IKON_LOKASI), 'Petunjuk arah') : null,
+      I.ulasan ? el('a', { class: 'info-link info-rating', href: I.ulasan, target: '_blank', rel: 'noopener' }, el('span', { class: 'bintang', 'aria-hidden': 'true', text: '★' }), (I.rating ? I.rating + ' · ' : '') + 'Ulasan Google') : null,
       el('button', { class: 'info-link', type: 'button', onclick: bukaInfoToko }, 'Info toko ›'),
+      bisaPasang() ? el('button', { class: 'info-link info-pasang', type: 'button', onclick: pasangAplikasi }, svg('<path d="M12 3v12M7 10l5 5 5-5M5 21h14"/>'), 'Pasang aplikasi') : null,
       el('span', { class: 'info-update', id: 'update', text: D.diperbarui ? 'Stok per ' + tglUpdate(D.diperbarui) : '' }));
   }
   function bukaInfoToko() {
@@ -867,10 +927,21 @@
         el('dt', { text: 'Alamat' }), el('dd', { text: I.alamat || 'Kartasura, Sukoharjo' }),
         el('dt', { text: 'WhatsApp' }), el('dd', { text: waTampil() + ' (resmi)' }),
         el('dt', { text: 'Stok' }), el('dd', { text: D.diperbarui ? 'Data per ' + tglUpdate(D.diperbarui) : '-' })),
+      I.ulasan ? el('a', { class: 'kartu-ulasan', href: I.ulasan, target: '_blank', rel: 'noopener' },
+        el('b', { class: 'angka-rating', text: I.rating || '★' }),
+        el('span', null, el('span', { class: 'bintang-5', 'aria-hidden': 'true', text: '★★★★★' }), el('small', { text: (I.jmlUlasan ? I.jmlUlasan + ' ulasan pelanggan di Google' : 'Ulasan pelanggan di Google') }), el('em', { text: 'Baca ulasan ›' }))) : null,
+      el('div', { class: 'kartu-eac' },
+        el('b', { text: 'Belanja sebagai member EAC (Eiger Adventure Club)' }),
+        el('ul', null,
+          el('li', { text: 'Daftar gratis lewat aplikasi EIGER Adventure (Google Play / App Store), akun langsung jadi member EAC.' }),
+          el('li', { text: 'Di kasir, tunjukkan QR member dari menu Membership sebelum membayar agar poin tercatat.' }),
+          el('li', { text: 'Dapat poin setiap belanja, promo khusus member, dan poin bisa dipakai memotong harga atau ditukar voucher.' })),
+        el('small', { text: 'Pendaftaran hanya lewat aplikasi, tidak bisa di toko. Ketentuan mengikuti EIGER Adventure.' })),
       el('div', { class: 'info-aksi' },
         I.maps ? el('a', { class: 'tombol garis kecil', href: I.maps, target: '_blank', rel: 'noopener' }, svg(IKON_LOKASI), 'Petunjuk arah') : null,
         el('a', { class: 'tombol kecil', href: waLink('Halo EIGER Kartasura, saya mau tanya.'), target: '_blank', rel: 'noopener' }, svg(IKON_WA), 'WhatsApp toko'),
-        el('button', { class: 'tombol garis kecil', type: 'button', onclick: bukaAman }, svg(IKON_PERISAI), 'Cek katalog resmi')))], true);
+        el('button', { class: 'tombol garis kecil', type: 'button', onclick: bukaAman }, svg(IKON_PERISAI), 'Cek katalog resmi'),
+        bisaPasang() ? el('button', { class: 'tombol garis kecil', type: 'button', onclick: pasangAplikasi }, 'Pasang aplikasi') : null))], true);
   }
 
   /* ---- panduan singkat untuk pengunjung pertama (sekali saja) ---- */

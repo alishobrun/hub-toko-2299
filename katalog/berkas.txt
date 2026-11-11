@@ -1,0 +1,12 @@
+# Berkas yang disalin ke eigerkartasura.github.io oleh workflow salin-katalog.yml
+# format: <jalur di repo Basecamp> <jalur di situs katalog>
+katalog/index.html index.html
+katalog/katalog.css katalog.css
+katalog/katalog.js katalog.js
+katalog/manifest.webmanifest manifest.webmanifest
+katalog/sw.js sw.js
+katalog/ikon-180.png ikon-180.png
+katalog/ikon-192.png ikon-192.png
+katalog/ikon-512.png ikon-512.png
+katalog/ikon-maskable-512.png ikon-maskable-512.png
+assets/config.js assets/config.js
