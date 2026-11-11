@@ -1073,3 +1073,4 @@ button.tanya { cursor: pointer; }
   .slide.gaya-promo .sl-kartu i { position: absolute; top: -8px; right: -8px; font-style: normal; font-weight: 800; font-size: 12px; background: var(--harga); color: #fff; padding: 3px 7px; border-radius: 99px; box-shadow: 0 2px 6px rgba(0, 0, 0, .25); }
 }
 @media (min-width: 700px) and (max-width: 1000px) { .slide.gaya-promo .sl-kartu:nth-child(3) { display: none; } }
+.slide.gaya-promo .sl-produk, .slide.gaya-promo .sl-kartu, .slide.gaya-promo .sl-kartu i { opacity: 1 !important; text-shadow: none !important; }
