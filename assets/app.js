@@ -6710,11 +6710,20 @@
         var bx = besar.getContext('2d', { willReadFrequently: true }); bx.imageSmoothingQuality = 'high'; bx.drawImage(mk, 0, 0, w, h);
         var mb = bx.getImageData(0, 0, w, h).data;
         var cx = c.getContext('2d', { willReadFrequently: true }), fd = cx.getImageData(0, 0, w, h), px = fd.data;
+        // gabungan: AI menjaga bagian putih produk (sol, tumit); masker banjir menjaga bagian berwarna yang terlewat AI (tali, gagang, ujung)
+        var banjir = ktMaskerBanjir(px, w, h);
+        // area dekat produk menurut AI (masker 320 dilebarkan ±4 sel) — hanya di sini bagian berwarna boleh dipaksa tetap
+        var dekat = new Uint8Array(n), R4 = 4;
+        for (var yy = 0; yy < S; yy++) for (var xx = 0; xx < S; xx++) {
+          if ((m[yy * S + xx] - lo) / Math.max(1e-6, hi - lo) < 0.5) continue;
+          for (var dy = -R4; dy <= R4; dy++) for (var dx = -R4; dx <= R4; dx++) { var ny = yy + dy, nx = xx + dx; if (ny >= 0 && ny < S && nx >= 0 && nx < S) dekat[ny * S + nx] = 1; }
+        }
         for (var t = 0; t < w * h; t++) {
           var a = mb[t * 4] / 255;
-          a = Math.min(1, Math.max(0, (a - 0.12) / 0.6)); // pertegas batas
+          a = Math.min(1, Math.max(0, (a - 0.1) / 0.55)); // pertegas batas
           var R = px[t * 4], G = px[t * 4 + 1], B = px[t * 4 + 2], mn = Math.min(R, G, B), mxx = Math.max(R, G, B);
-          if (mn > 247 && mxx - mn < 8 && a < 0.9) a = Math.min(a, 0.15); // putih bersih di pinggir = latar
+          if (banjir[t]) a = Math.min(a, mxx - mn < 8 && mn > 247 ? 0.12 : a); // putih bersih yang tersambung ke tepi = latar
+          else if ((mn < 215 || mxx - mn > 28) && dekat[Math.min(S - 1, Math.floor((Math.floor(t / w)) * S / h)) * S + Math.min(S - 1, Math.floor((t % w) * S / w))]) a = 1; // jelas bagian produk di dekat bentuk produk
           px[t * 4 + 3] = Math.round(px[t * 4 + 3] * a);
         }
         cx.putImageData(fd, 0, 0);
@@ -6722,18 +6731,22 @@
       });
     });
   }
-  /** Cadangan tanpa AI: isi banjir dari tepi, hanya melewati putih bersih & perubahan warna yang halus. */
-  function ktLatarSederhana(img) {
-    var c = ktKanvasDari(img, 900), w = c.width, h = c.height, x = c.getContext('2d', { willReadFrequently: true });
-    var d = x.getImageData(0, 0, w, h), px = d.data, n = w * h;
-    var lum = function (i) { return (px[i * 4] + px[i * 4 + 1] + px[i * 4 + 2]) / 3; };
+  /** Masker latar putih dari tepi: 1 = latar. Hanya menembus putih bersih dengan perubahan warna yang halus. */
+  function ktMaskerBanjir(px, w, h) {
+    var n = w * h, lum = function (i) { return (px[i * 4] + px[i * 4 + 1] + px[i * 4 + 2]) / 3; };
     var putih = function (i) { var r = px[i * 4], g = px[i * 4 + 1], b = px[i * 4 + 2]; return px[i * 4 + 3] < 20 || (Math.min(r, g, b) > 243 && Math.max(r, g, b) - Math.min(r, g, b) < 10); };
     var latar = new Uint8Array(n), antre = new Int32Array(n), ujung = 0, awal = 0;
     var masuk = function (i, dari) { if (!latar[i] && putih(i) && (dari < 0 || Math.abs(lum(i) - lum(dari)) < 4)) { latar[i] = 1; antre[ujung++] = i; } };
     for (var i = 0; i < w; i++) { masuk(i, -1); masuk(n - 1 - i, -1); }
     for (var j = 0; j < h; j++) { masuk(j * w, -1); masuk(j * w + w - 1, -1); }
     while (awal < ujung) { var k = antre[awal++], kx = k % w, ky = (k - kx) / w; if (kx > 0) masuk(k - 1, k); if (kx < w - 1) masuk(k + 1, k); if (ky > 0) masuk(k - w, k); if (ky < h - 1) masuk(k + w, k); }
-    for (var q = 0; q < n; q++) if (latar[q]) px[q * 4 + 3] = 0;
+    return latar;
+  }
+  /** Cadangan tanpa AI. */
+  function ktLatarSederhana(img) {
+    var c = ktKanvasDari(img, 900), w = c.width, h = c.height, x = c.getContext('2d', { willReadFrequently: true });
+    var d = x.getImageData(0, 0, w, h), px = d.data, latar = ktMaskerBanjir(px, w, h);
+    for (var q = 0; q < w * h; q++) if (latar[q]) px[q * 4 + 3] = 0;
     x.putImageData(d, 0, 0);
     return ktPotong(c);
   }
@@ -6947,12 +6960,84 @@
   }
 
 
+
+  /* ---------- Studio Promo: pesan siaran WhatsApp (blasting) yang rapi ---------- */
+  var URL_KATALOG = 'https://eigerkartasura.github.io/';
+  function ktTglPanjang(iso) { return iso ? new Date(iso + 'T00:00:00').toLocaleDateString('id-ID', { day: 'numeric', month: 'long' }) : ''; }
+  /** Susun teks pesan per jenis. Format WhatsApp: *tebal*, _miring_. Link di baris sendiri agar kartu pratinjau muncul. */
+  function ktPesan(jenis, d, pilihan) {
+    var promo = d.items.filter(function (it) { return it.pr; }), maxD = promo.reduce(function (m, it) { return Math.max(m, it.pr.d); }, 0);
+    var baru = d.items.filter(function (it) { return it.b; }).length, sampai = ktTglPanjang(d.promoSampai);
+    var kaki = '\n\n📍 Jl. A. Yani Km 7, Kartasura, Sukoharjo\n🕘 Buka setiap hari 08.30–21.45\n💬 WhatsApp resmi: 0811-2002-2574\n\n_Pembayaran hanya di kasir toko. Kami tidak pernah meminta transfer ke rekening pribadi._';
+    if (jenis === 'promo') return '*PROMO DI TOKO — EIGER Store A. Yani Kartasura* 🏔️\n\nHalo Kak, ada potongan harga di toko kami' + (maxD ? ' *hingga ' + maxD + '%*' : '') + (sampai ? ' sampai *' + sampai + '*' : '') + '.\n\n' +
+      '🏷️ ' + promo.length + ' artikel promo tersedia di toko\n✅ Cek warna & ukuran yang ada sebelum datang\n🛍️ Tanya stok langsung lewat WhatsApp\n\nLihat semua barang promo:\n' + URL_KATALOG + '#promo' + kaki;
+    if (jenis === 'baru') return '*BARANG BARU DI TOKO — EIGER Store A. Yani Kartasura* ✨\n\nHalo Kak, ' + (baru ? '*' + baru + ' artikel baru* ' : 'beberapa artikel baru ') + 'sudah datang di toko kami: tas, pakaian, sepatu dan perlengkapan outdoor.\n\n' +
+      'Cek warna & ukuran yang tersedia:\n' + URL_KATALOG + kaki;
+    if (jenis === 'pilihan') {
+      var baris = (pilihan || []).map(function (it, i) {
+        var h = it.pr ? '*' + rpTeks(it.pr.n) + '* ~' + rpTeks(it.pr.h) + '~ (-' + it.pr.d + '%)' : (it.hm || it.h ? '*' + rpTeks(it.hm || it.h) + '*' : 'tanya harga');
+        return (i + 1) + '. ' + ktNama(it.n) + '\n   ' + h + '\n   ' + URL_KATALOG + '#artikel-' + it.g;
+      }).join('\n\n');
+      return '*PILIHAN MINGGU INI — EIGER Store A. Yani Kartasura* 🏔️\n\nHalo Kak, berikut beberapa barang pilihan yang tersedia di toko:\n\n' + (baris || '(pilih artikel di bawah)') +
+        '\n\nKatalog lengkap:\n' + URL_KATALOG + kaki;
+    }
+    return '*KATALOG RESMI — EIGER Store A. Yani Kartasura* 🏔️\n\nHalo Kak, sekarang cek stok toko kami bisa langsung dari HP:\n' + URL_KATALOG + '\n\n' +
+      '✅ Lihat warna & ukuran yang tersedia di toko\n🏷️ Harga promo' + (maxD ? ' hingga ' + maxD + '%' : '') + (sampai ? ' (berlaku s/d ' + sampai + ')' : '') + '\n🔔 Ukuran kosong? Minta dikabari saat datang\n💬 Tanya stok langsung ke WhatsApp toko' + kaki;
+  }
+  /** Ubah format WhatsApp ke HTML aman untuk pratinjau gelembung. */
+  function ktWaHtml(t) {
+    var esc = String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    return esc.replace(/\*([^*\n]+)\*/g, '<b>$1</b>').replace(/(^|\s)_([^_\n]+)_/g, '$1<i>$2</i>').replace(/~([^~\n]+)~/g, '<s>$1</s>')
+      .replace(/(https:\/\/eigerkartasura\.github\.io\/[^\s]*)/g, '<u>$1</u>').replace(/\n/g, '<br>');
+  }
+  function katalogPesanWA(box) {
+    var jenis = 'katalog', pilihan = [], D0 = null;
+    var teks = el('textarea', { class: 'st-teks', rows: '14', 'aria-label': 'Teks pesan' });
+    var gelembung = el('div', { class: 'st-wa-isi' });
+    var kartuLink = el('div', { class: 'st-wa-link' },
+      el('img', { src: URL_KATALOG + 'og-katalog.jpg', alt: '', referrerpolicy: 'no-referrer' }),
+      el('div', null, el('b', { text: 'Katalog Resmi EIGER Store A. Yani Kartasura' }), el('span', { text: 'Cek stok, ukuran & promo yang tersedia di toko, lalu tanya langsung lewat WhatsApp…' }), el('small', { text: 'eigerkartasura.github.io' })));
+    var jam = el('small', { class: 'st-wa-jam', text: new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) + ' ✓✓' });
+    var chips = el('div', { class: 'kt-kol-chips' }), pemilih = el('div');
+    function pratinjau() { gelembung.innerHTML = ktWaHtml(teks.value); } // HTML dari teks yang sudah di-escape
+    teks.addEventListener('input', pratinjau);
+    function isi() { if (!D0) return; teks.value = ktPesan(jenis, D0, pilihan); pratinjau(); }
+    function gambarChips() {
+      chips.replaceChildren.apply(chips, pilihan.map(function (it, i) {
+        return el('span', { class: 'kt-chip' }, ktNama(it.n), el('button', { type: 'button', 'aria-label': 'Hapus', text: '×', onclick: function () { pilihan.splice(i, 1); gambarChips(); isi(); } }));
+      }));
+    }
+    var JENIS = [['katalog', 'Kenalkan katalog'], ['promo', 'Promo bulan ini'], ['baru', 'Barang baru'], ['pilihan', 'Pilihan artikel']];
+    var seg = el('div', { class: 'seg st-seg', role: 'group', 'aria-label': 'Jenis pesan' });
+    function gambarSeg() {
+      seg.replaceChildren.apply(seg, JENIS.map(function (j) { return el('button', { type: 'button', 'aria-pressed': String(jenis === j[0]), text: j[1], onclick: function () { jenis = j[0]; gambarSeg(); isi(); } }); }));
+      pemilih.hidden = jenis !== 'pilihan';
+    }
+    pemilih.append(el('div', { class: 'kt-form-label', text: 'Artikel pilihan (maksimal 6)' }), chips,
+      ktPemilih(function (it) { if (pilihan.length >= 6) { toast('Maksimal 6 artikel', true); return; } if (!pilihan.some(function (x) { return x.g === it.g; })) { pilihan.push(it); gambarChips(); isi(); } }));
+    gambarSeg();
+    box.replaceChildren(el('div', { class: 'card-head' }, el('div', null, el('h3', { text: 'Pesan siaran WhatsApp' }),
+        el('p', { class: 'sub', text: 'Teks siap kirim untuk Daftar Siaran WhatsApp Business. Link katalog otomatis tampil sebagai kartu bergambar. Teks boleh diubah sebelum dikirim.' }))),
+      seg, pemilih,
+      el('div', { class: 'st-wa' },
+        el('div', { class: 'st-wa-kiri' }, teks,
+          el('div', { class: 'tags' },
+            el('button', { class: 'btn btn-primary', type: 'button', text: 'Salin teks', onclick: function () { copyText(teks.value); toast('Teks disalin. Tempel di Daftar Siaran WhatsApp.'); } }),
+            el('a', { class: 'btn btn-ghost', href: '#', onclick: function (e) { e.preventDefault(); window.open('https://wa.me/?text=' + encodeURIComponent(teks.value), '_blank', 'noopener'); }, text: 'Buka di WhatsApp' })),
+          el('ul', { class: 'st-tips' },
+            el('li', { text: 'Kirim lewat Daftar Siaran (Broadcast) di WhatsApp Business toko, maksimal 256 kontak per daftar.' }),
+            el('li', { text: 'Pesan siaran hanya sampai ke pelanggan yang menyimpan nomor toko. Minta pelanggan menyimpan nomor saat di kasir.' }),
+            el('li', { text: 'Kirim ke pelanggan yang pernah belanja atau setuju menerima info, cukup 1–2 kali seminggu agar nomor tidak dilaporkan spam.' }))),
+        el('div', { class: 'st-wa-hp' }, el('div', { class: 'st-wa-kepala' }, el('span', { class: 'st-wa-ava', text: 'EK' }), el('div', null, el('b', { text: 'EIGER Kartasura' }), el('small', { text: 'Akun bisnis' }))),
+          el('div', { class: 'st-wa-chat' }, el('div', { class: 'st-wa-bubble' }, kartuLink, gelembung, jam)))));
+    ktData().then(function (d) { D0 = d; isi(); }).catch(function (e) { box.append(errBox(e)); });
+  }
+
   /* ---------- Studio Promo: semua anggota tim membuat poster & story dari stok toko ---------- */
   function viewStudio(v) {
-    var URL_KATALOG = 'https://eigerkartasura.github.io/';
     var qr = el('div', { class: 'st-qr', 'aria-label': 'QR katalog' });
     loadScript(QR_LIB).then(function () { qr.innerHTML = qrSvg(URL_KATALOG + '?dari=qr', 140); }).catch(function () { /* QR opsional */ });
-    var teksBagi = 'Cek stok, ukuran & promo EIGER Store A. Yani Kartasura langsung dari HP: ' + URL_KATALOG + ' — tanya stok lewat WhatsApp toko 0811-2002-2574.';
+
     var hero = el('section', { class: 'st-hero', style: "background-image:linear-gradient(110deg,rgba(10,26,79,.96) 0%,rgba(10,26,79,.82) 45%,rgba(120,28,20,.55) 100%),url('" + ktLatarUrl('merbabu', 1400) + "')" },
       el('div', { class: 'st-hero-teks' },
         el('span', { class: 'st-kicker', text: 'Katalog EIGER Kartasura' }),
@@ -6960,11 +7045,11 @@
         el('p', { text: 'Buat poster dan story promo dari barang yang benar-benar ada di toko. Harga, diskon, dan QR ke halaman produk terisi otomatis, latar foto produk dihapus otomatis.' }),
         el('div', { class: 'st-hero-aksi' },
           el('button', { class: 'st-btn st-btn-terang', type: 'button', text: 'Salin link katalog', onclick: function () { copyText(URL_KATALOG); toast('Link katalog disalin'); } }),
-          el('a', { class: 'st-btn st-btn-garis', href: 'https://wa.me/?text=' + encodeURIComponent(teksBagi), target: '_blank', rel: 'noopener', text: 'Bagikan ke WhatsApp' }),
+          el('button', { class: 'st-btn st-btn-garis', type: 'button', text: 'Buat pesan WhatsApp', onclick: function () { mode = 'wa'; gambarTab(); tab.scrollIntoView({ behavior: 'smooth' }); } }),
           el('a', { class: 'st-btn st-btn-garis', href: URL_KATALOG, target: '_blank', rel: 'noopener', text: 'Buka katalog' }))),
       el('div', { class: 'st-hero-qr' }, qr, el('small', { text: 'Scan untuk membuka katalog' })));
     var langkah = el('ol', { class: 'st-langkah' },
-      el('li', null, el('b', { text: 'Pilih jenis' }), el('span', { text: 'Poster 1 produk atau story beberapa produk.' })),
+      el('li', null, el('b', { text: 'Pilih jenis' }), el('span', { text: 'Poster, story beberapa produk, atau pesan WhatsApp.' })),
       el('li', null, el('b', { text: 'Cari artikel' }), el('span', { text: 'Ketik nama atau kode, lalu klik.' })),
       el('li', null, el('b', { text: 'Unduh & unggah' }), el('span', { text: 'Simpan PNG, pasang di Status WA atau Story IG.' })));
     var isi = el('div');
@@ -6975,10 +7060,12 @@
         el('button', { type: 'button', role: 'tab', 'aria-selected': String(mode === 'poster'), onclick: function () { mode = 'poster'; gambarTab(); } },
           el('b', { text: 'Poster 1 produk' }), el('small', { text: '3 desain · Story 9:16 atau Feed 4:5' })),
         el('button', { type: 'button', role: 'tab', 'aria-selected': String(mode === 'kejutan'), onclick: function () { mode = 'kejutan'; gambarTab(); } },
-          el('b', { text: 'Story kejutan' }), el('small', { text: '3–5 produk melayang · 9:16' })));
+          el('b', { text: 'Story kejutan' }), el('small', { text: '3–5 produk melayang · 9:16' })),
+        el('button', { type: 'button', role: 'tab', 'aria-selected': String(mode === 'wa'), onclick: function () { mode = 'wa'; gambarTab(); } },
+          el('b', { text: 'Pesan WhatsApp' }), el('small', { text: 'Teks siaran + kartu link' })));
       var kartu = el('div', { class: 'card section st-kartu' });
       isi.replaceChildren(kartu);
-      if (mode === 'poster') katalogPoster(kartu); else katalogStoryKejutan(kartu);
+      if (mode === 'poster') katalogPoster(kartu); else if (mode === 'kejutan') katalogStoryKejutan(kartu); else katalogPesanWA(kartu);
     }
     gambarTab();
     v.append(hero, langkah, tab, isi);

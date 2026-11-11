@@ -10,3 +10,4 @@ katalog/ikon-192.png ikon-192.png
 katalog/ikon-512.png ikon-512.png
 katalog/ikon-maskable-512.png ikon-maskable-512.png
 assets/config.js assets/config.js
+katalog/og-katalog.jpg og-katalog.jpg
