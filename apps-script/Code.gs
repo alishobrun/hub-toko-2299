@@ -11,7 +11,7 @@
 /** Versi kode. WAJIB dinaikkan setiap kali Code.gs diubah (format yyyy-MM-dd.n),
  *  lalu simpan ke GitHub (alishobrun/hub-toko-2299) SEBELUM dipasang. Halaman Kesehatan Data
  *  membandingkan angka ini dengan GitHub supaya kode yang dipasang di luar GitHub ketahuan. */
-const KODE_VERSI = '2026-11-11.11';
+const KODE_VERSI = '2026-11-11.12';
 
 const CFG = {
   STORE: '2299',
@@ -89,7 +89,7 @@ const TABS = {
   // buku petty cash dari CARE (laporan PettyCash.xlsx diunggah manual)
   petty_care: ['id', 'kode', 'waktu', 'debit', 'kredit', 'saldo', 'akun', 'status', 'ket', 'oleh', 'diubah'],
   // buku Store Safe (brankas) dari CARE: uang masuk saat closing (POS Desktop) & setoran ke bank
-  serah_terima: ['kode', 'tahu_user', 'tahu_nama', 'tahu_waktu', 'penyetor_user', 'penyetor_nama', 'diubah', 'oleh'],
+  serah_terima: ['kode', 'tahu_user', 'tahu_nama', 'tahu_waktu', 'penyetor_user', 'penyetor_nama', 'diubah', 'oleh', 'pihak', 'ttd_waktu'],
   dok_antre: ['file_id', 'nama', 'tanggal', 'jenis', 'mb', 'didaftar'],
   dok_terkirim: ['file_id', 'nama', 'waktu', 'link', 'catatan'],
   putaway_tpl: ['kategori', 'bin_sell', 'bin_wa', 'diubah', 'oleh'],
@@ -4646,7 +4646,6 @@ function pettyParse_(aoa) {
 const SERAH_MULAI = '2026-11-01'; // setoran sebelum tanggal ini dianggap arsip (tidak perlu Mengetahui SL)
 function serahData_(K) {
   const U = {}; read_('users').forEach(function (u) { U[String(u.username)] = u; });
-  const NIK = jsonOr_(PropertiesService.getScriptProperties().getProperty('SERAH_NIK'), {}); // NIK CARE → username Basecamp
   const T = {}; read_('serah_terima').forEach(function (r) { T[String(r.kode)] = r; });
   const balik = function (x) { return /X$/i.test(String(x.kode)) || /revers/i.test(String(x.ket)); };
   const masuk = {};
@@ -4656,14 +4655,16 @@ function serahData_(K) {
     if (!(x.kredit > 0) || x.status === 'Reversed' || balik(x) || !/bank/i.test(x.dari)) return;
     let tj = x.tglJual || '';
     if (!tj) { const m = String(x.ket).match(/(\d{2})\/(\d{2})\/(\d{4})/); if (m) tj = m[3] + '-' + m[2] + '-' + m[1]; }
-    const t = T[String(x.kode)] || {}, nik = String(t.penyetor_user || x.oleh || ''), u = U[nik] || U[NIK[nik]];
-    const pihak = u ? (u.role === 'admin' ? 'SL' : 'RA') : 'RA';
+    // penyetor = yang menandatangani di Basecamp ("Saya yang setor") / dipilih admin / dari sheet lama — BUKAN NIK penginput CARE
+    const t = T[String(x.kode)] || {}, nik = String(t.penyetor_user || ''), u = nik ? U[nik] : null;
+    const adaPenyetor = !!(u || t.penyetor_nama);
+    const pihak = String(t.pihak || '') || (u ? (u.role === 'admin' ? 'SL' : 'RA') : 'RA');
     rows.push({ kode: x.kode, waktu: x.waktu, tanggal: x.waktu.slice(0, 10), tglJual: tj, sisa: /SISA/i.test(x.ket), nominal: x.kredit,
       bank: [x.akun, x.jenis === 'atm' ? 'ATM' : x.jenis === 'brankas' ? 'dari brankas' : 'teller'].filter(String).join(' · '),
-      username: nik, nama: t.penyetor_nama || (u ? u.nama : (nik ? 'NIK ' + nik : '?')), pihak: pihak, ket: x.ket, diganti: !!t.penyetor_user,
+      username: nik, nama: t.penyetor_nama || (u ? u.nama : ''), pihak: adaPenyetor ? pihak : '', ket: x.ket, ttd: String(t.ttd_waktu || ''),
       tahu: t.tahu_user ? { username: String(t.tahu_user), nama: String(t.tahu_nama), waktu: String(t.tahu_waktu) } : null,
-      nik: String(x.oleh || ''), kenal: !!u,
-      status: pihak === 'SL' ? 'info' : t.tahu_user ? 'diketahui' : x.waktu.slice(0, 10) < SERAH_MULAI ? 'arsip' : 'menunggu' });
+      nik: String(x.oleh || ''), penginput: U[String(x.oleh)] ? String(U[String(x.oleh)].nama) : 'NIK ' + String(x.oleh || '?'),
+      status: !adaPenyetor ? (x.waktu.slice(0, 10) < SERAH_MULAI ? 'arsip' : 'ttd') : pihak === 'SL' ? 'info' : t.tahu_user ? 'diketahui' : x.waktu.slice(0, 10) < SERAH_MULAI ? 'arsip' : 'menunggu' });
   });
   const jual = {};
   rows.forEach(function (r) { if (!r.tglJual) return; const o = jual[r.tglJual] || (jual[r.tglJual] = { tanggal: r.tglJual, closing: masuk[r.tglJual] || 0, setor: 0, n: 0 }); o.setor += r.nominal; o.n++; });
@@ -4681,7 +4682,7 @@ Object.assign(API, {
     const jual = {}; rows.forEach(function (r) { if (r.tglJual && D.jual[r.tglJual]) jual[r.tglJual] = D.jual[r.tglJual]; });
     const last = K.safe[K.safe.length - 1];
     const users = u.role === 'admin' ? read_('users').filter(function (x) { return String(x.status) === 'aktif'; }).map(function (x) { return { username: String(x.username), nama: String(x.nama) }; }) : [];
-    return { bulan: bulan, bulanAda: daftar, rows: rows, jual: jual, menunggu: D.rows.filter(function (r) { return r.status === 'menunggu'; }).length,
+    return { bulan: bulan, bulanAda: daftar, rows: rows, jual: jual, menunggu: D.rows.filter(function (r) { return r.status === 'menunggu' || r.status === 'ttd'; }).length,
       sampai: last ? last.waktu : null, bisaTahu: u.role === 'admin', users: users, tautan: bapTautan_(), sheet: serahTautan_() };
   },
   /** SL / admin: "Mengetahui" setoran RA (batal = true untuk membatalkan). */
@@ -4703,25 +4704,25 @@ Object.assign(API, {
     rekapAman_([], true);
     return true;
   },
-  /** Admin: ganti nama penyetor bila yang menginput di CARE bukan yang menyetor. */
-  serahPenyetor: function (req) {
-    const a = auth_(req, true), k = String(req.kode || ''), un = String(req.username || '');
-    const u = read_('users').filter(function (x) { return String(x.username) === un; })[0];
-    if (!k) throw new Error('Pilih setoran');
-    if (req.nik) { // ingat NIK CARE ini milik siapa → berlaku untuk semua setoran dengan NIK yang sama
-      const pp = PropertiesService.getScriptProperties(), m = jsonOr_(pp.getProperty('SERAH_NIK'), {});
-      if (u) m[String(req.nik)] = un; else delete m[String(req.nik)];
-      pp.setProperty('SERAH_NIK', JSON.stringify(m));
-      log_(a.username, 'NIK CARE', String(req.nik) + ' → ' + (u ? u.nama : '-'));
-      rekapAman_([], true);
-      return true;
+  /** Penyetor menandatangani: "Saya yang setor" (siapa saja yang login; admin boleh memilih nama orang lain). */
+  serahSaya: function (req) {
+    const u = auth_(req), k = String(req.kode || '');
+    let target = u;
+    if (req.username && String(req.username) !== u.username) {
+      if (u.role !== 'admin') throw new Error('Hanya admin yang bisa memilih penyetor lain');
+      target = read_('users').filter(function (x) { return String(x.username) === String(req.username); })[0];
+      if (!target) throw new Error('Akun tidak ditemukan');
     }
+    if (!k) throw new Error('Pilih setoran');
     withLock_(function () {
       const all = read_('serah_terima'); let o = all.filter(function (r) { return String(r.kode) === k; })[0];
       if (!o) { o = { kode: k }; all.push(o); }
-      o.penyetor_user = u ? un : ''; o.penyetor_nama = u ? String(u.nama) : ''; o.diubah = now_(); o.oleh = a.username;
+      if (o.penyetor_user && String(o.penyetor_user) !== String(target.username) && u.role !== 'admin') throw new Error('Setoran ini sudah ditandatangani ' + o.penyetor_nama);
+      if (req.hapus) { if (u.role !== 'admin') throw new Error('Hanya admin'); o.penyetor_user = ''; o.penyetor_nama = ''; o.pihak = ''; o.ttd_waktu = ''; }
+      else { o.penyetor_user = String(target.username); o.penyetor_nama = String(target.nama); o.pihak = String(target.role) === 'admin' ? 'SL' : 'RA'; o.ttd_waktu = now_(); }
+      o.diubah = now_(); o.oleh = u.username;
       writeAll_('serah_terima', all);
-      log_(a.username, 'ganti penyetor', k + ' → ' + (u ? u.nama : 'sesuai CARE'));
+      log_(u.username, 'tanda tangan setoran', k + ' · ' + (req.hapus ? 'dihapus' : target.nama));
     });
     rekapAman_([], true);
     return true;
@@ -5137,9 +5138,9 @@ function bapNotif_(u, today) {
   }
   if (admin) {
     try {
-      const nunggu = serahData_(kasBaca_()).rows.filter(function (r) { return r.status === 'menunggu'; });
+      const nunggu = serahData_(kasBaca_()).rows.filter(function (r) { return r.status === 'menunggu' || r.status === 'ttd'; });
       if (nunggu.length) out.push({ id: 'live-serah-' + nunggu.length + '-' + nunggu[0].kode, live: true, level: 'cek', jenis: 'kas', waktu: nunggu[0].waktu,
-        judul: nunggu.length + ' setoran RA menunggu "Mengetahui (SL)"', isi: nunggu.slice(0, 3).map(function (r) { return tglPendek_(r.tanggal) + ' ' + r.nama + ' Rp ' + rupiah_(r.nominal); }).join(' · '), link: '#/kas-setor' });
+        judul: nunggu.length + ' setoran belum lengkap serah terimanya', isi: nunggu.slice(0, 3).map(function (r) { return tglPendek_(r.tanggal) + ' ' + (r.nama || 'penyetor?') + ' Rp ' + rupiah_(r.nominal); }).join(' · '), link: '#/kas-setor' });
     } catch (e) {}
     const bData = Number(set.data_batas) || 660;
     if (R.posAda && !R.posKemarin && mnt >= bData) out.push({ id: 'live-pos-' + today, live: true, level: 'cek', jenis: 'kas', waktu: today + ' ' + hhmm_(bData).replace('.', ':') + ':00',
@@ -5396,8 +5397,8 @@ const namaPendek_ = function (n) { n = String(n || '').trim(); return /^NIK /.te
 /** Baris sheet serah terima satu bulan: tanggal | Pihak | Nama | penjualan | Nominal | Tanda Tangan | Mengetahui (SL) | PV */
 function serahBaris_(rows) {
   return rows.map(function (r) {
-    return [tglId_(r.tanggal), r.pihak, namaPendek_(r.nama), r.tglJual ? tglId_(r.tglJual) + (r.sisa ? ' (sisa)' : '') : '', 'Rp' + Number(r.nominal).toLocaleString('en-US'),
-      '✓ ' + namaPendek_(r.nama) + ' ' + r.waktu.slice(11, 16),
+    return [tglId_(r.tanggal), r.pihak, r.nama ? namaPendek_(r.nama) : '', r.tglJual ? tglId_(r.tglJual) + (r.sisa ? ' (sisa)' : '') : '', 'Rp' + Number(r.nominal).toLocaleString('en-US'),
+      r.ttd ? '✓ ' + namaPendek_(r.nama) + ' ' + r.ttd.slice(11, 16) : r.nama ? '' : (r.status === 'arsip' ? '' : 'BELUM'),
       r.status === 'info' ? '— (setor SL)' : r.tahu ? '✓ ' + namaPendek_(r.tahu.nama) + ' ' + tglId_(r.tahu.waktu.slice(0, 10)) : r.status === 'arsip' ? '' : 'BELUM',
       r.kode];
   });

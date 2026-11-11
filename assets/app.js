@@ -1881,18 +1881,20 @@
         var tg = function (t) { return t ? t.slice(8, 10) + '/' + t.slice(5, 7) + '/' + t.slice(0, 4) : ''; };
         var pendek = function (n) { n = String(n || '').trim(); return /^NIK /.test(n) ? n : n.split(/\s+/)[0].toUpperCase(); };
         xlsxDownload('SERAH TERIMA SETORAN ' + bulanLabel(d.bulan).toUpperCase(), [{ name: bulanLabel(d.bulan).toUpperCase(), rows: [['SERAH TERIMA SETORAN'], [], ['tanggal', 'Pihak', 'Nama', 'penjualan', 'Nominal', 'Tanda Tangan', 'Mengetahui (SL)', 'PV']].concat(d.rows.slice().reverse().map(function (r) {
-          return [tg(r.tanggal), r.pihak, pendek(r.nama), r.tglJual ? tg(r.tglJual) + (r.sisa ? ' (sisa)' : '') : '', 'Rp' + nf.format(r.nominal).replace(/\./g, ','), '✓ ' + pendek(r.nama) + ' ' + r.waktu.slice(11, 16),
+          return [tg(r.tanggal), r.pihak, r.nama ? pendek(r.nama) : '', r.tglJual ? tg(r.tglJual) + (r.sisa ? ' (sisa)' : '') : '', 'Rp' + nf.format(r.nominal).replace(/\./g, ','), r.ttd ? '✓ ' + pendek(r.nama) + ' ' + r.ttd.slice(11, 16) : '',
             r.status === 'info' ? '— (setor SL)' : r.tahu ? '✓ ' + pendek(r.tahu.nama) + ' ' + tg(r.tahu.waktu.slice(0, 10)) : r.status === 'arsip' ? '' : 'BELUM', r.kode];
         })) }]);
       };
       var head = el('div', { class: 'card' },
         el('div', { class: 'card-head' }, el('div', null, el('h3', { text: 'Serah terima setoran' }),
-          el('p', { class: 'sub', text: 'Otomatis dari laporan Store Safe CARE' + (d.sampai ? ' · transaksi terakhir ' + fTime(d.sampai) : '') + '. Setoran RA mulai 1 Nov 2026 perlu "Mengetahui (SL)".' })),
+          el('p', { class: 'sub', text: 'Baris otomatis dari laporan Store Safe CARE' + (d.sampai ? ' (transaksi terakhir ' + fTime(d.sampai) + ')' : '') + '. Penyetor menekan "Saya yang setor", lalu SL menekan "Mengetahui".' })),
           monthSel(d.bulanAda.length ? d.bulanAda : [d.bulan], d.bulan, function (m) { serahTerima(box, m); })),
         el('div', { class: 'tags' }, el('span', { class: 'tag', text: d.rows.length + ' setoran' }), el('span', { class: 'tag', text: rpx(total) }),
-          nunggu.length ? el('span', { class: 'tag tag-warn', text: nunggu.length + ' menunggu SL' }) : el('span', { class: 'tag tag-good', text: '✓ semua beres' }),
-          d.menunggu > nunggu.length ? el('span', { class: 'tag tag-warn', text: (d.menunggu - nunggu.length) + ' menunggu di bulan lain' }) : null),
-        d.rows.some(function (r) { return !r.kenal; }) && d.bisaTahu ? el('p', { class: 'note', style: 'margin-top:8px', text: 'Ada penyetor yang masih tampil sebagai NIK. Pilih namanya di kolom "Penyetor" sekali saja — NIK itu akan dikenali untuk semua setoran.' }) : null,
+          d.rows.filter(function (r) { return r.status === 'ttd'; }).length ? el('span', { class: 'tag tag-warn', text: d.rows.filter(function (r) { return r.status === 'ttd'; }).length + ' belum ada penyetor' }) : null,
+          nunggu.length ? el('span', { class: 'tag tag-warn', text: nunggu.length + ' menunggu SL' }) : null,
+          !nunggu.length && !d.rows.some(function (r) { return r.status === 'ttd'; }) ? el('span', { class: 'tag tag-good', text: '✓ semua beres' }) : null,
+          (function () { var ini = d.rows.filter(function (r) { return r.status === 'menunggu' || r.status === 'ttd'; }).length; return d.menunggu > ini ? el('span', { class: 'tag tag-warn', text: (d.menunggu - ini) + ' belum lengkap di bulan lain' }) : null; })()),
+
         el('div', { class: 'row-btns', style: 'margin-top:10px' },
           d.bisaTahu && nunggu.length ? el('button', { type: 'button', class: 'btn btn-orange btn-sm', onclick: function (e) {
             if (confirm('Tandai ' + nunggu.length + ' setoran RA bulan ini "Mengetahui (SL)" atas nama ' + S.user.nama + '?')) tahu(nunggu.map(function (r) { return r.kode; }), false, e.currentTarget);
@@ -1907,16 +1909,20 @@
           el('thead', null, el('tr', null, ['tanggal', 'Pihak', 'Nama', 'penjualan', 'Nominal', 'Tanda Tangan', 'Mengetahui (SL)', 'PV'].map(function (h) { return el('th', { text: h }); }))),
           el('tbody', null, d.rows.slice().reverse().map(function (r) {
             var j = r.tglJual && d.jual[r.tglJual];
-            var nm = el('td', null, el('b', { text: pendek(r.nama) }));
+            var saya = function (un, hapus, btn) {
+              if (btn) btn.disabled = true;
+              api('serahSaya', { kode: r.kode, username: un || '', hapus: !!hapus }).then(function () { toast(hapus ? 'Penyetor dihapus' : 'Tanda tangan tersimpan'); serahTerima(box, d.bulan); })
+                .catch(function (e) { if (btn) btn.disabled = false; toast(e.message, true); });
+            };
+            var nm = el('td', null, r.nama ? el('b', { text: pendek(r.nama) }) : (r.status === 'arsip' ? el('span', { class: 'muted', text: '—' }) :
+              el('button', { type: 'button', class: 'btn btn-orange btn-sm', text: 'Saya yang setor', onclick: function (e) { if (confirm('Tanda tangan: Anda (' + S.user.nama + ') yang menyetor ' + rpx(r.nominal) + ' tanggal ' + tg(r.tanggal) + '?')) saya('', false, e.currentTarget); } })));
             if (d.bisaTahu) {
-              var gant = el('select', { class: 'serah-ganti', 'aria-label': 'Ganti penyetor' }, [el('option', { value: '', text: 'sesuai CARE' })].concat(d.users.map(function (u) { var o = el('option', { value: u.username, text: u.nama }); if (r.diganti && u.username === r.username) o.selected = true; return o; })));
-              gant.addEventListener('change', function () {
-                var semua = !r.kenal && r.nik && gant.value && confirm('NIK CARE ' + r.nik + ' milik ' + gant.options[gant.selectedIndex].text + '?\nOK = berlaku untuk semua setoran NIK ini · Batal = hanya setoran ini');
-                api('serahPenyetor', { kode: r.kode, username: gant.value, nik: semua ? r.nik : '' }).then(function () { toast(semua ? 'NIK ' + r.nik + ' dikenali' : 'Penyetor diganti'); serahTerima(box, d.bulan); }).catch(function (e) { toast(e.message, true); });
-              });
+              var gant = el('select', { class: 'serah-ganti', 'aria-label': 'Pilih penyetor' }, [el('option', { value: '', text: r.nama ? 'ganti…' : 'pilih penyetor…' })].concat(d.users.map(function (u) { return el('option', { value: u.username, text: u.nama }); })).concat(r.nama ? [el('option', { value: '__hapus', text: '(kosongkan)' })] : []));
+              gant.addEventListener('change', function () { if (gant.value) saya(gant.value === '__hapus' ? '' : gant.value, gant.value === '__hapus'); });
               nm.append(gant);
             }
             var tahuTd = r.status === 'info' ? el('td', { class: 'muted', text: '— (setor SL)' })
+              : r.status === 'ttd' ? el('td', { class: 'muted', text: 'tunggu tanda tangan penyetor' })
               : r.status === 'arsip' ? el('td', { class: 'muted', text: '' })
               : r.status === 'diketahui' ? el('td', { class: 'c-good' }, '✓ ' + pendek(r.tahu.nama) + ' ' + tg(r.tahu.waktu.slice(0, 10)),
                   d.bisaTahu ? el('button', { type: 'button', class: 'link-btn', text: 'batal', onclick: function (e) { if (confirm('Batalkan "Mengetahui" untuk setoran ini?')) tahu(r.kode, true, e.currentTarget); } }) : null)
@@ -1926,9 +1932,9 @@
               el('td', { class: 'c', title: j && j.sisa > 0 && j.closing ? 'Penjualan ' + tg(j.tanggal) + ' ' + rpx(j.closing) + ' · disetor ' + rpx(j.setor) + ' · sisa ' + rpx(j.sisa) : '' },
                 (r.tglJual ? tg(r.tglJual) : '?') + (r.sisa ? ' (sisa)' : ''), j && j.sisa > 0 && j.closing && r.status !== 'arsip' ? el('small', { class: 'c-warn', text: 'sisa ' + nf.format(j.sisa) + ' belum disetor' }) : null),
               el('td', { class: 'r num', text: 'Rp' + nf.format(r.nominal) }),
-              el('td', { class: 'c', title: r.bank, text: '✓ ' + pendek(r.nama) + ' ' + r.waktu.slice(11, 16) }),
+              el('td', { class: 'c', text: r.ttd ? '✓ ' + pendek(r.nama) + ' ' + r.ttd.slice(11, 16) : r.nama ? '—' : '' }),
               tahuTd,
-              el('td', { class: 'c pv', title: r.bank, text: r.kode }));
+              el('td', { class: 'c pv', title: r.bank }, r.kode, el('small', { class: 'muted', text: r.bank + ' · input CARE: ' + r.penginput })));
           }))))) : el('div', { class: 'card section' }, el('div', { class: 'empty', text: 'Belum ada setoran di bulan ini. Unggah laporan Store Safe CARE di tab Ringkasan.' }));
       box.replaceChildren(head, list);
     }).catch(function (e) { box.replaceChildren(errBox(e)); });
