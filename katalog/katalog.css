@@ -1012,3 +1012,7 @@ button.tanya { cursor: pointer; }
   .terlaris-kotak .kotak-kepala { flex-wrap: wrap; gap: 2px 8px; }
 }
 @media (max-width: 420px) { .gaya b { font-size: 21px; } .gaya small { font-size: 11px; } }
+
+/* label Pria/Wanita/Anak di bawah supaya wajah di foto tidak tertutup */
+.gaya { justify-content: flex-end; padding-bottom: 18px; }
+@media (min-width: 900px) { .gaya { padding-bottom: 26px; } }

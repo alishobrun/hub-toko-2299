@@ -1949,15 +1949,15 @@
   /* Pria / Wanita / Anak */
   var FOTO_GAYA = {
     Pria: 'https://images.unsplash.com/photo-1698129878421-836a6b1cecd2?w=640&h=520&fit=crop&crop=focalpoint&fp-x=.5&fp-y=.6&fp-z=1.5&q=60&auto=format',
-    Wanita: 'https://images.unsplash.com/photo-1604320462838-2d4b8c1b882c?w=640&h=520&fit=crop&crop=faces,center&q=60&auto=format',
-    Anak: 'https://images.unsplash.com/photo-1700937521110-2d9b24b1cee6?w=640&h=520&fit=crop&crop=focalpoint&fp-x=.5&fp-y=.62&fp-z=1.8&q=60&auto=format'
+    Wanita: 'https://images.unsplash.com/photo-1604320462838-2d4b8c1b882c?w=640&h=520&fit=crop&crop=focalpoint&fp-x=.5&fp-y=.5&fp-z=1.25&q=60&auto=format',
+    Anak: 'https://images.unsplash.com/photo-1700937521110-2d9b24b1cee6?w=640&h=520&fit=crop&crop=focalpoint&fp-x=.5&fp-y=.5&fp-z=1.5&q=60&auto=format'
   };
   function gambarGaya() {
     var box = $('#gaya'); if (!box) return;
     isiUlang(box, ['Pria', 'Wanita', 'Anak'].map(function (g) {
       var n = D.items.filter(function (it) { return cocokGender(it, g); }).length;
       if (n < 3) return null;
-      return el('button', { class: 'gaya', type: 'button', style: "background-image:linear-gradient(rgba(0,0,0,.18),rgba(0,0,0,.42)),url('" + FOTO_GAYA[g] + "')", onclick: function () { terapkan({ gds: [g] }); } },
+      return el('button', { class: 'gaya', type: 'button', style: "background-image:linear-gradient(rgba(0,0,0,0) 40%,rgba(0,0,0,.55)),url('" + FOTO_GAYA[g] + "')", onclick: function () { terapkan({ gds: [g] }); } },
         el('b', { text: g }), el('small', { text: n + ' barang' }));
     }));
   }
