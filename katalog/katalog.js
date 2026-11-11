@@ -1077,7 +1077,7 @@
           el('div', { class: 'pilihan pilihan-ukuran' }, w[1].map(function (u) {
             var milikku = ukurankuUntuk(it).indexOf(u[0]) >= 0;
             return el('button', { type: 'button', class: (u[1] ? '' : 'uk-kosong') + (milikku ? ' uk-ku' : ''), 'aria-pressed': String(uk === u[0]), 'aria-label': u[0] + (u[1] ? '' : ', kosong') + (milikku ? ', ukuranku' : ''),
-              text: u[0] === 'NOS' ? 'All size' : u[0], onclick: function () { uk = u[0]; gambar(); } });
+              text: u[0] === 'NOS' ? 'All size' : u[0], onclick: function () { uk = u[0]; if (!u[1]) catatKosong(it.g, w[0], u[0]); gambar(); } });
           })),
           el('div', { class: 'legenda-ukuran' }, el('span', null, el('i', { class: 'ada' }), 'Tersedia di toko'), el('span', null, el('i', { class: 'habis' }), 'Kosong · ketuk untuk dikabari'),
             ukurankuUntuk(it).length ? el('span', null, el('i', { class: 'ku' }), 'Ukuranku') : null),
@@ -1089,7 +1089,7 @@
         el('div', { class: 'bar-beli' },
           el('button', { class: 'bagikan', type: 'button', onclick: function () {
             // link per produk: halaman kecil berisi foto, nama & harga untuk pratinjau WhatsApp, lalu membuka produk ini
-            var url = location.hostname === SITUS_RESMI ? 'https://' + SITUS_RESMI + '/p/' + it.g + '/' : location.href.split('#')[0] + '#artikel-' + it.g;
+            var url = location.hostname === SITUS_RESMI ? 'https://' + SITUS_RESMI + '/p/' + it.g + '/?dari=bagi' : location.href.split('#')[0] + '#artikel-' + it.g;
             if (navigator.share) navigator.share({ title: namaTampil(it.n), url: url }).catch(function () {});
             else if (navigator.clipboard) navigator.clipboard.writeText(url).then(function () { toast('Link disalin'); }, function () { toast(url); });
           } }, svg('<circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.6 13.5 6.8 4M15.4 6.5l-6.8 4"/>'), 'Bagikan'),
@@ -1222,6 +1222,13 @@
     antreCatat.push([g, jenis]);
     clearTimeout(catatT); catatT = setTimeout(kirimCatat, 4000);
   }
+  var sudahKosong = {};
+  function catatKosong(g, warna, ukuran) { // ukuran kosong yang dipilih pelanggan → bahan usulan order
+    var k = g + '|' + warna + '|' + ukuran;
+    if (sudahKosong[k]) return; sudahKosong[k] = 1;
+    antreCatat.push([g, 'k', warna, ukuran]);
+    clearTimeout(catatT); catatT = setTimeout(kirimCatat, 4000);
+  }
   function kirimCatat() {
     if (!antreCatat.length || !CFG.API_URL) return;
     var e = antreCatat.splice(0, 25);
@@ -1230,7 +1237,12 @@
   }
   addEventListener('pagehide', kirimCatat);
   document.addEventListener('visibilitychange', function () { if (document.hidden) kirimCatat(); });
-  try { if (/[?&]dari=qr\b/.test(location.search)) { antreCatat.push(['qr', 's']); catatT = setTimeout(kirimCatat, 1500); history.replaceState(null, '', location.pathname + location.hash); } } catch (x) { /* abaikan */ }
+  // asal pengunjung (sekali per sesi): ?dari=qr|wa|ig|tiktok|maps|fb|bagi|aplikasi, selain itu "langsung"
+  try {
+    var mDari = location.search.match(/[?&]dari=([a-z]+)/), asal = mDari && /^(qr|wa|ig|tiktok|maps|fb|bagi|aplikasi)$/.test(mDari[1]) ? mDari[1] : 'langsung';
+    if (!sessionStorage.getItem('kt-asal')) { sessionStorage.setItem('kt-asal', asal); antreCatat.push([asal, 'd']); catatT = setTimeout(kirimCatat, 1500); }
+    if (mDari) history.replaceState(null, '', location.pathname + location.search.replace(/[?&]dari=[a-z]+/, '').replace(/^&/, '?') + location.hash);
+  } catch (x) { /* abaikan */ }
 
 
   /* ---- foto alam (Unsplash License) untuk latar koleksi ---- */

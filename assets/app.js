@@ -342,7 +342,7 @@
   window.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeMenu(); });
 
   function visibleItems(g) { return g.items.filter(function (x) { return !x.admin || isAdmin(); }); }
-  function badgeCount(id) { var b = S.badges || {}; return id === 'persetujuan' ? (b.admin || 0) + (isAdmin() ? (b.request || 0) + (b.tukar || 0) : 0) : id === 'admin' ? b.admin : id === 'request' ? b.request : id === 'tukar' ? b.tukar : id === 'pengumuman' ? b.peng : id === 'feedback' ? b.fb : id === 'handover' ? b.ho : 0; }
+  function badgeCount(id) { var b = S.badges || {}; return id === 'persetujuan' ? (b.admin || 0) + (isAdmin() ? (b.request || 0) + (b.tukar || 0) : 0) : id === 'admin' ? b.admin : id === 'request' ? b.request : id === 'tukar' ? b.tukar : id === 'pengumuman' ? b.peng : id === 'feedback' ? b.fb : id === 'handover' ? b.ho : id === 'kabari' ? b.kb : 0; }
   function groupCount(g) { return visibleItems(g).reduce(function (n, x) { return n + (badgeCount(x.id) || 0); }, 0); }
   function badgeEl(n, cls) { return el('span', { class: 'nbadge' + (cls ? ' ' + cls : ''), 'data-n': n || 0, text: n > 99 ? '99+' : String(n || '') }); }
   function getFold() { try { return JSON.parse(store.get('fold') || '[]'); } catch (e) { return []; } }
@@ -353,7 +353,7 @@
     { id: 'monitoring', label: 'Sales', icon: 'chart', groups: ['sales'] },
     { id: 'kas', label: 'Kas', icon: 'cash', groups: ['kasg'] },
     { id: 'jadwal', label: 'Jadwal', icon: 'cal', routes: ['jadwal', 'request', 'tukar', 'simpanan'], badge: ['request', 'tukar'] },
-    { id: '_menu', label: 'Menu', icon: 'grid', badge: ['admin', 'pengumuman', 'feedback', 'handover'] }
+    { id: '_menu', label: 'Menu', icon: 'grid', badge: ['admin', 'pengumuman', 'feedback', 'handover', 'kabari'] }
   ];
 
   function shell(m) {
@@ -6417,32 +6417,89 @@
   /* ---------- Katalog: barang paling sering dilihat & ditanya ---------- */
   function katalogStatistik(box) {
     var hari = 30;
+    var NAMA_ASAL = { qr: 'Scan QR di toko', wa: 'WhatsApp', ig: 'Instagram', tiktok: 'TikTok', maps: 'Google Maps', fb: 'Facebook', bagi: 'Link dibagikan pelanggan', aplikasi: 'Ikon di layar HP', langsung: 'Langsung / lainnya' };
     function muat() {
       box.replaceChildren(skel(2));
       api('katalogStatistik', { hari: hari }).then(gambar).catch(function (e) { box.replaceChildren(errBox(e)); });
     }
+    function stokEl(x) {
+      var tipis = x.stok <= 1;
+      return el('small', { class: 'kt-stok' + (tipis ? ' tipis' : ''), text: 'stok ' + x.stok + ' pcs' });
+    }
     function tabel(judul, xs, kunci) {
       return el('div', { class: 'kt-stat-kol' }, el('h4', { text: judul }),
         xs.length ? el('ol', { class: 'kt-stat-list' }, xs.map(function (x) {
-          return el('li', null, el('span', { class: 'kt-stat-nama' }, el('b', { text: x.n }), el('small', { text: x.g + (x.k4 ? ' · ' + x.k4 : '') + (x.ada ? '' : ' · sudah tidak ada stok') })),
+          return el('li', null, el('span', { class: 'kt-stat-nama' }, el('b', { text: x.n }),
+              el('small', null, x.g + (x.k4 ? ' · ' + x.k4 : '') + ' · ', stokEl(x))),
             el('span', { class: 'kt-stat-angka', text: String(x[kunci]) }));
         })) : el('p', { class: 'sub', text: 'Belum ada data.' }));
+    }
+    function salinTombol(teks, label) {
+      return el('button', { class: 'btn btn-ghost btn-sm', type: 'button', text: label || 'Salin untuk usulan order', onclick: function () {
+        copyText(teks()).then(function () { toast('Disalin, tinggal tempel di WhatsApp'); }, function () { toast('Gagal menyalin', true); });
+      } });
+    }
+    function grafik(ph) {
+      var W = 640, Hh = 120, n = ph.length || 1, bw = W / n, maks = Math.max(1, Math.max.apply(null, ph.map(function (x) { return Math.max(x[1], x[2], x[3] || 0); })));
+      var svgNS = 'http://www.w3.org/2000/svg', g = document.createElementNS(svgNS, 'svg');
+      g.setAttribute('viewBox', '0 0 ' + W + ' ' + (Hh + 18)); g.setAttribute('class', 'kt-grafik'); g.setAttribute('role', 'img');
+      g.setAttribute('aria-label', 'Grafik harian: artikel dibuka dan tanya stok');
+      ph.forEach(function (x, i) {
+        [[x[1], 'l', 0], [x[2], 't', 1]].forEach(function (b) {
+          var h = Math.round(b[0] / maks * Hh), r = document.createElementNS(svgNS, 'rect');
+          r.setAttribute('x', (i * bw + b[2] * bw * 0.42 + bw * 0.08).toFixed(1)); r.setAttribute('y', Hh - h); r.setAttribute('width', (bw * 0.38).toFixed(1)); r.setAttribute('height', Math.max(h, b[0] ? 1 : 0));
+          r.setAttribute('class', 'kt-bar-' + b[1]);
+          var tt = document.createElementNS(svgNS, 'title'); tt.textContent = x[0] + ': ' + b[0] + (b[1] === 'l' ? ' dibuka' : ' tanya'); r.appendChild(tt);
+          g.appendChild(r);
+        });
+        if (i === 0 || i === n - 1 || (n > 10 && i % Math.ceil(n / 6) === 0)) {
+          var t = document.createElementNS(svgNS, 'text'); t.setAttribute('x', (i * bw + bw / 2).toFixed(1)); t.setAttribute('y', Hh + 14); t.setAttribute('text-anchor', i === 0 ? 'start' : i === n - 1 ? 'end' : 'middle');
+          t.setAttribute('class', 'kt-grafik-tgl'); t.textContent = x[0].slice(8, 10) + '/' + x[0].slice(5, 7); g.appendChild(t);
+        }
+      });
+      return el('div', { class: 'kt-stat-kol kt-grafik-wadah' }, el('h4', { text: 'Tren harian' }),
+        el('div', { class: 'kt-legenda' }, el('span', null, el('i', { class: 'kt-bar-l' }), 'Artikel dibuka'), el('span', null, el('i', { class: 'kt-bar-t' }), 'Tanya stok')), g);
     }
     function gambar(d) {
       var seg = el('div', { class: 'seg', role: 'group', 'aria-label': 'Rentang waktu' }, [7, 30, 90].map(function (h) {
         return el('button', { type: 'button', 'aria-pressed': String(h === hari), text: h + ' hari', onclick: function () { hari = h; muat(); } });
       }));
+      var uk = d.ukuranKosong || [], ck = d.cariKosong || [], asal = d.asal || [];
+      var totalAsal = asal.reduce(function (n, x) { return n + x.n; }, 0);
+      var teksUk = function () {
+        return 'Usulan order dari katalog EIGER Kartasura (' + hari + ' hari terakhir)\nUkuran yang dicari pelanggan tapi kosong di toko:\n\n' +
+          uk.filter(function (x) { return !x.datang; }).map(function (x, i) { return (i + 1) + '. ' + x.n + ' (' + x.g + ') · ' + x.warna + ' · ukuran ' + x.ukuran + ' · dicari ' + x.n2 + 'x'; }).join('\n') +
+          (ck.length ? '\n\nDicari tapi tidak ada di toko:\n' + ck.slice(0, 15).map(function (x) { return '- ' + x.kata + ' (' + x.n + 'x)'; }).join('\n') : '');
+      };
       box.replaceChildren(el('div', { class: 'card-head' }, el('div', null, el('h3', { text: 'Statistik katalog' }),
-          el('p', { class: 'sub', text: 'Dari pengunjung katalog, tanpa data pribadi. Pakai untuk memilih barang yang dipajang depan dan bahan usulan order.' })), seg),
+          el('p', { class: 'sub', text: 'Dari pengunjung katalog, tanpa data pribadi. Jumlah stok hanya terlihat di sini, tidak di katalog pelanggan.' })), seg),
         el('div', { class: 'kt-stat-angka-besar' },
+          el('div', null, el('b', { text: String(totalAsal) }), el('span', { text: 'kunjungan' })),
           el('div', null, el('b', { text: String(d.lihat) }), el('span', { text: 'artikel dibuka' })),
           el('div', null, el('b', { text: String(d.tanya) }), el('span', { text: 'tanya stok (WhatsApp)' })),
-          el('div', null, el('b', { text: String(d.scan || 0) }), el('span', { text: 'scan QR' })),
-          el('div', null, el('b', { text: String(d.artikel) }), el('span', { text: 'artikel berbeda' }))),
+          el('div', null, el('b', { text: String(uk.reduce(function (n, x) { return n + x.n2; }, 0)) }), el('span', { text: 'pilih ukuran kosong' }))),
+        el('div', { class: 'kt-stat-grid' },
+          grafik(d.perHari || []),
+          el('div', { class: 'kt-stat-kol' }, el('h4', { text: 'Pengunjung datang dari' }),
+            asal.length ? el('div', { class: 'kt-asal' }, asal.map(function (x) {
+              var pc = totalAsal ? Math.round(x.n / totalAsal * 100) : 0;
+              return el('div', { class: 'kt-asal-baris' }, el('span', { text: NAMA_ASAL[x.asal] || x.asal }), el('span', { class: 'kt-asal-bar' }, el('i', { style: 'width:' + pc + '%' })), el('b', { text: x.n + ' · ' + pc + '%' }));
+            })) : el('p', { class: 'sub', text: 'Mulai tercatat sejak pembaruan ini. Pakai link berpenanda, mis. eigerkartasura.github.io/?dari=ig untuk bio Instagram.' }))),
+        el('div', { class: 'kt-stat-kol kt-uk-kosong' },
+          el('div', { class: 'kt-kol-kepala' }, el('div', null, el('h4', { text: 'Ukuran dicari tapi kosong' }),
+            el('p', { class: 'sub', text: 'Pelanggan memilih ukuran yang sedang kosong. Bahan usulan order paling tajam: per artikel, warna dan ukuran.' })),
+            uk.length || ck.length ? salinTombol(teksUk) : null),
+          uk.length ? el('div', { class: 'kt-uk-tabel' }, uk.map(function (x) {
+            return el('div', { class: 'kt-uk-baris' + (x.datang ? ' datang' : '') },
+              el('span', { class: 'kt-stat-nama' }, el('b', { text: x.n }), el('small', null, x.g + ' · ', stokEl(x))),
+              el('span', { class: 'kt-uk-varian', text: x.warna + ' · ' + x.ukuran }),
+              el('span', { class: 'kt-uk-n', text: x.n2 + 'x' }),
+              x.datang ? el('span', { class: 'kt-uk-tag', text: 'sudah datang' }) : el('span'));
+          })) : el('p', { class: 'sub', text: 'Mulai tercatat sejak pembaruan ini.' })),
         el('div', { class: 'kt-stat-grid' }, tabel('Paling sering dilihat', d.topLihat, 'lihat'), tabel('Paling sering ditanya', d.topTanya, 'tanya'),
           el('div', { class: 'kt-stat-kol' }, el('h4', { text: 'Dicari tapi tidak ada di toko' }),
-            el('p', { class: 'sub', text: 'Kata yang diketik pelanggan tanpa hasil. Bahan usulan order.' }),
-            (d.cariKosong || []).length ? el('ol', { class: 'kt-stat-list' }, d.cariKosong.map(function (x) {
+            el('p', { class: 'sub', text: 'Kata yang diketik pelanggan tanpa hasil.' }),
+            ck.length ? el('ol', { class: 'kt-stat-list' }, ck.map(function (x) {
               return el('li', null, el('span', { class: 'kt-stat-nama' }, el('b', { text: x.kata })), el('span', { class: 'kt-stat-angka', text: String(x.n) }));
             })) : el('p', { class: 'sub', text: 'Belum ada.' }))));
     }

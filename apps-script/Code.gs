@@ -11,7 +11,7 @@
 /** Versi kode. WAJIB dinaikkan setiap kali Code.gs diubah (format yyyy-MM-dd.n),
  *  lalu simpan ke GitHub (alishobrun/hub-toko-2299) SEBELUM dipasang. Halaman Kesehatan Data
  *  membandingkan angka ini dengan GitHub supaya kode yang dipasang di luar GitHub ketahuan. */
-const KODE_VERSI = '2026-11-11.17';
+const KODE_VERSI = '2026-11-12.1';
 
 const CFG = {
   STORE: '2299',
@@ -1913,6 +1913,7 @@ function notifFor_(u) {
     read_('pengumuman_baca').forEach(function (x) { if (x.username === u.username) sudah[String(x.id)] = 1; });
     badges.peng = read_('pengumuman').filter(function (p) { return p.aktif !== 'tidak' && !sudah[String(p.id)]; }).length;
   } catch (e) { badges.peng = 0; }
+  try { badges.kb = kabariSiap_(); } catch (e) { badges.kb = 0; }
   const live = items.sort(function (a, b) { return a.level === b.level ? (a.waktu < b.waktu ? 1 : -1) : (a.level === 'aksi' ? -1 : 1); });
   const unread = live.length + log.filter(function (n) { return !n.dibaca && n.level !== 'info'; }).length;
   return { items: live.concat(log), unread: unread, badges: badges, waktu: now_() };
@@ -6240,6 +6241,33 @@ function kuotaPublik_(kunci, maks, detik, tambah) {
 }
 
 /** Artikel katalog saat ini per generic (dari cache katalog publik). */
+/** Asal pengunjung katalog yang dicatat (parameter ?dari=). */
+const KATALOG_ASAL_ = { qr: 1, wa: 1, ig: 1, tiktok: 1, maps: 1, fb: 1, bagi: 1, aplikasi: 1, langsung: 1 };
+
+/** Jumlah stok tersedia (pcs) per generic dari By Bin, hanya untuk staf. */
+function stokPerGeneric_() {
+  const S = {};
+  read_('bin').forEach(function (o) {
+    if (!binKatalogOk_(o)) return;
+    const sku = String(o.sku).trim(), g = String(o.generic || '').trim() || sku.slice(0, 9);
+    S[g] = (S[g] || 0) + (Number(o.available) || 0);
+  });
+  return S;
+}
+
+/** Jumlah pelanggan "Kabari saya" yang ukurannya sudah tersedia tapi belum dikabari (untuk angka merah di menu). */
+function kabariSiap_() {
+  const rows = read_('katalog_tunggu').filter(function (r) { return String(r.status) === 'menunggu'; });
+  if (!rows.length) return 0;
+  const G = katalogPerGeneric_();
+  return rows.filter(function (r) {
+    const it = G[String(r.generic)];
+    const w = it && it.w.filter(function (x) { return x[0] === String(r.warna); })[0];
+    const u = w && w[1].filter(function (x) { return x[0] === String(r.ukuran); })[0];
+    return !!(u && u[1]);
+  }).length;
+}
+
 function katalogPerGeneric_() {
   const d = katalogData_(), G = {};
   d.items.forEach(function (it) { G[it.g] = it; });
@@ -6362,13 +6390,23 @@ Object.assign(API, {
   katalogCatat: function (req) {
     const e = Array.isArray(req.e) ? req.e.slice(0, 25) : [];
     const bersihKata = function (k) { return String(k || '').toLowerCase().replace(/[^a-z0-9 .\-\/]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 40); };
+    const kodeUk = function (k) { return String(k || '').toUpperCase().replace(/[^A-Z0-9.\/\-]/g, '').slice(0, 10); };
     const ok = e.filter(function (x) {
-      return Array.isArray(x) && ((/^9\d{8}$/.test(String(x[0])) && (x[1] === 'l' || x[1] === 't')) || (x[0] === 'qr' && x[1] === 's') || (x[1] === 'c' && bersihKata(x[0]).length >= 2));
+      return Array.isArray(x) && ((/^9\d{8}$/.test(String(x[0])) && (x[1] === 'l' || x[1] === 't')) || (x[0] === 'qr' && x[1] === 's') || (x[1] === 'c' && bersihKata(x[0]).length >= 2) ||
+        (x[1] === 'k' && /^9\d{8}$/.test(String(x[0])) && kodeUk(x[2]) && kodeUk(x[3])) || (x[1] === 'd' && KATALOG_ASAL_[String(x[0])]));
+    }).map(function (x) {
+      if (x[1] === 'k') return [String(x[0]) + '|' + kodeUk(x[2]) + '|' + kodeUk(x[3]), 'k'];
+      if (x[1] === 's') return ['qr', 'd']; // scan QR = asal "qr"
+      return x;
     });
     if (!ok.length) return 0;
     if (!kuotaPublik_('catat', KATALOG.LOG_MAKS_MENIT, 60, ok.length)) return 0; // diam-diam diabaikan bila banjir
     const w = now_();
-    withLock_(function () { appendRows_('katalog_log', ok.map(function (x) { return x[1] === 'c' ? { waktu: w, generic: bersihKata(x[0]), jenis: 'cari kosong' } : { waktu: w, generic: String(x[0]), jenis: x[1] === 't' ? 'tanya' : x[1] === 's' ? 'scan qr' : 'lihat' }; })); }, 10000);
+    withLock_(function () { appendRows_('katalog_log', ok.map(function (x) {
+      if (x[1] === 'c') return { waktu: w, generic: bersihKata(x[0]), jenis: 'cari kosong' };
+      if (x[1] === 'd') return { waktu: w, generic: String(x[0]), jenis: x[0] === 'qr' ? 'scan qr' : 'datang' };
+      return { waktu: w, generic: String(x[0]), jenis: x[1] === 't' ? 'tanya' : x[1] === 'k' ? 'ukuran kosong' : 'lihat' };
+    })); }, 10000);
     return ok.length;
   },
 
@@ -6489,24 +6527,40 @@ Object.assign(API, {
     auth_(req, true);
     const hari = [7, 30, 90].indexOf(Number(req.hari)) >= 0 ? Number(req.hari) : 30;
     const batas = addDays_(today_(), -hari + 1);
-    const H = {}, perHari = {};
+    const H = {}, perHari = {}, CK = {}, UK = {}, ASAL = {};
     let lihat = 0, tanya = 0, scan = 0;
-    const CK = {};
     read_('katalog_log').forEach(function (r) {
       const t = String(r.waktu).slice(0, 10);
       if (t < batas) return;
-      if (String(r.jenis) === 'scan qr') { scan++; return; }
-      if (String(r.jenis) === 'cari kosong') { const k = String(r.generic); CK[k] = (CK[k] || 0) + 1; return; }
-      const x = H[r.generic] || (H[r.generic] = { l: 0, t: 0 });
-      const ph = perHari[t] || (perHari[t] = { l: 0, t: 0 });
-      if (String(r.jenis) === 'tanya') { x.t++; tanya++; ph.t++; } else { x.l++; lihat++; ph.l++; }
+      const j = String(r.jenis), k = String(r.generic);
+      const ph = perHari[t] || (perHari[t] = { l: 0, t: 0, d: 0 });
+      if (j === 'scan qr') { scan++; ASAL.qr = (ASAL.qr || 0) + 1; ph.d++; return; }
+      if (j === 'datang') { ASAL[k] = (ASAL[k] || 0) + 1; ph.d++; return; }
+      if (j === 'cari kosong') { CK[k] = (CK[k] || 0) + 1; return; }
+      if (j === 'ukuran kosong') { UK[k] = (UK[k] || 0) + 1; return; }
+      const x = H[k] || (H[k] = { l: 0, t: 0 });
+      if (j === 'tanya') { x.t++; tanya++; ph.t++; } else { x.l++; lihat++; ph.l++; }
     });
-    const G = katalogPerGeneric_();
-    const daftar = Object.keys(H).map(function (g) { const it = G[g] || {}; return { g: g, n: it.n || '(tidak ada di toko)', k4: it.k4 || '', lihat: H[g].l, tanya: H[g].t, ada: !!G[g] }; });
+    const G = katalogPerGeneric_(), STOK = stokPerGeneric_();
+    const daftar = Object.keys(H).map(function (g) {
+      const it = G[g] || {};
+      return { g: g, n: it.n || '(tidak ada di toko)', k4: it.k4 || '', lihat: H[g].l, tanya: H[g].t, ada: !!G[g], stok: STOK[g] || 0 };
+    });
     const top = function (k) { return daftar.filter(function (x) { return x[k]; }).sort(function (a, b) { return b[k] - a[k]; }).slice(0, 20); };
     const cariKosong = Object.keys(CK).sort(function (a, b) { return CK[b] - CK[a]; }).slice(0, 30).map(function (k) { return { kata: k, n: CK[k] }; });
+    const ukuranKosong = Object.keys(UK).map(function (k) {
+      const p = k.split('|'), it = G[p[0]] || {};
+      const w = (it.w || []).filter(function (x) { return x[0] === p[1]; })[0];
+      const u = w && w[1].filter(function (x) { return x[0] === p[2]; })[0];
+      return { g: p[0], n: it.n || '(tidak ada di toko)', warna: p[1], ukuran: p[2], n2: UK[k], datang: !!(u && u[1]), stok: STOK[p[0]] || 0 };
+    }).sort(function (a, b) { return b.n2 - a.n2; }).slice(0, 40);
+    const asal = Object.keys(ASAL).sort(function (a, b) { return ASAL[b] - ASAL[a]; }).map(function (k) { return { asal: k, n: ASAL[k] }; });
+    // isi hari yang kosong supaya grafik tidak bolong
+    const hariList = [];
+    for (let d = batas; d <= today_(); d = addDays_(d, 1)) hariList.push(d);
     return { hari: hari, lihat: lihat, tanya: tanya, scan: scan, artikel: daftar.length, cariKosong: cariKosong, topLihat: top('lihat'), topTanya: top('tanya'),
-      perHari: Object.keys(perHari).sort().map(function (t) { return [t, perHari[t].l, perHari[t].t]; }) };
+      ukuranKosong: ukuranKosong, asal: asal,
+      perHari: hariList.map(function (t) { const x = perHari[t] || { l: 0, t: 0, d: 0 }; return [t, x.l, x.t, x.d]; }) };
   },
 
   /** Admin: daftar artikel katalog + status foto. */
