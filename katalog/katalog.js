@@ -1946,28 +1946,21 @@
     pasangPanah(box);
   }
 
-  /* Pria / Wanita / Anak — tanpa foto orang: latar alam + foto produk (tas, sepatu, sandal, perlengkapan) */
-  var LATAR_GAYA = { Pria: 'puncak', Wanita: 'senja', Anak: 'hijau' };
-  function produkGaya(g) {
-    // hanya kategori yang fotonya produk saja (bukan pakaian yang dipakai model)
-    var boleh = { BAGS: 1, FOOTWEAR: 1, EQUIPMENT: 1, ACCESSORIES: 1 };
-    var xs = D.items.filter(function (it) { return boleh[it.k3] && it.k4 !== 'SOCK' && genderNama(it.gd) === g && fotoBersih(it).length; });
-    if (xs.length < 3) xs = D.items.filter(function (it) { return boleh[it.k3] && cocokGender(it, g) && fotoBersih(it).length; });
-    var urut = function (it) { return TERLARIS[it.g] || 999; };
-    xs.sort(function (a, b) { return urut(a) - urut(b); });
-    var pilih = [], k3 = {};
-    xs.forEach(function (it) { if (pilih.length < 3 && !k3[it.k3 + it.k4]) { k3[it.k3 + it.k4] = 1; pilih.push(it); } });
-    return pilih;
-  }
+  /* Pria / Wanita / Anak — foto resmi produk EIGER (model memakai produk EIGER itu sendiri):
+   * Pria  : Across 1.2 Windproof (910006778) · Wanita: 910011338 · Anak: JR Bushwalk WP (910011669) */
+  var FOTO_GAYA = {
+    Pria: CDN + 'product/variant/photo/910006778_BLACK_1_bc17.jpg',
+    Wanita: CDN + 'product/variant/media/web/3e4a9026d06d58658ba76c402890c853.webp',
+    Anak: CDN + 'product/variant/media/web/8a03c4bfe5a0b448273e2cbe57abd9c6.webp'
+  };
   function gambarGaya() {
     var box = $('#gaya'); if (!box) return;
     isiUlang(box, ['Pria', 'Wanita', 'Anak'].map(function (g) {
       var n = D.items.filter(function (it) { return cocokGender(it, g); }).length;
       if (n < 3) return null;
-      var pr = produkGaya(g);
-      return el('button', { class: 'gaya', type: 'button', style: "background-image:linear-gradient(rgba(10,26,79,.25),rgba(10,26,79,.7)),url('" + fotoLatar(LATAR_GAYA[g], 640) + "')", onclick: function () { terapkan({ gds: [g] }); } },
-        pr.length ? el('span', { class: 'gaya-produk' }, pr.map(function (it) { return el('span', null, imgKecil(fotoBersih(it)[0], '')); })) : null,
-        el('b', { text: g }), el('small', { text: n + ' barang' }));
+      return el('button', { class: 'gaya gaya-model', type: 'button', onclick: function () { terapkan({ gds: [g] }); } },
+        el('span', { class: 'gaya-foto' }, el('img', { src: FOTO_GAYA[g], alt: 'Model memakai produk EIGER ' + g.toLowerCase(), loading: 'lazy', decoding: 'async', referrerpolicy: 'no-referrer' })),
+        el('span', { class: 'gaya-label' }, el('b', { text: g }), el('small', { text: n + ' barang' })));
     }));
   }
 
