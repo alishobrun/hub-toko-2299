@@ -11,7 +11,7 @@
 /** Versi kode. WAJIB dinaikkan setiap kali Code.gs diubah (format yyyy-MM-dd.n),
  *  lalu simpan ke GitHub (alishobrun/hub-toko-2299) SEBELUM dipasang. Halaman Kesehatan Data
  *  membandingkan angka ini dengan GitHub supaya kode yang dipasang di luar GitHub ketahuan. */
-const KODE_VERSI = '2026-11-11.9';
+const KODE_VERSI = '2026-11-11.10';
 
 const CFG = {
   STORE: '2299',
@@ -4643,8 +4643,10 @@ function pettyParse_(aoa) {
 /* ---------- Serah terima setoran (dari laporan Store Safe CARE) ---------- */
 /** Satu baris per setoran ke bank di CARE: PV = kode SSC, penyetor = NIK pembuat transaksi (= username Basecamp).
  *  Setoran RA perlu "Mengetahui (SL)"; setoran oleh SL/admin cukup info. Transaksi reverse tidak ikut. */
+const SERAH_MULAI = '2026-11-01'; // setoran sebelum tanggal ini dianggap arsip (tidak perlu Mengetahui SL)
 function serahData_(K) {
   const U = {}; read_('users').forEach(function (u) { U[String(u.username)] = u; });
+  const NIK = jsonOr_(PropertiesService.getScriptProperties().getProperty('SERAH_NIK'), {}); // NIK CARE → username Basecamp
   const T = {}; read_('serah_terima').forEach(function (r) { T[String(r.kode)] = r; });
   const balik = function (x) { return /X$/i.test(String(x.kode)) || /revers/i.test(String(x.ket)); };
   const masuk = {};
@@ -4654,13 +4656,14 @@ function serahData_(K) {
     if (!(x.kredit > 0) || x.status === 'Reversed' || balik(x) || !/bank/i.test(x.dari)) return;
     let tj = x.tglJual || '';
     if (!tj) { const m = String(x.ket).match(/(\d{2})\/(\d{2})\/(\d{4})/); if (m) tj = m[3] + '-' + m[2] + '-' + m[1]; }
-    const t = T[String(x.kode)] || {}, nik = String(t.penyetor_user || x.oleh || ''), u = U[nik];
+    const t = T[String(x.kode)] || {}, nik = String(t.penyetor_user || x.oleh || ''), u = U[nik] || U[NIK[nik]];
     const pihak = u ? (u.role === 'admin' ? 'SL' : 'RA') : 'RA';
     rows.push({ kode: x.kode, waktu: x.waktu, tanggal: x.waktu.slice(0, 10), tglJual: tj, sisa: /SISA/i.test(x.ket), nominal: x.kredit,
       bank: [x.akun, x.jenis === 'atm' ? 'ATM' : x.jenis === 'brankas' ? 'dari brankas' : 'teller'].filter(String).join(' · '),
       username: nik, nama: t.penyetor_nama || (u ? u.nama : (nik ? 'NIK ' + nik : '?')), pihak: pihak, ket: x.ket, diganti: !!t.penyetor_user,
       tahu: t.tahu_user ? { username: String(t.tahu_user), nama: String(t.tahu_nama), waktu: String(t.tahu_waktu) } : null,
-      status: pihak === 'SL' ? 'info' : t.tahu_user ? 'diketahui' : 'menunggu' });
+      nik: String(x.oleh || ''), kenal: !!u,
+      status: pihak === 'SL' ? 'info' : t.tahu_user ? 'diketahui' : x.waktu.slice(0, 10) < SERAH_MULAI ? 'arsip' : 'menunggu' });
   });
   const jual = {};
   rows.forEach(function (r) { if (!r.tglJual) return; const o = jual[r.tglJual] || (jual[r.tglJual] = { tanggal: r.tglJual, closing: masuk[r.tglJual] || 0, setor: 0, n: 0 }); o.setor += r.nominal; o.n++; });
@@ -4705,6 +4708,14 @@ Object.assign(API, {
     const a = auth_(req, true), k = String(req.kode || ''), un = String(req.username || '');
     const u = read_('users').filter(function (x) { return String(x.username) === un; })[0];
     if (!k) throw new Error('Pilih setoran');
+    if (req.nik) { // ingat NIK CARE ini milik siapa → berlaku untuk semua setoran dengan NIK yang sama
+      const pp = PropertiesService.getScriptProperties(), m = jsonOr_(pp.getProperty('SERAH_NIK'), {});
+      if (u) m[String(req.nik)] = un; else delete m[String(req.nik)];
+      pp.setProperty('SERAH_NIK', JSON.stringify(m));
+      log_(a.username, 'NIK CARE', String(req.nik) + ' → ' + (u ? u.nama : '-'));
+      rekapAman_([], true);
+      return true;
+    }
     withLock_(function () {
       const all = read_('serah_terima'); let o = all.filter(function (r) { return String(r.kode) === k; })[0];
       if (!o) { o = { kode: k }; all.push(o); }
@@ -5370,7 +5381,7 @@ function tabSerah_(ss, K) {
   const rows = [['Tanggal setor', 'Pihak', 'Nama', 'Penjualan', 'Nominal', 'Bank / cara', 'PV (CARE)', 'Mengetahui (SL)', 'Status', 'Keterangan']];
   D.rows.slice().reverse().forEach(function (r) {
     rows.push([r.tanggal, r.pihak, r.nama, r.tglJual ? tglPendek_(r.tglJual) + (r.sisa ? ' (sisa)' : '') : '', r.nominal, r.bank, r.kode,
-      r.tahu ? r.tahu.nama + ' · ' + r.tahu.waktu : (r.status === 'info' ? '— (disetor SL)' : ''), r.status === 'menunggu' ? 'Menunggu SL' : 'DONE', r.ket]);
+      r.tahu ? r.tahu.nama + ' · ' + r.tahu.waktu : (r.status === 'info' ? '— (disetor SL)' : ''), r.status === 'menunggu' ? 'Menunggu SL' : r.status === 'arsip' ? 'Arsip' : 'DONE', r.ket]);
   });
   if (rows.length === 1) rows.push(['Laporan Store Safe CARE belum diunggah', '', '', '', '', '', '', '', '', '']);
   tulisTab_(ss, 'Serah Terima', rows, { uang: [5], lebar: [110, 50, 150, 120, 110, 130, 150, 200, 100, 320], index: 1 });

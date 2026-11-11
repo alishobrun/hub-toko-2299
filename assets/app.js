@@ -1884,11 +1884,12 @@
       };
       var head = el('div', { class: 'card' },
         el('div', { class: 'card-head' }, el('div', null, el('h3', { text: 'Serah terima setoran' }),
-          el('p', { class: 'sub', text: 'Otomatis dari laporan Store Safe CARE' + (d.sampai ? ' · transaksi terakhir ' + fTime(d.sampai) : '') + '. Setoran RA perlu "Mengetahui (SL)".' })),
+          el('p', { class: 'sub', text: 'Otomatis dari laporan Store Safe CARE' + (d.sampai ? ' · transaksi terakhir ' + fTime(d.sampai) : '') + '. Setoran RA mulai 1 Nov 2026 perlu "Mengetahui (SL)".' })),
           monthSel(d.bulanAda.length ? d.bulanAda : [d.bulan], d.bulan, function (m) { serahTerima(box, m); })),
         el('div', { class: 'tags' }, el('span', { class: 'tag', text: d.rows.length + ' setoran' }), el('span', { class: 'tag', text: rpx(total) }),
           nunggu.length ? el('span', { class: 'tag tag-warn', text: nunggu.length + ' menunggu SL' }) : el('span', { class: 'tag tag-good', text: '✓ semua beres' }),
           d.menunggu > nunggu.length ? el('span', { class: 'tag tag-warn', text: (d.menunggu - nunggu.length) + ' menunggu di bulan lain' }) : null),
+        d.rows.some(function (r) { return !r.kenal; }) && d.bisaTahu ? el('p', { class: 'note', style: 'margin-top:8px', text: 'Ada penyetor yang masih tampil sebagai NIK. Pilih namanya di kolom "Penyetor" sekali saja — NIK itu akan dikenali untuk semua setoran.' }) : null,
         el('div', { class: 'row-btns', style: 'margin-top:10px' },
           d.bisaTahu && nunggu.length ? el('button', { type: 'button', class: 'btn btn-orange btn-sm', onclick: function (e) {
             if (confirm('Tandai ' + nunggu.length + ' setoran RA bulan ini "Mengetahui (SL)" atas nama ' + S.user.nama + '?')) tahu(nunggu.map(function (r) { return r.kode; }), false, e.currentTarget);
@@ -1900,9 +1901,13 @@
         var gant = null;
         if (d.bisaTahu) {
           gant = el('select', { class: 'sel serah-ganti', 'aria-label': 'Ganti penyetor' }, [el('option', { value: '', text: 'Penyetor: sesuai CARE' })].concat(d.users.map(function (u) { var o = el('option', { value: u.username, text: u.nama }); if (r.diganti && u.username === r.username) o.selected = true; return o; })));
-          gant.addEventListener('change', function () { api('serahPenyetor', { kode: r.kode, username: gant.value }).then(function () { toast('Penyetor diganti'); serahTerima(box, d.bulan); }).catch(function (e) { toast(e.message, true); }); });
+          gant.addEventListener('change', function () {
+            var semua = !r.kenal && r.nik && gant.value && confirm('NIK CARE ' + r.nik + ' milik ' + gant.options[gant.selectedIndex].text + '?\nOK = berlaku untuk semua setoran NIK ini · Batal = hanya setoran ini');
+            api('serahPenyetor', { kode: r.kode, username: gant.value, nik: semua ? r.nik : '' }).then(function () { toast(semua ? 'NIK ' + r.nik + ' dikenali' : 'Penyetor diganti'); serahTerima(box, d.bulan); }).catch(function (e) { toast(e.message, true); });
+          });
         }
         var st = r.status === 'info' ? el('span', { class: 'tag', text: 'Disetor SL' })
+          : r.status === 'arsip' ? el('span', { class: 'tag', text: 'Arsip' })
           : r.status === 'diketahui' ? el('span', { class: 'tag tag-good', title: r.tahu.waktu, text: '✓ ' + r.tahu.nama })
           : el('span', { class: 'tag tag-warn', text: 'Menunggu SL' });
         return el('div', { class: 'serah-row ' + r.status },
