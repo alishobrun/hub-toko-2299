@@ -6651,36 +6651,95 @@
   }
 
   /* ---------- Katalog: Story "kejutan" berisi beberapa produk melayang (latar produk dihapus otomatis) ---------- */
-  /** Hapus latar putih/terang di tepi foto produk (isi banjir dari pinggir), lalu potong ke bentuk produk. */
-  function ktTanpaLatar(img) {
-    var maks = 900, sk = Math.min(1, maks / Math.max(img.width, img.height));
-    var w = Math.round(img.width * sk), h = Math.round(img.height * sk);
-    var c = document.createElement('canvas'); c.width = w; c.height = h;
-    var x = c.getContext('2d', { willReadFrequently: true }); x.drawImage(img, 0, 0, w, h);
-    var d = x.getImageData(0, 0, w, h), px = d.data, n = w * h;
-    var terang = function (i) { var r = px[i * 4], g = px[i * 4 + 1], b = px[i * 4 + 2], mx = Math.max(r, g, b), mn = Math.min(r, g, b); return px[i * 4 + 3] < 20 || (mn > 222 && mx - mn < 26); };
-    var latar = new Uint8Array(n), antre = new Int32Array(n), ujung = 0, awal = 0;
-    var masuk = function (i) { if (!latar[i] && terang(i)) { latar[i] = 1; antre[ujung++] = i; } };
-    for (var i = 0; i < w; i++) { masuk(i); masuk(n - 1 - i); }
-    for (var j = 0; j < h; j++) { masuk(j * w); masuk(j * w + w - 1); }
-    while (awal < ujung) {
-      var k = antre[awal++], cx = k % w, cy = (k - cx) / w;
-      if (cx > 0) masuk(k - 1); if (cx < w - 1) masuk(k + 1); if (cy > 0) masuk(k - w); if (cy < h - 1) masuk(k + w);
-    }
-    var x0 = w, y0 = h, x1 = 0, y1 = 0;
-    for (var q = 0; q < n; q++) {
-      if (latar[q]) { px[q * 4 + 3] = 0; continue; }
-      var qx = q % w, qy = (q - qx) / w;
-      // tepi lembut: piksel terang yang menempel latar dibuat setengah transparan
-      var tepi = (qx > 0 && latar[q - 1]) || (qx < w - 1 && latar[q + 1]) || (qy > 0 && latar[q - w]) || (qy < h - 1 && latar[q + w]);
-      if (tepi) { var lum = (px[q * 4] + px[q * 4 + 1] + px[q * 4 + 2]) / 3; if (lum > 200) px[q * 4 + 3] = Math.round(px[q * 4 + 3] * (255 - lum) / 55); }
-      if (qx < x0) x0 = qx; if (qx > x1) x1 = qx; if (qy < y0) y0 = qy; if (qy > y1) y1 = qy;
-    }
-    x.putImageData(d, 0, 0);
-    if (x1 <= x0 || y1 <= y0) return c;
+  /* Hapus latar foto produk.
+   * Utama: model U²-Net kecil (assets/model/u2netp.onnx, Apache-2.0) dijalankan di browser lewat onnxruntime-web,
+   * sehingga bagian produk yang berwarna putih/terang (sol, tumit, logo) tidak ikut terhapus.
+   * Cadangan bila model gagal dimuat: isi banjir dari tepi yang hanya menembus latar putih bersih. */
+  var ORT_JS = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.20.1/dist/ort.min.js';
+  var sesiLatar = null;
+  function ktModelLatar() {
+    if (!sesiLatar) sesiLatar = loadScript(ORT_JS).then(function () {
+      window.ort.env.wasm.wasmPaths = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.20.1/dist/';
+      window.ort.env.wasm.numThreads = 1;
+      return window.ort.InferenceSession.create('assets/model/u2netp.onnx?v=1', { executionProviders: ['wasm'] });
+    }).catch(function (e) { sesiLatar = null; throw e; });
+    return sesiLatar;
+  }
+  function ktKanvasDari(img, maks) {
+    var sk = Math.min(1, maks / Math.max(img.width, img.height));
+    var c = document.createElement('canvas'); c.width = Math.round(img.width * sk); c.height = Math.round(img.height * sk);
+    c.getContext('2d', { willReadFrequently: true }).drawImage(img, 0, 0, c.width, c.height);
+    return c;
+  }
+  /** Potong kanvas ke batas piksel yang tidak transparan. */
+  function ktPotong(c) {
+    var w = c.width, h = c.height, px = c.getContext('2d').getImageData(0, 0, w, h).data, x0 = w, y0 = h, x1 = -1, y1 = -1;
+    for (var y = 0; y < h; y++) for (var x = 0; x < w; x++) if (px[(y * w + x) * 4 + 3] > 24) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+    if (x1 < x0) return c;
     var o = document.createElement('canvas'); o.width = x1 - x0 + 1; o.height = y1 - y0 + 1;
     o.getContext('2d').drawImage(c, x0, y0, o.width, o.height, 0, 0, o.width, o.height);
     return o;
+  }
+  /** Masker latar dengan model AI. Hasil: kanvas produk tanpa latar. */
+  var antreAI = Promise.resolve();
+  function ktLatarAI(img) {
+    var tugas = antreAI.then(function () { return ktLatarAI1(img); });
+    antreAI = tugas.catch(function () { /* lanjut antrean */ });
+    return tugas;
+  }
+  function ktLatarAI1(img) {
+    return ktModelLatar().then(function (sesi) {
+      var c = ktKanvasDari(img, 1000), w = c.width, h = c.height;
+      // masukan 320x320 (dinormalisasi seperti rembg)
+      var S = 320, k = document.createElement('canvas'); k.width = k.height = S;
+      var kx = k.getContext('2d', { willReadFrequently: true }); kx.fillStyle = '#fff'; kx.fillRect(0, 0, S, S); kx.drawImage(c, 0, 0, S, S);
+      var d = kx.getImageData(0, 0, S, S).data, n = S * S, mx = 1;
+      for (var i = 0; i < n * 4; i++) if (i % 4 !== 3 && d[i] > mx) mx = d[i];
+      var M = [0.485, 0.456, 0.406], SD = [0.229, 0.224, 0.225], inp = new Float32Array(3 * n);
+      for (var j = 0; j < n; j++) for (var ch = 0; ch < 3; ch++) inp[ch * n + j] = (d[j * 4 + ch] / mx - M[ch]) / SD[ch];
+      var masuk = {}; masuk[sesi.inputNames[0]] = new window.ort.Tensor('float32', inp, [1, 3, S, S]);
+      return sesi.run(masuk).then(function (out) {
+        var m = out[sesi.outputNames[0]].data, lo = Infinity, hi = -Infinity;
+        for (var q = 0; q < n; q++) { if (m[q] < lo) lo = m[q]; if (m[q] > hi) hi = m[q]; }
+        // masker 320 → kanvas abu-abu → diperbesar halus ke ukuran foto
+        var mk = document.createElement('canvas'); mk.width = mk.height = S;
+        var mkx = mk.getContext('2d'), md = mkx.createImageData(S, S);
+        for (var r = 0; r < n; r++) { var v = Math.round(255 * (m[r] - lo) / Math.max(1e-6, hi - lo)); md.data[r * 4] = md.data[r * 4 + 1] = md.data[r * 4 + 2] = v; md.data[r * 4 + 3] = 255; }
+        mkx.putImageData(md, 0, 0);
+        var besar = document.createElement('canvas'); besar.width = w; besar.height = h;
+        var bx = besar.getContext('2d', { willReadFrequently: true }); bx.imageSmoothingQuality = 'high'; bx.drawImage(mk, 0, 0, w, h);
+        var mb = bx.getImageData(0, 0, w, h).data;
+        var cx = c.getContext('2d', { willReadFrequently: true }), fd = cx.getImageData(0, 0, w, h), px = fd.data;
+        for (var t = 0; t < w * h; t++) {
+          var a = mb[t * 4] / 255;
+          a = Math.min(1, Math.max(0, (a - 0.12) / 0.6)); // pertegas batas
+          var R = px[t * 4], G = px[t * 4 + 1], B = px[t * 4 + 2], mn = Math.min(R, G, B), mxx = Math.max(R, G, B);
+          if (mn > 247 && mxx - mn < 8 && a < 0.9) a = Math.min(a, 0.15); // putih bersih di pinggir = latar
+          px[t * 4 + 3] = Math.round(px[t * 4 + 3] * a);
+        }
+        cx.putImageData(fd, 0, 0);
+        return ktPotong(c);
+      });
+    });
+  }
+  /** Cadangan tanpa AI: isi banjir dari tepi, hanya melewati putih bersih & perubahan warna yang halus. */
+  function ktLatarSederhana(img) {
+    var c = ktKanvasDari(img, 900), w = c.width, h = c.height, x = c.getContext('2d', { willReadFrequently: true });
+    var d = x.getImageData(0, 0, w, h), px = d.data, n = w * h;
+    var lum = function (i) { return (px[i * 4] + px[i * 4 + 1] + px[i * 4 + 2]) / 3; };
+    var putih = function (i) { var r = px[i * 4], g = px[i * 4 + 1], b = px[i * 4 + 2]; return px[i * 4 + 3] < 20 || (Math.min(r, g, b) > 243 && Math.max(r, g, b) - Math.min(r, g, b) < 10); };
+    var latar = new Uint8Array(n), antre = new Int32Array(n), ujung = 0, awal = 0;
+    var masuk = function (i, dari) { if (!latar[i] && putih(i) && (dari < 0 || Math.abs(lum(i) - lum(dari)) < 4)) { latar[i] = 1; antre[ujung++] = i; } };
+    for (var i = 0; i < w; i++) { masuk(i, -1); masuk(n - 1 - i, -1); }
+    for (var j = 0; j < h; j++) { masuk(j * w, -1); masuk(j * w + w - 1, -1); }
+    while (awal < ujung) { var k = antre[awal++], kx = k % w, ky = (k - kx) / w; if (kx > 0) masuk(k - 1, k); if (kx < w - 1) masuk(k + 1, k); if (ky > 0) masuk(k - w, k); if (ky < h - 1) masuk(k + w, k); }
+    for (var q = 0; q < n; q++) if (latar[q]) px[q * 4 + 3] = 0;
+    x.putImageData(d, 0, 0);
+    return ktPotong(c);
+  }
+  /** Foto produk tanpa latar (Promise kanvas). */
+  function ktTanpaLatar(img) {
+    return ktLatarAI(img).catch(function (e) { if (window.console) console.warn('Hapus latar AI gagal, pakai cara sederhana:', e); return ktLatarSederhana(img); });
   }
   /** Angka acak yang selalu sama untuk bibit yang sama (konfeti tidak berubah tiap digambar ulang). */
   function ktAcak(bibit) { var a = bibit >>> 0 || 1; return function () { a ^= a << 13; a ^= a >>> 17; a ^= a << 5; return ((a >>> 0) % 10000) / 10000; }; }
