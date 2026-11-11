@@ -1959,7 +1959,7 @@
     var isi = [];
     var maxD = D.items.reduce(function (m, it) { var p = prItem(it); return p ? Math.max(m, p.d) : m; }, 0);
     if (maxD) isi.push(el('button', { class: 'kotak-kat promo', type: 'button', 'aria-pressed': String(F.promo), onclick: function () { pilihPromo(!F.promo); } },
-      el('span', { class: 'kk-foto' }, el('b', { text: maxD + '%' }), el('small', { text: 'diskon s/d' })), el('span', { class: 'kk-label', text: 'Promo' })));
+      el('span', { class: 'kk-foto' }, el('small', { text: 'Diskon s/d' }), el('b', { text: maxD + '%' })), el('span', { class: 'kk-label', text: 'Promo' })));
     KOTAK_KAT.forEach(function (k) {
       var xs = D.items.filter(k[1]);
       if (xs.length < 3) return;

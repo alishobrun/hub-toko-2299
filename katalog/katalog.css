@@ -1087,3 +1087,53 @@ button.tanya { cursor: pointer; }
   .slide.gaya-promo .sl-potong i { position: absolute; top: 8%; right: 6%; font-style: normal; font-weight: 800; font-size: 13px; background: var(--harga); color: #fff; padding: 4px 8px; border-radius: 99px; box-shadow: 0 2px 6px rgba(0, 0, 0, .25); opacity: 1 !important; text-shadow: none !important; }
 }
 @media (min-width: 700px) and (max-width: 1000px) { .slide.gaya-promo .sl-potong:nth-child(3) { display: none; } }
+
+/* ---------- rapi di HP: skala huruf 12 / 13 / 15 / 20 / 26, deretan geser yang menempel (snap) ---------- */
+.kategori, .strip-rel, .koleksi-rel { overscroll-behavior-x: contain; -webkit-overflow-scrolling: touch; touch-action: pan-x pan-y; scroll-padding-inline: 12px; }
+.kategori, .strip-rel.deret { scroll-snap-type: x proximity; }
+.kategori > *, .strip-rel.deret > * { scroll-snap-align: start; }
+.kotak-kat:hover { transform: none; }
+@media (hover: hover) { .kotak-kat:hover { transform: translateY(-2px); } }
+.kotak-kat { -webkit-tap-highlight-color: transparent; }
+.kotak-kat.promo .kk-foto { gap: 0; padding: 4px; }
+.kotak-kat.promo .kk-foto small { order: 0; font-size: 11px; letter-spacing: .02em; line-height: 1.2; white-space: nowrap; }
+.kotak-kat.promo .kk-foto b { font-size: clamp(28px, 8.4vw, 36px); white-space: nowrap; letter-spacing: -.01em; }
+/* kartu promo/terlaris: tinggi seragam, harga selalu sejajar di bawah */
+.kartu-deret { height: 100%; }
+.kd-isi { flex: 1; }
+.kd-kat { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.kd-harga { margin-top: auto; padding-top: 6px; }
+@media (max-width: 699px) {
+  /* 3 kotak + sepotong kotak ke-4 terlihat, jadi jelas bisa digeser */
+  .kategori { grid-auto-columns: calc((100% - 24px - 30px) / 3.35); gap: 10px; padding: 10px 12px 14px; }
+  .kk-label { font-size: 15px; padding: 6px 4px 7px; }
+  /* deretan kartu: 2 kartu + sepotong kartu ke-3 */
+  .strip-rel.deret { grid-auto-columns: calc((100% - 24px - 20px) / 2.25); gap: 10px; padding: 8px 12px 16px; }
+  .kartu-deret { padding: 6px; border-radius: 10px; }
+  .kd-diskon { font-size: 11.5px; padding: 4px; }
+  .kd-nama { font-size: 13px; }
+  .kd-varian, .kd-kat { font-size: 12px; }
+  .kd-harga s { font-size: 12px; }
+  .kd-harga b { font-size: 15px; }
+  /* kepala promo toko: judul + "Lihat semua" sebaris, hitung mundur di bawahnya */
+  .promo-strip .kotak-kepala { display: grid; grid-template-columns: 1fr auto; align-items: center; row-gap: 8px; padding: 14px 12px 4px; }
+  .promo-strip .kotak-kepala h2.judul-promo { font-size: 26px; grid-area: 1 / 1; }
+  .promo-strip .lihat { grid-area: 1 / 2; font-size: 13px; }
+  .promo-strip .hitung-mundur { grid-area: 2 / 1 / 3 / 3; justify-self: start; font-size: 12px; padding: 4px 10px; }
+  .kotak-kepala h2.judul-tebal { font-size: 22px; }
+  /* banner: lebih tinggi supaya tulisan tidak menempel tepi */
+  .banner.ada-foto .banner-rel { aspect-ratio: 1.5; }
+  .slide.gaya-promo { padding: 16px 18px 30px; gap: 6px; justify-content: center; }
+  .slide.gaya-promo .sl-judul { font-size: 26px; line-height: .95; max-width: 13ch; }
+  .slide.gaya-promo .sl-angka { margin: 0; }
+  .slide.gaya-promo .sl-angka strong { font-size: 68px; }
+  .slide.gaya-promo .sl-angka i { font-size: 32px; }
+  .slide.gaya-promo .sl-angka small { font-size: 14px; }
+  .slide.gaya-promo .sl-sub { font-size: 12.5px; line-height: 1.35; max-width: 34ch; text-wrap: balance; }
+  .slide.gaya-promo .sl-cta { font-size: 13px; padding: 8px 14px; margin-top: 4px; }
+}
+@media (max-width: 360px) {
+  .slide.gaya-promo .sl-angka strong { font-size: 58px; }
+  .slide.gaya-promo .sl-judul { font-size: 23px; }
+  .promo-strip .kotak-kepala h2.judul-promo { font-size: 23px; }
+}
