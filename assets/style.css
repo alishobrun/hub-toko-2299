@@ -1602,3 +1602,14 @@ html[data-theme=dark] .promo-tag{background:var(--orange-50);color:#FDBA74}
 .st-wa-isi{padding:2px 6px;word-break:break-word}
 .st-wa-isi u{color:#53BDEB;text-decoration:none}
 .st-wa-jam{display:block;text-align:right;font-size:10.5px;opacity:.6;padding:0 6px}
+/* Serah terima setoran */
+.serah-list{display:flex;flex-direction:column}
+.serah-row{display:flex;justify-content:space-between;gap:12px;padding:12px 0;border-top:1px solid var(--line);align-items:flex-start}
+.serah-row:first-child{border-top:0}
+.serah-row.menunggu{background:linear-gradient(90deg,var(--warn-50),transparent 60%);margin:0 -12px;padding-left:12px;padding-right:12px;border-radius:10px}
+.serah-main{display:flex;flex-direction:column;gap:3px;min-width:0}
+.serah-main small{font-size:12.5px;line-height:1.4}
+.serah-side{display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex:0 0 auto}
+.serah-side select.serah-ganti{font-size:12px;max-width:170px;padding:4px 24px 4px 8px;height:32px!important;min-height:0!important;flex:0 0 auto}
+.tag-sm{font-size:11px;padding:1px 6px}
+@media (max-width:560px){.serah-row{flex-direction:column}.serah-side{flex-direction:row;flex-wrap:wrap;align-items:center;justify-content:flex-start}}

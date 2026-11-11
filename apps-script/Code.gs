@@ -11,7 +11,7 @@
 /** Versi kode. WAJIB dinaikkan setiap kali Code.gs diubah (format yyyy-MM-dd.n),
  *  lalu simpan ke GitHub (alishobrun/hub-toko-2299) SEBELUM dipasang. Halaman Kesehatan Data
  *  membandingkan angka ini dengan GitHub supaya kode yang dipasang di luar GitHub ketahuan. */
-const KODE_VERSI = '2026-11-11.8';
+const KODE_VERSI = '2026-11-11.9';
 
 const CFG = {
   STORE: '2299',
@@ -89,6 +89,7 @@ const TABS = {
   // buku petty cash dari CARE (laporan PettyCash.xlsx diunggah manual)
   petty_care: ['id', 'kode', 'waktu', 'debit', 'kredit', 'saldo', 'akun', 'status', 'ket', 'oleh', 'diubah'],
   // buku Store Safe (brankas) dari CARE: uang masuk saat closing (POS Desktop) & setoran ke bank
+  serah_terima: ['kode', 'tahu_user', 'tahu_nama', 'tahu_waktu', 'penyetor_user', 'penyetor_nama', 'diubah', 'oleh'],
   dok_antre: ['file_id', 'nama', 'tanggal', 'jenis', 'mb', 'didaftar'],
   dok_terkirim: ['file_id', 'nama', 'waktu', 'link', 'catatan'],
   putaway_tpl: ['kategori', 'bin_sell', 'bin_wa', 'diubah', 'oleh'],
@@ -4639,6 +4640,83 @@ function pettyParse_(aoa) {
 
 /** Baca laporan StoreSafe.xlsx dari CARE. Catatan: di file CARE urutan kolom Created At/Updated By tertukar,
  *  jadi waktu dicari dari isi sel (format tanggal-jam), bukan dari judul kolom. */
+/* ---------- Serah terima setoran (dari laporan Store Safe CARE) ---------- */
+/** Satu baris per setoran ke bank di CARE: PV = kode SSC, penyetor = NIK pembuat transaksi (= username Basecamp).
+ *  Setoran RA perlu "Mengetahui (SL)"; setoran oleh SL/admin cukup info. Transaksi reverse tidak ikut. */
+function serahData_(K) {
+  const U = {}; read_('users').forEach(function (u) { U[String(u.username)] = u; });
+  const T = {}; read_('serah_terima').forEach(function (r) { T[String(r.kode)] = r; });
+  const balik = function (x) { return /X$/i.test(String(x.kode)) || /revers/i.test(String(x.ket)); };
+  const masuk = {};
+  K.safe.forEach(function (x) { if (x.status !== 'Reversed' && !balik(x) && x.debit > 0) { const d = tglClosing_(x.waktu); masuk[d] = (masuk[d] || 0) + x.debit; } });
+  const rows = [];
+  K.safe.forEach(function (x) {
+    if (!(x.kredit > 0) || x.status === 'Reversed' || balik(x) || !/bank/i.test(x.dari)) return;
+    let tj = x.tglJual || '';
+    if (!tj) { const m = String(x.ket).match(/(\d{2})\/(\d{2})\/(\d{4})/); if (m) tj = m[3] + '-' + m[2] + '-' + m[1]; }
+    const t = T[String(x.kode)] || {}, nik = String(t.penyetor_user || x.oleh || ''), u = U[nik];
+    const pihak = u ? (u.role === 'admin' ? 'SL' : 'RA') : 'RA';
+    rows.push({ kode: x.kode, waktu: x.waktu, tanggal: x.waktu.slice(0, 10), tglJual: tj, sisa: /SISA/i.test(x.ket), nominal: x.kredit,
+      bank: [x.akun, x.jenis === 'atm' ? 'ATM' : x.jenis === 'brankas' ? 'dari brankas' : 'teller'].filter(String).join(' · '),
+      username: nik, nama: t.penyetor_nama || (u ? u.nama : (nik ? 'NIK ' + nik : '?')), pihak: pihak, ket: x.ket, diganti: !!t.penyetor_user,
+      tahu: t.tahu_user ? { username: String(t.tahu_user), nama: String(t.tahu_nama), waktu: String(t.tahu_waktu) } : null,
+      status: pihak === 'SL' ? 'info' : t.tahu_user ? 'diketahui' : 'menunggu' });
+  });
+  const jual = {};
+  rows.forEach(function (r) { if (!r.tglJual) return; const o = jual[r.tglJual] || (jual[r.tglJual] = { tanggal: r.tglJual, closing: masuk[r.tglJual] || 0, setor: 0, n: 0 }); o.setor += r.nominal; o.n++; });
+  Object.keys(jual).forEach(function (d) { jual[d].sisa = Math.max(0, jual[d].closing - jual[d].setor); });
+  return { rows: rows, jual: jual };
+}
+Object.assign(API, {
+  serahList: function (req) {
+    const u = auth_(req);
+    const K = kasBaca_(), D = serahData_(K);
+    const bulanAda = {}; D.rows.forEach(function (r) { bulanAda[r.tanggal.slice(0, 7)] = 1; });
+    const daftar = Object.keys(bulanAda).sort().reverse();
+    const bulan = /^\d{4}-\d{2}$/.test(String(req.bulan || '')) ? String(req.bulan) : (daftar[0] || today_().slice(0, 7));
+    const rows = D.rows.filter(function (r) { return r.tanggal.slice(0, 7) === bulan; }).reverse();
+    const jual = {}; rows.forEach(function (r) { if (r.tglJual && D.jual[r.tglJual]) jual[r.tglJual] = D.jual[r.tglJual]; });
+    const last = K.safe[K.safe.length - 1];
+    const users = u.role === 'admin' ? read_('users').filter(function (x) { return String(x.status) === 'aktif'; }).map(function (x) { return { username: String(x.username), nama: String(x.nama) }; }) : [];
+    return { bulan: bulan, bulanAda: daftar, rows: rows, jual: jual, menunggu: D.rows.filter(function (r) { return r.status === 'menunggu'; }).length,
+      sampai: last ? last.waktu : null, bisaTahu: u.role === 'admin', users: users, tautan: bapTautan_() };
+  },
+  /** SL / admin: "Mengetahui" setoran RA (batal = true untuk membatalkan). */
+  serahTahu: function (req) {
+    const a = auth_(req, true);
+    const kodes = (Array.isArray(req.kode) ? req.kode : [req.kode]).map(String).filter(Boolean).slice(0, 60);
+    if (!kodes.length) throw new Error('Pilih setoran');
+    withLock_(function () {
+      const all = read_('serah_terima'), idx = {};
+      all.forEach(function (r, i) { idx[String(r.kode)] = i; });
+      kodes.forEach(function (k) {
+        const v = req.batal ? { tahu_user: '', tahu_nama: '', tahu_waktu: '' } : { tahu_user: a.username, tahu_nama: a.nama, tahu_waktu: now_() };
+        const o = Object.assign(idx[k] != null ? all[idx[k]] : { kode: k }, v, { diubah: now_(), oleh: a.username });
+        if (idx[k] != null) all[idx[k]] = o; else all.push(o);
+      });
+      writeAll_('serah_terima', all);
+      log_(a.username, req.batal ? 'batal mengetahui setoran' : 'mengetahui setoran', kodes.join(', ').slice(0, 200));
+    });
+    rekapAman_([], true);
+    return true;
+  },
+  /** Admin: ganti nama penyetor bila yang menginput di CARE bukan yang menyetor. */
+  serahPenyetor: function (req) {
+    const a = auth_(req, true), k = String(req.kode || ''), un = String(req.username || '');
+    const u = read_('users').filter(function (x) { return String(x.username) === un; })[0];
+    if (!k) throw new Error('Pilih setoran');
+    withLock_(function () {
+      const all = read_('serah_terima'); let o = all.filter(function (r) { return String(r.kode) === k; })[0];
+      if (!o) { o = { kode: k }; all.push(o); }
+      o.penyetor_user = u ? un : ''; o.penyetor_nama = u ? String(u.nama) : ''; o.diubah = now_(); o.oleh = a.username;
+      writeAll_('serah_terima', all);
+      log_(a.username, 'ganti penyetor', k + ' → ' + (u ? u.nama : 'sesuai CARE'));
+    });
+    rekapAman_([], true);
+    return true;
+  }
+});
+
 function safeParse_(aoa) {
   const norm = function (x) { return String(x == null ? '' : x).trim().toLowerCase().replace(/\s+/g, ' '); };
   const num = function (x) { if (x == null || x === '') return 0; if (typeof x === 'number') return x; const v = Number(String(x).replace(/,/g, '').trim()); return isNaN(v) ? 0 : v; };
@@ -5046,6 +5124,11 @@ function bapNotif_(u, today) {
       isi: 'Rp ' + rupiah_(telat.reduce(function (s, b) { return s + b.sisa; }, 0)) + ' · tekan Sudah disetor setelah setor', link: '#/kas-setor' });
   }
   if (admin) {
+    try {
+      const nunggu = serahData_(kasBaca_()).rows.filter(function (r) { return r.status === 'menunggu'; });
+      if (nunggu.length) out.push({ id: 'live-serah-' + nunggu.length + '-' + nunggu[0].kode, live: true, level: 'cek', jenis: 'kas', waktu: nunggu[0].waktu,
+        judul: nunggu.length + ' setoran RA menunggu "Mengetahui (SL)"', isi: nunggu.slice(0, 3).map(function (r) { return tglPendek_(r.tanggal) + ' ' + r.nama + ' Rp ' + rupiah_(r.nominal); }).join(' · '), link: '#/kas-setor' });
+    } catch (e) {}
     const bData = Number(set.data_batas) || 660;
     if (R.posAda && !R.posKemarin && mnt >= bData) out.push({ id: 'live-pos-' + today, live: true, level: 'cek', jenis: 'kas', waktu: today + ' ' + hhmm_(bData).replace('.', ':') + ':00',
       judul: 'Laporan POS kemarin belum masuk', isi: 'Ekspor POS Receivable Report ' + tglPendek_(addDays_(today, -1)) + ' dari CARE', link: '#/kas-rekap' });
@@ -5281,6 +5364,17 @@ function tabSetoran_(ss, K) {
   });
   tulisTab_(ss, 'Setoran', rows, { uang: [4], lebar: [100, 140, 110, 110, 80, 130, 260, 220, 300], index: 1 });
 }
+/** Tab "Serah Terima": format seperti sheet lama (tanggal, pihak, nama, penjualan, nominal, PV, mengetahui SL). */
+function tabSerah_(ss, K) {
+  const D = serahData_(K);
+  const rows = [['Tanggal setor', 'Pihak', 'Nama', 'Penjualan', 'Nominal', 'Bank / cara', 'PV (CARE)', 'Mengetahui (SL)', 'Status', 'Keterangan']];
+  D.rows.slice().reverse().forEach(function (r) {
+    rows.push([r.tanggal, r.pihak, r.nama, r.tglJual ? tglPendek_(r.tglJual) + (r.sisa ? ' (sisa)' : '') : '', r.nominal, r.bank, r.kode,
+      r.tahu ? r.tahu.nama + ' · ' + r.tahu.waktu : (r.status === 'info' ? '— (disetor SL)' : ''), r.status === 'menunggu' ? 'Menunggu SL' : 'DONE', r.ket]);
+  });
+  if (rows.length === 1) rows.push(['Laporan Store Safe CARE belum diunggah', '', '', '', '', '', '', '', '', '']);
+  tulisTab_(ss, 'Serah Terima', rows, { uang: [5], lebar: [110, 50, 150, 120, 110, 130, 150, 200, 100, 320], index: 1 });
+}
 function tabPetty_(ss, K) {
   const rows = [['Waktu', 'Kode', 'Akun / kategori', 'Masuk (debit)', 'Keluar (kredit)', 'Saldo CARE', 'Status', 'Keterangan']];
   K.care.slice().reverse().forEach(function (x) { rows.push([x.waktu, x.kode, x.akun, x.debit || '', x.kredit || '', x.saldo, x.status, x.ket]); });
@@ -5320,7 +5414,7 @@ function rekapSekarang_(bulan, semuaTab) {
     const ss = rekapFile_(), K = kasBacaUlang_(), S = setoranHitung_(K);
     (bulan || []).forEach(function (b) { if (/^\d{4}-\d{2}$/.test(b)) { tabBulan_(ss, b, K, S); tabPecahan_(ss, b, K, S); } });
     tabRingkasan_(ss, K, S);
-    if (semuaTab) { tabSetoran_(ss, K); tabPetty_(ss, K); }
+    if (semuaTab) { tabSetoran_(ss, K); tabPetty_(ss, K); tabSerah_(ss, K); }
   } catch (e) { Logger.log('rekap BAP: ' + e); }
 }
 function rekapBangun_() {
@@ -5329,7 +5423,7 @@ function rekapBangun_() {
   K.bap.forEach(function (b) { bulan[b.tanggal.slice(0, 7)] = 1; });
   // hapus tab bulan lama yang tidak ada datanya
   ss.getSheets().forEach(function (s) { const m = s.getName().match(/^(\w{3}) (\d{4})$/); if (m && !bulan[m[2] + '-' + pad_(BLN_.indexOf(m[1]) + 1)] && ss.getSheets().length > 1) ss.deleteSheet(s); });
-  tabRingkasan_(ss, K, S); tabSetoran_(ss, K); tabPetty_(ss, K);
+  tabRingkasan_(ss, K, S); tabSetoran_(ss, K); tabPetty_(ss, K); tabSerah_(ss, K);
   Object.keys(bulan).sort().forEach(function (b) { tabBulan_(ss, b, K, S); tabPecahan_(ss, b, K, S); });
   return { bulan: Object.keys(bulan).length, url: bapTautan_().rekap };
 }

@@ -1834,8 +1834,11 @@
   var CARA_SETOR = { atm: 'ATM', teller: 'Teller', brankas: 'Brankas', internal: 'Internal' };
   function viewKasSetor(v) {
     pageHead(v, 'Setoran Bank', 'Uang Cash at Till masuk brankas lalu disetor besoknya (Sabtu–Minggu lewat ATM, sisanya Senin). Data diambil dari laporan Store Safe CARE.');
-    var body = el('div', null, skel(2));
-    v.append(body);
+    var body = el('div', null, skel(2)), serahBox = el('div');
+    var tab = store.get('setorTab') || 'ringkas';
+    var seg = segmented([['ringkas', 'Ringkasan'], ['serah', 'Serah Terima']], tab, function (x) { tab = x; store.set('setorTab', x); tampil(); });
+    v.append(el('div', { class: 'section-sm' }, seg), body, serahBox);
+    function tampil() { body.hidden = tab !== 'ringkas'; serahBox.hidden = tab !== 'serah'; if (tab === 'serah') serahTerima(serahBox); else load(); }
     function load() {
       apiSwr('setoranList').then(function (d) {
         var dz = dropZone({ judul: 'Unggah laporan Store Safe CARE', ket: '…_StoreSafe.xlsx · ketuk atau seret & lepas ke sini', onFiles: function (fs) { prosesSafe(fs[0], load); } });
@@ -1860,7 +1863,60 @@
         body.replaceChildren(el('div', { class: 'section-sm' }, dz), top, hist);
       }).catch(function (e) { body.replaceChildren(errBox(e)); });
     }
-    load();
+    tampil();
+  }
+
+  /** Serah terima setoran: satu baris per setoran CARE (PV), setoran RA perlu "Mengetahui (SL)". */
+  function serahTerima(box, bulan) {
+    box.replaceChildren(el('div', { class: 'card' }, skel(3)));
+    api('serahList', { bulan: bulan || '' }).then(function (d) {
+      var nunggu = d.rows.filter(function (r) { return r.status === 'menunggu'; });
+      var total = d.rows.reduce(function (a, r) { return a + r.nominal; }, 0);
+      var tahu = function (kode, batal, btn) {
+        if (btn) btn.disabled = true;
+        api('serahTahu', { kode: kode, batal: !!batal }).then(function () { toast(batal ? 'Dibatalkan' : 'Tercatat: Mengetahui (SL)'); serahTerima(box, d.bulan); })
+          .catch(function (e) { if (btn) btn.disabled = false; toast(e.message, true); });
+      };
+      var unduh = function () {
+        xlsxDownload('Serah Terima Setoran ' + CFG.STORE + ' ' + d.bulan, [{ name: bulanLabel(d.bulan), rows: [['Tanggal setor', 'Pihak', 'Nama', 'Penjualan', 'Nominal', 'Bank / cara', 'PV (CARE)', 'Mengetahui (SL)', 'Status']].concat(d.rows.slice().reverse().map(function (r) {
+          return [r.tanggal, r.pihak, r.nama, r.tglJual ? r.tglJual + (r.sisa ? ' (sisa)' : '') : '', r.nominal, r.bank, r.kode, r.tahu ? r.tahu.nama + ' · ' + r.tahu.waktu : (r.status === 'info' ? '— (disetor SL)' : ''), r.status === 'menunggu' ? 'Menunggu SL' : 'DONE'];
+        })) }]);
+      };
+      var head = el('div', { class: 'card' },
+        el('div', { class: 'card-head' }, el('div', null, el('h3', { text: 'Serah terima setoran' }),
+          el('p', { class: 'sub', text: 'Otomatis dari laporan Store Safe CARE' + (d.sampai ? ' · transaksi terakhir ' + fTime(d.sampai) : '') + '. Setoran RA perlu "Mengetahui (SL)".' })),
+          monthSel(d.bulanAda.length ? d.bulanAda : [d.bulan], d.bulan, function (m) { serahTerima(box, m); })),
+        el('div', { class: 'tags' }, el('span', { class: 'tag', text: d.rows.length + ' setoran' }), el('span', { class: 'tag', text: rpx(total) }),
+          nunggu.length ? el('span', { class: 'tag tag-warn', text: nunggu.length + ' menunggu SL' }) : el('span', { class: 'tag tag-good', text: '✓ semua beres' }),
+          d.menunggu > nunggu.length ? el('span', { class: 'tag tag-warn', text: (d.menunggu - nunggu.length) + ' menunggu di bulan lain' }) : null),
+        el('div', { class: 'row-btns', style: 'margin-top:10px' },
+          d.bisaTahu && nunggu.length ? el('button', { type: 'button', class: 'btn btn-orange btn-sm', onclick: function (e) {
+            if (confirm('Tandai ' + nunggu.length + ' setoran RA bulan ini "Mengetahui (SL)" atas nama ' + S.user.nama + '?')) tahu(nunggu.map(function (r) { return r.kode; }), false, e.currentTarget);
+          } }, icon('check'), 'Mengetahui semua (' + nunggu.length + ')') : null,
+          d.tautan.rekap ? el('a', { class: 'btn btn-ghost btn-sm', href: d.tautan.rekap, target: '_blank', rel: 'noopener' }, icon('file'), 'Lihat di Spreadsheet') : null,
+          dlBtn(unduh, 'Unduh Excel')));
+      var list = d.rows.length ? el('div', { class: 'card section' }, el('div', { class: 'serah-list' }, d.rows.map(function (r) {
+        var j = r.tglJual && d.jual[r.tglJual];
+        var gant = null;
+        if (d.bisaTahu) {
+          gant = el('select', { class: 'sel serah-ganti', 'aria-label': 'Ganti penyetor' }, [el('option', { value: '', text: 'Penyetor: sesuai CARE' })].concat(d.users.map(function (u) { var o = el('option', { value: u.username, text: u.nama }); if (r.diganti && u.username === r.username) o.selected = true; return o; })));
+          gant.addEventListener('change', function () { api('serahPenyetor', { kode: r.kode, username: gant.value }).then(function () { toast('Penyetor diganti'); serahTerima(box, d.bulan); }).catch(function (e) { toast(e.message, true); }); });
+        }
+        var st = r.status === 'info' ? el('span', { class: 'tag', text: 'Disetor SL' })
+          : r.status === 'diketahui' ? el('span', { class: 'tag tag-good', title: r.tahu.waktu, text: '✓ ' + r.tahu.nama })
+          : el('span', { class: 'tag tag-warn', text: 'Menunggu SL' });
+        return el('div', { class: 'serah-row ' + r.status },
+          el('div', { class: 'serah-main' },
+            el('div', null, el('b', { text: dShort(r.tanggal) + ' · ' + r.waktu.slice(11, 16) }), ' ', el('span', { class: 'tag tag-sm', text: r.pihak }), ' ', el('b', { text: titleCase(r.nama) })),
+            el('small', { class: 'muted', text: 'Penjualan ' + (r.tglJual ? dShort(r.tglJual) : '?') + (r.sisa ? ' (sisa)' : '') + ' · ' + r.bank + ' · PV ' + r.kode }),
+            j && j.sisa > 0 && j.closing ? el('small', { class: 'c-warn', text: 'Uang penjualan ' + dShort(j.tanggal) + ' ' + rpx(j.closing) + ' · sudah disetor ' + rpx(j.setor) + ' · sisa ' + rpx(j.sisa) + ' menunggu hari kerja' }) : null),
+          el('div', { class: 'serah-side' }, el('b', { class: 'num', text: nf.format(r.nominal) }), st,
+            d.bisaTahu && r.status === 'menunggu' ? el('button', { type: 'button', class: 'btn btn-primary btn-sm', text: 'Mengetahui', onclick: function (e) { tahu(r.kode, false, e.currentTarget); } }) : null,
+            d.bisaTahu && r.status === 'diketahui' ? el('button', { type: 'button', class: 'btn btn-ghost btn-sm', text: 'Batal', onclick: function (e) { if (confirm('Batalkan "Mengetahui" untuk setoran ini?')) tahu(r.kode, true, e.currentTarget); } }) : null,
+            gant));
+      }))) : el('div', { class: 'card section' }, el('div', { class: 'empty', text: 'Belum ada setoran di bulan ini. Unggah laporan Store Safe CARE di tab Ringkasan.' }));
+      box.replaceChildren(head, list);
+    }).catch(function (e) { box.replaceChildren(errBox(e)); });
   }
 
   /* ---------- Petty cash (dari laporan CARE) ---------- */
