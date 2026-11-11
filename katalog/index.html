@@ -26,7 +26,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="katalog.css?v=202611122000">
+  <link rel="stylesheet" href="katalog.css?v=202611122100">
 </head>
 <body>
   <header class="atas" id="atas">
@@ -48,6 +48,7 @@
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a9 9 0 0 0-7.8 13.5L3 21l4.6-1.2A9 9 0 1 0 12 3Z"/></svg>
       </a>
     </div>
+    <nav class="menu-atas" id="menuAtas" aria-label="Kategori utama"></nav>
   </header>
 
   <div class="halaman">
@@ -68,6 +69,10 @@
         <div class="kategori" id="kategori"></div>
       </section>
 
+      <section class="kotak populer-kotak" id="populerKotak" hidden>
+        <div class="kotak-kepala"><h2>Paling banyak dilihat minggu ini</h2></div>
+        <div class="strip-rel" id="populerRel"></div>
+      </section>
       <section class="kotak terakhir-kotak" id="terakhirKotak" hidden>
         <div class="kotak-kepala"><h2>Baru kamu lihat</h2><button class="lihat" type="button" id="terakhirHapus">Hapus</button></div>
         <div class="strip-rel" id="terakhirRel"></div>
@@ -96,13 +101,11 @@
     <section class="kotak daftar" id="daftar">
       <div class="daftar-kepala" id="daftarKepala"><h2 id="judulDaftar">Rekomendasi untukmu</h2><p class="hitung" id="hitung" aria-live="polite"></p></div>
       <div class="bilah">
-      <div class="tab-urut" id="tabUrut" role="tablist" aria-label="Urutkan">
-        <button type="button" role="tab" data-u="pilihan" aria-selected="true">Terkait</button>
-        <button type="button" role="tab" data-u="baru" aria-selected="false">Terbaru</button>
-        <button type="button" role="tab" data-u="diskon" aria-selected="false">Promo</button>
-        <button type="button" role="tab" data-u="harga" aria-selected="false" class="tab-harga">Harga <i aria-hidden="true"></i></button>
+      <div class="bilah-baris">
+        <div class="saring" id="saring" aria-label="Saring barang"></div>
+        <button class="tombol-urut" id="tombolUrut" type="button" aria-haspopup="listbox" aria-expanded="false"><span class="urut-label">Berdasarkan:</span><b>Terkait</b></button>
       </div>
-      <div class="saring" id="saring"></div>
+      <div class="saring-aktif" id="saringAktif" hidden></div>
       </div>
       <div class="grid" id="grid"></div>
       <div class="lagi" id="lagi"></div>
@@ -140,7 +143,7 @@
     <div class="lembar-in" id="lembar2Isi"></div>
   </dialog>
 
-  <script src="../assets/config.js?v=202611122000"></script>
-  <script src="katalog.js?v=202611122000"></script>
+  <script src="../assets/config.js?v=202611122100"></script>
+  <script src="katalog.js?v=202611122100"></script>
 </body>
 </html>

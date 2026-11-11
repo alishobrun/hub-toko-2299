@@ -11,7 +11,7 @@
 /** Versi kode. WAJIB dinaikkan setiap kali Code.gs diubah (format yyyy-MM-dd.n),
  *  lalu simpan ke GitHub (alishobrun/hub-toko-2299) SEBELUM dipasang. Halaman Kesehatan Data
  *  membandingkan angka ini dengan GitHub supaya kode yang dipasang di luar GitHub ketahuan. */
-const KODE_VERSI = '2026-11-11.15';
+const KODE_VERSI = '2026-11-11.16';
 
 const CFG = {
   STORE: '2299',
@@ -5830,6 +5830,7 @@ function katalogSusun_(fotoIkut) {
   return { toko: CFG.STORE_NAME, wa: KATALOG.WA, diperbarui: last ? String(last.waktu) : '', items: items,
     promoSampai: promoSampai, promoToko: fotoIkut ? promoTokoAktif_() : [], banner: fotoIkut ? bannerEiger_() : [], panduan: panduan,
     koleksi: fotoIkut ? koleksiAktif_(items) : [],
+    populer: fotoIkut ? populerKatalog_(items) : [],
     infoToko: KATALOG.INFO };
 }
 
@@ -6187,6 +6188,21 @@ function infoKatalogPeta_() {
   return peta;
 }
 
+/** Artikel paling banyak dilihat/ditanya pelanggan 7 hari terakhir (jejak anonim). Ditanya = 3 kali bobot dilihat. */
+function populerKatalog_(items) {
+  const ada = {};
+  items.forEach(function (it) { ada[it.g] = 1; });
+  const batas = addDays_(today_(), -7), skor = {};
+  try {
+    read_('katalog_log').forEach(function (r) {
+      if (String(r.waktu).slice(0, 10) < batas) return;
+      const g = String(r.generic), j = String(r.jenis);
+      if (!ada[g] || (j !== 'lihat' && j !== 'tanya')) return;
+      skor[g] = (skor[g] || 0) + (j === 'tanya' ? 3 : 1);
+    });
+  } catch (e) { Logger.log('populer katalog: ' + e); }
+  return Object.keys(skor).filter(function (g) { return skor[g] >= 2; }).sort(function (a, b) { return skor[b] - skor[a]; }).slice(0, 16);
+}
 /** Hapus jejak lihat/tanya yang lebih tua dari LOG_HARI. */
 function rapikanLogKatalog_() {
   const batas = addDays_(today_(), -KATALOG.LOG_HARI);
