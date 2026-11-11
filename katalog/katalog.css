@@ -1016,3 +1016,11 @@ button.tanya { cursor: pointer; }
 /* label Pria/Wanita/Anak di bawah supaya wajah di foto tidak tertutup */
 .gaya { justify-content: flex-end; padding-bottom: 18px; }
 @media (min-width: 900px) { .gaya { padding-bottom: 26px; } }
+
+/* Pria/Wanita/Anak: foto produk di atas latar alam (tanpa foto orang) */
+.gaya { justify-content: flex-end; }
+.gaya-produk { position: absolute; left: 50%; top: 14%; transform: translateX(-50%); display: flex; gap: 6px; width: 86%; justify-content: center; }
+.gaya-produk span { flex: 1; max-width: 120px; aspect-ratio: 1; background: #fff; border-radius: 10px; overflow: hidden; box-shadow: 0 6px 18px rgba(0, 0, 0, .25); display: grid; place-items: center; }
+.gaya-produk span:nth-child(2) { transform: translateY(-8%); }
+.gaya-produk img { width: 88%; height: 88%; object-fit: contain; }
+@media (max-width: 699px) { .gaya-produk { top: 10%; gap: 4px; width: 92%; } .gaya-produk span { border-radius: 6px; } .gaya-produk span:nth-child(3) { display: none; } }

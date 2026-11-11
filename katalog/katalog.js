@@ -1946,18 +1946,27 @@
     pasangPanah(box);
   }
 
-  /* Pria / Wanita / Anak */
-  var FOTO_GAYA = {
-    Pria: 'https://images.unsplash.com/photo-1698129878421-836a6b1cecd2?w=640&h=520&fit=crop&crop=focalpoint&fp-x=.5&fp-y=.6&fp-z=1.5&q=60&auto=format',
-    Wanita: 'https://images.unsplash.com/photo-1604320462838-2d4b8c1b882c?w=640&h=520&fit=crop&crop=focalpoint&fp-x=.5&fp-y=.5&fp-z=1.25&q=60&auto=format',
-    Anak: 'https://images.unsplash.com/photo-1700937521110-2d9b24b1cee6?w=640&h=520&fit=crop&crop=focalpoint&fp-x=.5&fp-y=.5&fp-z=1.5&q=60&auto=format'
-  };
+  /* Pria / Wanita / Anak — tanpa foto orang: latar alam + foto produk (tas, sepatu, sandal, perlengkapan) */
+  var LATAR_GAYA = { Pria: 'puncak', Wanita: 'senja', Anak: 'hijau' };
+  function produkGaya(g) {
+    // hanya kategori yang fotonya produk saja (bukan pakaian yang dipakai model)
+    var boleh = { BAGS: 1, FOOTWEAR: 1, EQUIPMENT: 1, ACCESSORIES: 1 };
+    var xs = D.items.filter(function (it) { return boleh[it.k3] && it.k4 !== 'SOCK' && genderNama(it.gd) === g && fotoBersih(it).length; });
+    if (xs.length < 3) xs = D.items.filter(function (it) { return boleh[it.k3] && cocokGender(it, g) && fotoBersih(it).length; });
+    var urut = function (it) { return TERLARIS[it.g] || 999; };
+    xs.sort(function (a, b) { return urut(a) - urut(b); });
+    var pilih = [], k3 = {};
+    xs.forEach(function (it) { if (pilih.length < 3 && !k3[it.k3 + it.k4]) { k3[it.k3 + it.k4] = 1; pilih.push(it); } });
+    return pilih;
+  }
   function gambarGaya() {
     var box = $('#gaya'); if (!box) return;
     isiUlang(box, ['Pria', 'Wanita', 'Anak'].map(function (g) {
       var n = D.items.filter(function (it) { return cocokGender(it, g); }).length;
       if (n < 3) return null;
-      return el('button', { class: 'gaya', type: 'button', style: "background-image:linear-gradient(rgba(0,0,0,0) 40%,rgba(0,0,0,.55)),url('" + FOTO_GAYA[g] + "')", onclick: function () { terapkan({ gds: [g] }); } },
+      var pr = produkGaya(g);
+      return el('button', { class: 'gaya', type: 'button', style: "background-image:linear-gradient(rgba(10,26,79,.25),rgba(10,26,79,.7)),url('" + fotoLatar(LATAR_GAYA[g], 640) + "')", onclick: function () { terapkan({ gds: [g] }); } },
+        pr.length ? el('span', { class: 'gaya-produk' }, pr.map(function (it) { return el('span', null, imgKecil(fotoBersih(it)[0], '')); })) : null,
         el('b', { text: g }), el('small', { text: n + ' barang' }));
     }));
   }
