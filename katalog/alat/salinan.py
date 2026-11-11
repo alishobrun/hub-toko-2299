@@ -254,7 +254,16 @@ def potong_produk(k):
         try:
             import rembg  # noqa
         except ImportError:
-            subprocess.run([sys.executable, '-m', 'pip', 'install', '-q', 'rembg[cpu]'], check=False)
+            r = subprocess.run([sys.executable, '-m', 'pip', 'install', '-q', '--break-system-packages', 'rembg[cpu]'], capture_output=True, text=True)
+            if r.returncode:
+                r = subprocess.run([sys.executable, '-m', 'pip', 'install', '-q', '--user', '--break-system-packages', 'rembg[cpu]'], capture_output=True, text=True)
+            print('pasang rembg:', r.returncode, (r.stderr or '')[-300:])
+            import site, importlib
+            importlib.invalidate_caches()
+            try:
+                sys.path.append(site.getusersitepackages())
+            except Exception:
+                pass
         try:
             from rembg import remove, new_session
             from PIL import Image
