@@ -561,6 +561,7 @@
           : hargaNormal ? hargaEl(hargaNormal) : el('span', { class: 'harga tanya', text: 'Tanya harga di toko' })),
         statusStok(),
         pw ? el('div', { class: 'pita-promo' }, el('span', { text: '⚡ Promo toko · ' + statusPromo('', D.promoSampai).teks }), hm) : null);
+      var wadahInfo = el('div', { class: 'info-produk' });
       var promoUmum = promoTokoAktif().filter(function (p) { return p.mulai <= hariIni() && /non promo|all item/i.test(p.produk || '') ; });
       bukaLembar([kepalaLembar('Detail produk'),
         el('div', { class: 'produk' }, galeri,
@@ -586,8 +587,9 @@
               el('div', { class: 'promo-berlaku' }, promoUmum.slice(0, 4).map(function (p) {
                 return el('div', { class: 'voucher-kecil' }, el('b', { text: p.jenis || 'Promo' }), el('span', { text: p.judul }));
               }), el('button', { class: 'sk', type: 'button', style: 'align-self:flex-start', text: 'Lihat semua promo ›', onclick: bukaDaftarPromo }))) : null,
+            wadahInfo,
             el('div', { class: 'blok' }, el('h3', { text: 'Spesifikasi' }),
-              el('dl', { class: 'detail-baris' }, el('dt', { text: 'Kategori' }), el('dd', { text: katNama(it.k3) + ' › ' + subNama(it.k4) }),
+              el('dl', { class: 'detail-baris dl-spek' }, el('dt', { text: 'Kategori' }), el('dd', { text: katNama(it.k3) + ' › ' + subNama(it.k4) }),
                 it.ac ? [el('dt', { text: 'Aktivitas' }), el('dd', { text: judul(it.ac) })] : null,
                 genderNama(it.gd) ? [el('dt', { text: 'Untuk' }), el('dd', { text: genderNama(it.gd) })] : null,
                 el('dt', { text: 'Kode artikel' }), el('dd', { text: it.g }),
@@ -607,6 +609,7 @@
               kosong ? el('button', { class: 'tanya', type: 'button', text: 'Kabari saya saat tersedia', onclick: function () { var f = $('.form-kabari input'); if (f) { f.scrollIntoView({ behavior: 'smooth', block: 'center' }); f.focus(); } } })
                 : el('a', { class: 'tanya', href: waLink(teks), target: '_blank', rel: 'noopener', text: uk || satuUkuran ? 'Tanya Stok via WhatsApp' : 'Tanya Ketersediaan', onclick: function () { catat(it.g, 't'); } }))))
       ], false, ulang);
+      ambilInfo(it.g, function (x) { if (wadahInfo.isConnected) isiInfo(wadahInfo, $('.dl-spek'), x); });
       var g = $('.galeri-utama');
       if (g) {
         if (fi) g.scrollLeft = fi * g.clientWidth;
@@ -875,6 +878,76 @@
   if (dlg2) dlg2.addEventListener('click', function (e) { if (e.target === dlg2) dlg2.close(); });
 
   /* ---- barang serupa: sub-kategori sama, harga berdekatan, ada foto ---- */
+  /* ---------- info resmi produk (deskripsi, fitur, teknologi) dari eigeradventure ---------- */
+  var INFO = {}, INFO_KUNCI = 'katalog2299.info', INFO_UMUR = 3 * 864e5;
+  function ambilInfo(g, cb) {
+    if (INFO[g] !== undefined) { cb(INFO[g]); return; }
+    var simpan = {};
+    try { simpan = JSON.parse(localStorage.getItem(INFO_KUNCI) || '{}') || {}; } catch (e) { simpan = {}; }
+    var s = simpan[g];
+    if (s && Date.now() - s[0] < INFO_UMUR) { INFO[g] = s[1]; cb(s[1]); return; }
+    if (!CFG.API_URL) return;
+    fetch(CFG.API_URL, { method: 'POST', body: JSON.stringify({ action: 'katalogInfo', g: g }), redirect: 'follow' })
+      .then(function (r) { return r.json(); })
+      .then(function (res) {
+        if (!res.ok) return;
+        INFO[g] = res.data || null;
+        simpan[g] = [Date.now(), INFO[g]];
+        var k = Object.keys(simpan);
+        if (k.length > 60) k.sort(function (a, b) { return simpan[a][0] - simpan[b][0]; }).slice(0, k.length - 60).forEach(function (x) { delete simpan[x]; });
+        try { localStorage.setItem(INFO_KUNCI, JSON.stringify(simpan)); } catch (e) { /* penuh */ }
+        cb(INFO[g]);
+      }).catch(function () {});
+  }
+  function barisTeks(t) { return String(t || '').split('\n').map(function (b) { return b.trim(); }).filter(Boolean); }
+  function poinTeks(t) { return barisTeks(t).map(function (b) { return b.replace(/^[•\-–*]\s*/, ''); }).filter(Boolean); }
+  function lipat(judulTeks, isi, terbuka) {
+    var d = el('details', { class: 'lipat' }, el('summary', null, el('span', { text: judulTeks }), svg('<path d="m6 9 6 6 6-6"/>')), el('div', { class: 'lipat-isi' }, isi));
+    if (terbuka) d.open = true;
+    return d;
+  }
+  function isiInfo(wadah, dl, x) {
+    if (!x) { isiUlang(wadah); return; }
+    var bagian = [];
+    var desk = barisTeks(x.d);
+    if (desk.length) {
+      var p = el('div', { class: 'desk' }, desk.map(function (b) { return el('p', { text: b }); }));
+      var tombol = el('button', { class: 'selengkapnya', type: 'button', text: 'Baca selengkapnya', onclick: function () {
+        var buka = p.classList.toggle('penuh'); tombol.textContent = buka ? 'Tutup' : 'Baca selengkapnya';
+      } });
+      bagian.push(el('div', { class: 'blok' }, el('h3', { text: 'Deskripsi produk' }),
+        x.w ? el('div', { class: 'lencana-garansi' }, svg('<path d="M12 3 4 6v6c0 5 3.4 8.5 8 9 4.6-.5 8-4 8-9V6Z"/><path d="m9 12 2 2 4-4"/>'), el('span', null, el('b', { text: 'Garansi seumur hidup' }), ' untuk produk ini')) : null,
+        p, tombol));
+      requestAnimationFrame(function () { if (p.scrollHeight <= p.clientHeight + 4) tombol.remove(); });
+    } else if (x.w) {
+      bagian.push(el('div', { class: 'blok' }, el('div', { class: 'lencana-garansi' }, svg('<path d="M12 3 4 6v6c0 5 3.4 8.5 8 9 4.6-.5 8-4 8-9V6Z"/><path d="m9 12 2 2 4-4"/>'), el('span', null, el('b', { text: 'Garansi seumur hidup' }), ' untuk produk ini'))));
+    }
+    var fitur = poinTeks(x.f);
+    if (fitur.length) bagian.push(el('div', { class: 'blok' }, el('h3', { text: 'Fitur & keunggulan' }),
+      el('ul', { class: 'fitur' }, fitur.slice(0, 14).map(function (f) { return el('li', null, svg('<path d="m5 12 5 5 9-10"/>'), el('span', { text: f })); }))));
+    var tek = (x.t || []).filter(function (t) { return t && t.t; });
+    if (tek.length) bagian.push(el('div', { class: 'blok' }, el('h3', { text: 'Teknologi' }),
+      el('div', { class: 'teknologi' }, tek.map(function (t) {
+        return el('div', { class: 'tek' },
+          t.i ? el('img', { src: t.i, alt: '', loading: 'lazy', referrerpolicy: 'no-referrer', onerror: function () { this.remove(); } }) : el('span', { class: 'tek-ikon', text: t.t.charAt(0) }),
+          el('div', null, el('b', { text: t.t }), t.d ? el('span', { text: t.d }) : null));
+      }))));
+    var mat = poinTeks(x.m), rawat = poinTeks(x.p);
+    if (mat.length || rawat.length) bagian.push(el('div', { class: 'blok blok-lipat' },
+      mat.length ? lipat('Material', el('ul', { class: 'poin' }, mat.map(function (b) { return el('li', { text: b }); })), true) : null,
+      rawat.length ? lipat('Cara perawatan', el('ul', { class: 'poin' }, rawat.map(function (b) { return el('li', { text: b }); }))) : null));
+    if (bagian.length) bagian.push(el('p', { class: 'sumber-info', text: 'Info produk dari eigeradventure.com. Ketersediaan & harga mengikuti toko.' }));
+    isiUlang(wadah, bagian);
+    if (dl && !dl.querySelector('.dari-info')) {
+      var dm = poinTeks(x.dm).join(', '), b = Number(x.b);
+      var kode = dl.querySelector('dt:nth-last-of-type(2)');
+      var tambahan = [];
+      if (dm) tambahan.push(el('dt', { class: 'dari-info', text: 'Dimensi' }), el('dd', { text: dm }));
+      if (b > 0) tambahan.push(el('dt', { class: 'dari-info', text: 'Berat' }), el('dd', { text: b >= 1000 ? nf.format(b / 1000) + ' kg' : nf.format(b) + ' gram' }));
+      tambahan.forEach(function (n) { dl.insertBefore(n, kode); });
+    }
+  }
+
   function blokSerupa(it) {
     var h0 = (prItem(it) || {}).n || it.hm || it.h || 0;
     var hargaDari = function (x) { var p = prItem(x); return p ? p.n : (x.hm || x.h || 0); };

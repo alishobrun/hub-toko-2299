@@ -11,7 +11,7 @@
 /** Versi kode. WAJIB dinaikkan setiap kali Code.gs diubah (format yyyy-MM-dd.n),
  *  lalu simpan ke GitHub (alishobrun/hub-toko-2299) SEBELUM dipasang. Halaman Kesehatan Data
  *  membandingkan angka ini dengan GitHub supaya kode yang dipasang di luar GitHub ketahuan. */
-const KODE_VERSI = '2026-11-11.12';
+const KODE_VERSI = '2026-11-11.13';
 
 const CFG = {
   STORE: '2299',
@@ -104,6 +104,8 @@ const TABS = {
   katalog_tunggu: ['id', 'waktu', 'nama', 'wa', 'generic', 'artikel', 'warna', 'ukuran', 'status', 'diubah', 'oleh'],
   // koleksi pilihan toko (etalase tematik di beranda katalog), disusun staf di Basecamp
   katalog_koleksi: ['id', 'judul', 'sub', 'latar', 'artikel', 'urut', 'aktif', 'diubah', 'oleh'],
+  // deskripsi resmi produk dari eigeradventure.com (diambil otomatis bertahap tiap malam)
+  katalog_info: ['generic', 'deskripsi', 'fitur', 'material', 'dimensi', 'berat', 'perawatan', 'teknologi', 'garansi', 'aktivitas', 'tipe', 'sumber', 'dicek'],
   // promo umum toko untuk katalog pelanggan (dari juknis promo / web Integrated Hub), diisi admin
   katalog_promo: ['id', 'judul', 'jenis', 'mulai', 'selesai', 'syarat', 'produk', 'aktif', 'diubah', 'oleh', 'sumber', 'ket']
 };
@@ -6015,6 +6017,7 @@ function cariFotoKatalog() {
     st.sisa = Math.max(0, antre.length - i);
     if (!st.sisa && !st.galat) {
       try { st.panduanSisa = cariPanduanKatalog_(mulai); } catch (e) { Logger.log('panduan ukuran: ' + e); }
+      try { if (!st.panduanSisa) st.infoSisa = cariInfoKatalog_(mulai); } catch (e) { Logger.log('info produk: ' + e); }
       try { rapikanLogKatalog_(); } catch (e) { Logger.log('rapikan log katalog: ' + e); }
     }
     if (Object.keys(hasil).length) withLock_(function () {
@@ -6026,7 +6029,7 @@ function cariFotoKatalog() {
       writeAll_('katalog_foto', rows);
       katalogBaru_();
     }, 60000);
-    if ((st.sisa || st.panduanSisa) && !st.galat) ScriptApp.newTrigger('cariFotoKatalogLanjut').timeBased().after(60 * 1000).create();
+    if ((st.sisa || st.panduanSisa || st.infoSisa) && !st.galat) ScriptApp.newTrigger('cariFotoKatalogLanjut').timeBased().after(60 * 1000).create();
   } catch (e) {
     st.galat = String(e.message || e).slice(0, 200);
   }
@@ -6080,6 +6083,71 @@ function cariPanduanKatalog_(mulai) {
     katalogBaru_();
   }, 60000);
   return Math.max(0, antre.length - i);
+}
+
+/** HTML deskripsi eigeradventure → teks polos per baris (poin '•' dipertahankan sebagai baris). */
+function teksBersih_(html) {
+  return String(html || '')
+    .replace(/<\s*(br|\/p|\/li|\/div|\/h\d)\s*\/?>/gi, '\n').replace(/<li[^>]*>/gi, '\n• ').replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;|&apos;/g, "'")
+    .replace(/&reg;/g, '®').replace(/&trade;/g, '™').replace(/&deg;/g, '°').replace(/&#(\d+);/g, function (m, n) { return String.fromCharCode(Number(n)); })
+    .split('\n').map(function (b) { return b.replace(/[ \t]+/g, ' ').trim(); }).filter(String).join('\n').slice(0, 4000);
+}
+/** Info produk resmi (deskripsi, fitur, material, teknologi, dll.) dari halaman produk eigeradventure untuk artikel
+ *  yang alamat produknya sudah ketemu. Disimpan di tab katalog_info. Mengembalikan jumlah artikel yang belum sempat diambil. */
+function cariInfoKatalog_(mulai) {
+  const sudah = {};
+  read_('katalog_info').forEach(function (r) { sudah[String(r.generic)] = 1; });
+  const antre = read_('katalog_foto').filter(function (f) { return !sudah[String(f.generic)] && String(f.url || '').indexOf(KATALOG.WEB) === 0; });
+  if (!antre.length) return 0;
+  const bid = buildIdEiger_();
+  const baru = [];
+  let i = 0;
+  while (i < antre.length && Date.now() - mulai < KATALOG.WAKTU_MS) {
+    const batch = antre.slice(i, i + KATALOG.BATCH);
+    i += batch.length;
+    const res = UrlFetchApp.fetchAll(batch.map(function (f) {
+      const slug = String(f.url).slice(KATALOG.WEB.length).split(/[?#]/)[0];
+      return { url: 'https://www.eigeradventure.com/_next/data/' + bid + '/id/d/' + encodeURIComponent(slug) + '.json', muteHttpExceptions: true, headers: { 'User-Agent': 'Mozilla/5.0 (Basecamp 2299 katalog toko)' } };
+    }));
+    let tolak = 0;
+    res.forEach(function (r, k) {
+      const g = String(batch[k].generic), code = r.getResponseCode();
+      if (code === 403 || code === 429) { tolak++; return; }
+      let a = null;
+      if (code === 200) {
+        try {
+          const qs = ((JSON.parse(r.getContentText()).pageProps || {}).dehydratedState || {}).queries || [];
+          qs.forEach(function (q) { const d = q.state && q.state.data && q.state.data.data; if (!a && d && d.attributes && (d.attributes.description || d.attributes.features || d.attributes.material)) a = d.attributes; });
+        } catch (e) { a = null; }
+      }
+      if (!a) { baru.push({ generic: g, sumber: '-', dicek: now_() }); return; }
+      const tek = (a.technology || []).filter(function (t) { return t && t.title; }).slice(0, 8).map(function (t) {
+        return { t: String(t.title).slice(0, 60), d: teksBersih_(t.description).slice(0, 300), i: /^https:\/\/d1yutv2xslo29o\.cloudfront\.net\//.test(String(t.iconUrl || '')) ? String(t.iconUrl) : '' };
+      });
+      baru.push({ generic: g, deskripsi: teksBersih_(a.description || a.shortDescription), fitur: teksBersih_(a.features), material: teksBersih_(a.material),
+        dimensi: teksBersih_(a.dimension), berat: String(a.weight || '').replace(/[^\d.]/g, '').slice(0, 8), perawatan: teksBersih_(a.careInstruction),
+        teknologi: tek.length ? JSON.stringify(tek) : '', garansi: a.isLifetimeWarranty ? 'seumur hidup' : '',
+        aktivitas: (a.activity && a.activity.name) || '', tipe: (a.type && a.type.name) || '', sumber: String(a.url || batch[k].url), dicek: now_() });
+    });
+    if (tolak) break;
+  }
+  if (baru.length) withLock_(function () { appendRows_('katalog_info', baru); katalogBaru_(); }, 60000);
+  return Math.max(0, antre.length - i);
+}
+/** Peta info produk per generic (di-cache gzip 6 jam, ikut versi katalog). */
+function infoKatalogPeta_() {
+  const k = 'katalog_info_peta_' + (PropertiesService.getScriptProperties().getProperty('ver_katalog') || '0');
+  const hit = cacheAmbilBesar_(k);
+  if (hit) return hit;
+  const peta = {};
+  read_('katalog_info').forEach(function (r) {
+    if (String(r.sumber) === '-') return;
+    peta[String(r.generic)] = { d: String(r.deskripsi || ''), f: String(r.fitur || ''), m: String(r.material || ''), dm: String(r.dimensi || ''),
+      b: String(r.berat || ''), p: String(r.perawatan || ''), t: String(r.teknologi || ''), w: String(r.garansi || ''), a: String(r.aktivitas || ''), y: String(r.tipe || '') };
+  });
+  cacheSimpanBesar_(k, peta, KATALOG.CACHE_DETIK);
+  return peta;
 }
 
 /** Hapus jejak lihat/tanya yang lebih tua dari LOG_HARI. */
@@ -6196,6 +6264,17 @@ Object.assign(API, {
 
   /** PUBLIK (tanpa login): data katalog untuk pelanggan. Tanpa jumlah stok. */
   katalog: function () { return katalogData_(); },
+
+  /** PUBLIK: info resmi satu produk (deskripsi, fitur, material, teknologi, perawatan). */
+  katalogInfo: function (req) {
+    const g = String(req.g || '');
+    if (!/^9\d{8}$/.test(g)) throw new Error('Kode artikel tidak valid.');
+    const x = infoKatalogPeta_()[g];
+    if (!x) return null;
+    let t = [];
+    try { t = x.t ? JSON.parse(x.t) : []; } catch (e) { t = []; }
+    return { d: x.d, f: x.f, m: x.m, dm: x.dm, b: x.b, p: x.p, t: t, w: x.w, a: x.a, y: x.y };
+  },
 
   /** PUBLIK: jejak anonim dari katalog. e = [[generic, 'l'|'t'], ...] (maks 25 per kiriman). Tanpa data pribadi. */
   katalogCatat: function (req) {
