@@ -11,7 +11,7 @@
 /** Versi kode. WAJIB dinaikkan setiap kali Code.gs diubah (format yyyy-MM-dd.n),
  *  lalu simpan ke GitHub (alishobrun/hub-toko-2299) SEBELUM dipasang. Halaman Kesehatan Data
  *  membandingkan angka ini dengan GitHub supaya kode yang dipasang di luar GitHub ketahuan. */
-const KODE_VERSI = '2026-11-12.2';
+const KODE_VERSI = '2026-11-12.3';
 
 const CFG = {
   STORE: '2299',
@@ -279,92 +279,7 @@ function todoTandai_(tanggal) {
   const p = PropertiesService.getScriptProperties(), d = jsonOr_(p.getProperty('TODO_DIRTY'), {});
   d[tanggal] = 1; p.setProperty('TODO_DIRTY', JSON.stringify(d));
 }
-Object.assign(API, {
-  todoHari: function (req) {
-    const u = auth_(req);
-    const t = /^\d{4}-\d{2}-\d{2}$/.test(String(req.tanggal || '')) ? String(req.tanggal) : today_();
-    return todoHari_(t, u);
-  },
-  /** Centang / batal centang. Anggota hanya untuk dirinya; admin boleh untuk siapa saja (key = username / "jadwal:NAMA"). */
-  todoCek: function (req) {
-    const u = auth_(req), t = String(req.tanggal || today_()), id = String(req.id || '');
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(t) || !id) throw new Error('Data tidak lengkap');
-    if (t > today_()) throw new Error('Belum bisa mencentang hari yang akan datang');
-    if (t < addDays_(today_(), -3) && u.role !== 'admin') throw new Error('Hanya admin yang bisa mengubah lebih dari 3 hari ke belakang');
-    let key = String(req.key || u.username), nama = u.nama;
-    if (key !== u.username) {
-      const roster = todoRoster_(t), p = roster.filter(function (x) { return (x.username || 'jadwal:' + x.jadwal) === key; })[0];
-      if (!p) throw new Error('Orang tidak ada di jadwal hari itu');
-      const self = resolveNamaJadwal_(u, roster.map(function (x) { return x.jadwal; }));
-      if (u.role !== 'admin' && p.jadwal !== self) throw new Error('Kamu hanya bisa mencentang tugasmu sendiri');
-      nama = p.nama;
-    }
-    withLock_(function () {
-      const all = read_('todo_cek');
-      const ada = all.filter(function (r) { return String(r.tanggal) === t && String(r.tugas_id) === id && String(r.username) === key; })[0];
-      if (req.on && !ada) appendRows_('todo_cek', [{ tanggal: t, tugas_id: id, username: key, nama: nama, waktu: now_(), oleh: u.username }]);
-      if (!req.on && ada) writeAll_('todo_cek', all.filter(function (r) { return r !== ada; }));
-    });
-    todoTandai_(t);
-    return true;
-  },
-  todoKet: function (req) {
-    const u = auth_(req), t = String(req.tanggal || today_());
-    let key = String(req.key || u.username);
-    if (key !== u.username && u.role !== 'admin') {
-      const roster = todoRoster_(t), self = resolveNamaJadwal_(u, roster.map(function (x) { return x.jadwal; }));
-      if (key !== 'jadwal:' + self) throw new Error('Hanya untuk dirimu sendiri');
-    }
-    const isi = String(req.ket || '').trim().slice(0, 500);
-    withLock_(function () {
-      const all = read_('todo_ket').filter(function (r) { return !(String(r.tanggal) === t && String(r.username) === key); });
-      if (isi) all.push({ tanggal: t, username: key, ket: isi, waktu: now_(), oleh: u.username });
-      writeAll_('todo_ket', all);
-    });
-    todoTandai_(t);
-    return true;
-  },
-  /** Rekap kepatuhan to-do per orang (admin). */
-  todoRekap: function (req) {
-    auth_(req, true);
-    const sampai = String(req.sampai || today_()), dari = String(req.dari || addDays_(sampai, -6));
-    const out = {}, hari = [];
-    for (let d = dari; d <= sampai; d = addDays_(d, 1)) {
-      const H = todoHari_(d, null); hari.push(d);
-      const tplMap = {}; H.tpl.forEach(function (x) { tplMap[x.id] = x; });
-      H.orang.forEach(function (p) {
-        if (p.off) return;
-        const o = out[p.nama] || (out[p.nama] = { nama: p.nama, wajib: 0, selesai: 0, hari: 0, lewat: {} });
-        o.hari++;
-        p.ids.forEach(function (id) {
-          const t = tplMap[id]; if (!t || t.kondisional) return;
-          const dn = H.done[id] || {}, ok = t.tipe === 'semua' ? !!dn[p.key] : (Object.keys(dn).length > 0 || !!H.auto[t.auto]);
-          o.wajib++; if (ok) o.selesai++; else o.lewat[t.tugas] = (o.lewat[t.tugas] || 0) + 1;
-        });
-      });
-    }
-    return { dari: dari, sampai: sampai, orang: Object.keys(out).map(function (k) { const o = out[k]; o.persen = o.wajib ? Math.round(o.selesai / o.wajib * 100) : 0; o.lewat = Object.keys(o.lewat).map(function (t) { return [t, o.lewat[t]]; }).sort(function (a, b) { return b[1] - a[1]; }).slice(0, 5); return o; }).sort(function (a, b) { return b.persen - a.persen; }) };
-  },
-  todoTplGet: function (req) { auth_(req); return todoTemplate_(); },
-  /** Admin: simpan template (rows: {shift, jam, tugas, tipe, auto, kondisional}). */
-  todoTplSave: function (req) {
-    const a = auth_(req, true), rows = (req.rows || []).filter(function (r) { return r && String(r.tugas || '').trim() && /^(PD|SB)$/.test(String(r.shift)); });
-    if (!rows.length) throw new Error('Template kosong');
-    const ada = {}; read_('todo_tpl').forEach(function (r) { ada[String(r.id)] = 1; });
-    let n = 0;
-    const out = rows.map(function (r, i) {
-      const jam = String(r.jam || '').split('-'), mulai = todoMenit_(jam[0]), selesai = todoMenit_(jam[1] || jam[0]);
-      if (mulai == null || selesai == null) throw new Error('Jam tidak valid: ' + r.jam);
-      let id = String(r.id || ''); if (!id) { do { n++; id = r.shift + '-N' + Date.now().toString(36) + n; } while (ada[id]); }
-      return { id: id, shift: String(r.shift), jam: String(r.jam).trim(), mulai: mulai, selesai: selesai, tugas: String(r.tugas).trim().toUpperCase().slice(0, 120), tipe: r.tipe === 'semua' ? 'semua' : 'satu', auto: String(r.auto || ''), kondisional: r.kondisional ? 1 : 0, urut: i + 1, aktif: 1 };
-    });
-    withLock_(function () { writeAll_('todo_tpl', out); });
-    log_(a.username, 'template to-do', out.length + ' tugas');
-    return todoTemplate_();
-  },
-  /** Admin: tulis ulang sheet hari tertentu sekarang. */
-  todoSheet: function (req) { auth_(req, true); const t = String(req.tanggal || today_()); todoSheetHari_(t); return { url: todoSheetUrl_() }; }
-});
+/* endpoint to-do: lihat Object.assign(API, …) di akhir file (API harus sudah dideklarasikan) */
 
 /* ---------- Sheet "TO DO LIST KARTASURA-2299" (format seperti sheet lama, satu tab per tanggal) ---------- */
 function todoFile_() {
@@ -6887,4 +6802,92 @@ Object.assign(API, {
     ScriptApp.newTrigger('cariFotoKatalogLanjut').timeBased().after(10 * 1000).create();
     return { dijadwalkan: true };
   }
+});
+
+/* ===================== To-Do Harian: endpoint ===================== */
+Object.assign(API, {
+  todoHari: function (req) {
+    const u = auth_(req);
+    const t = /^\d{4}-\d{2}-\d{2}$/.test(String(req.tanggal || '')) ? String(req.tanggal) : today_();
+    return todoHari_(t, u);
+  },
+  /** Centang / batal centang. Anggota hanya untuk dirinya; admin boleh untuk siapa saja (key = username / "jadwal:NAMA"). */
+  todoCek: function (req) {
+    const u = auth_(req), t = String(req.tanggal || today_()), id = String(req.id || '');
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(t) || !id) throw new Error('Data tidak lengkap');
+    if (t > today_()) throw new Error('Belum bisa mencentang hari yang akan datang');
+    if (t < addDays_(today_(), -3) && u.role !== 'admin') throw new Error('Hanya admin yang bisa mengubah lebih dari 3 hari ke belakang');
+    let key = String(req.key || u.username), nama = u.nama;
+    if (key !== u.username) {
+      const roster = todoRoster_(t), p = roster.filter(function (x) { return (x.username || 'jadwal:' + x.jadwal) === key; })[0];
+      if (!p) throw new Error('Orang tidak ada di jadwal hari itu');
+      const self = resolveNamaJadwal_(u, roster.map(function (x) { return x.jadwal; }));
+      if (u.role !== 'admin' && p.jadwal !== self) throw new Error('Kamu hanya bisa mencentang tugasmu sendiri');
+      nama = p.nama;
+    }
+    withLock_(function () {
+      const all = read_('todo_cek');
+      const ada = all.filter(function (r) { return String(r.tanggal) === t && String(r.tugas_id) === id && String(r.username) === key; })[0];
+      if (req.on && !ada) appendRows_('todo_cek', [{ tanggal: t, tugas_id: id, username: key, nama: nama, waktu: now_(), oleh: u.username }]);
+      if (!req.on && ada) writeAll_('todo_cek', all.filter(function (r) { return r !== ada; }));
+    });
+    todoTandai_(t);
+    return true;
+  },
+  todoKet: function (req) {
+    const u = auth_(req), t = String(req.tanggal || today_());
+    let key = String(req.key || u.username);
+    if (key !== u.username && u.role !== 'admin') {
+      const roster = todoRoster_(t), self = resolveNamaJadwal_(u, roster.map(function (x) { return x.jadwal; }));
+      if (key !== 'jadwal:' + self) throw new Error('Hanya untuk dirimu sendiri');
+    }
+    const isi = String(req.ket || '').trim().slice(0, 500);
+    withLock_(function () {
+      const all = read_('todo_ket').filter(function (r) { return !(String(r.tanggal) === t && String(r.username) === key); });
+      if (isi) all.push({ tanggal: t, username: key, ket: isi, waktu: now_(), oleh: u.username });
+      writeAll_('todo_ket', all);
+    });
+    todoTandai_(t);
+    return true;
+  },
+  /** Rekap kepatuhan to-do per orang (admin). */
+  todoRekap: function (req) {
+    auth_(req, true);
+    const sampai = String(req.sampai || today_()), dari = String(req.dari || addDays_(sampai, -6));
+    const out = {}, hari = [];
+    for (let d = dari; d <= sampai; d = addDays_(d, 1)) {
+      const H = todoHari_(d, null); hari.push(d);
+      const tplMap = {}; H.tpl.forEach(function (x) { tplMap[x.id] = x; });
+      H.orang.forEach(function (p) {
+        if (p.off) return;
+        const o = out[p.nama] || (out[p.nama] = { nama: p.nama, wajib: 0, selesai: 0, hari: 0, lewat: {} });
+        o.hari++;
+        p.ids.forEach(function (id) {
+          const t = tplMap[id]; if (!t || t.kondisional) return;
+          const dn = H.done[id] || {}, ok = t.tipe === 'semua' ? !!dn[p.key] : (Object.keys(dn).length > 0 || !!H.auto[t.auto]);
+          o.wajib++; if (ok) o.selesai++; else o.lewat[t.tugas] = (o.lewat[t.tugas] || 0) + 1;
+        });
+      });
+    }
+    return { dari: dari, sampai: sampai, orang: Object.keys(out).map(function (k) { const o = out[k]; o.persen = o.wajib ? Math.round(o.selesai / o.wajib * 100) : 0; o.lewat = Object.keys(o.lewat).map(function (t) { return [t, o.lewat[t]]; }).sort(function (a, b) { return b[1] - a[1]; }).slice(0, 5); return o; }).sort(function (a, b) { return b.persen - a.persen; }) };
+  },
+  todoTplGet: function (req) { auth_(req); return todoTemplate_(); },
+  /** Admin: simpan template (rows: {shift, jam, tugas, tipe, auto, kondisional}). */
+  todoTplSave: function (req) {
+    const a = auth_(req, true), rows = (req.rows || []).filter(function (r) { return r && String(r.tugas || '').trim() && /^(PD|SB)$/.test(String(r.shift)); });
+    if (!rows.length) throw new Error('Template kosong');
+    const ada = {}; read_('todo_tpl').forEach(function (r) { ada[String(r.id)] = 1; });
+    let n = 0;
+    const out = rows.map(function (r, i) {
+      const jam = String(r.jam || '').split('-'), mulai = todoMenit_(jam[0]), selesai = todoMenit_(jam[1] || jam[0]);
+      if (mulai == null || selesai == null) throw new Error('Jam tidak valid: ' + r.jam);
+      let id = String(r.id || ''); if (!id) { do { n++; id = r.shift + '-N' + Date.now().toString(36) + n; } while (ada[id]); }
+      return { id: id, shift: String(r.shift), jam: String(r.jam).trim(), mulai: mulai, selesai: selesai, tugas: String(r.tugas).trim().toUpperCase().slice(0, 120), tipe: r.tipe === 'semua' ? 'semua' : 'satu', auto: String(r.auto || ''), kondisional: r.kondisional ? 1 : 0, urut: i + 1, aktif: 1 };
+    });
+    withLock_(function () { writeAll_('todo_tpl', out); });
+    log_(a.username, 'template to-do', out.length + ' tugas');
+    return todoTemplate_();
+  },
+  /** Admin: tulis ulang sheet hari tertentu sekarang. */
+  todoSheet: function (req) { auth_(req, true); const t = String(req.tanggal || today_()); todoSheetHari_(t); return { url: todoSheetUrl_() }; }
 });
