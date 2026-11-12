@@ -11,7 +11,7 @@
 /** Versi kode. WAJIB dinaikkan setiap kali Code.gs diubah (format yyyy-MM-dd.n),
  *  lalu simpan ke GitHub (alishobrun/hub-toko-2299) SEBELUM dipasang. Halaman Kesehatan Data
  *  membandingkan angka ini dengan GitHub supaya kode yang dipasang di luar GitHub ketahuan. */
-const KODE_VERSI = '2026-11-12.4';
+const KODE_VERSI = '2026-11-12.5';
 
 const CFG = {
   STORE: '2299',
@@ -2650,6 +2650,8 @@ Object.assign(API, {
 
   /** Admin: susun ulang antrean kiriman ke OneDrive Pak Fany (semua bulan). */
   dokAntreSemua: function (req) { auth_(req, true); return dokAntre_(true); },
+  /** Admin: ID file antrean & folder penanda untuk alur Power Automate. */
+  dokPaInfo: function (req) { auth_(req, true); const r = dokAntre_(false); const n = dokPaBaca_(); return { antreFile: dokPaFile_().getId(), tandaFolder: dokPaTanda_().getId(), tandaUrl: dokPaTanda_().getUrl(), antre: r.antre, dibaca: n }; },
 
   /** Petugas menandai video sudah diunggah manual ke folder Pak Fany (opsi semi-otomatis). */
   dokFanyTandai: function (req) {
@@ -2712,7 +2714,58 @@ function dokAntre_(semua) {
   const sebelum = Object.keys(lama).sort().join(','), sesudah = rows.map(function (r) { return r.file_id; }).sort().join(',');
   if (sebelum !== sesudah) withLock_(function () { writeAll_('dok_antre', rows); });
   if (semua) PropertiesService.getScriptProperties().setProperty('DOK_SISA', String(belum.length));
+  try { dokPaTulis_(rows); } catch (e) { Logger.log('dok pa tulis: ' + e); }
   return { antre: rows.length, belum: belum.length, terkirim: Object.keys(kirim).length };
+}
+
+/* ---------- Jalur Power Automate lewat Google Drive (tanpa konektor Google Sheets yang sering kena 429) ----------
+ * Basecamp menulis antrean ke file teks  Sistem (jangan diubah)/Pak Fany (Power Automate)/antrean.txt
+ * (satu baris per video: file_id|nama). Alur Power Automate membaca file itu, menyalin tiap video ke folder
+ * OneDrive Pak Fany, lalu membuat file penanda <file_id>.txt di subfolder "terkirim". Tiap 15 menit Basecamp
+ * memindahkan penanda ke tab dok_terkirim dan membuang file penanda ke sampah Drive. */
+function dokPaFolder_() {
+  const p = PropertiesService.getScriptProperties(), id = p.getProperty('DOK_PA_FOLDER');
+  if (id) { try { const f = DriveApp.getFolderById(id); if (!f.isTrashed()) return f; } catch (e) { /* buat ulang */ } }
+  const sis = folderSistem_(), it = sis.getFoldersByName('Pak Fany (Power Automate)');
+  const f = it.hasNext() ? it.next() : sis.createFolder('Pak Fany (Power Automate)');
+  p.setProperty('DOK_PA_FOLDER', f.getId());
+  return f;
+}
+function dokPaTanda_() {
+  const p = PropertiesService.getScriptProperties(), id = p.getProperty('DOK_PA_TANDA');
+  if (id) { try { const f = DriveApp.getFolderById(id); if (!f.isTrashed()) return f; } catch (e) { /* buat ulang */ } }
+  const pa = dokPaFolder_(), it = pa.getFoldersByName('terkirim');
+  const f = it.hasNext() ? it.next() : pa.createFolder('terkirim');
+  p.setProperty('DOK_PA_TANDA', f.getId());
+  return f;
+}
+function dokPaFile_() {
+  const p = PropertiesService.getScriptProperties(), id = p.getProperty('DOK_PA_ANTRE');
+  if (id) { try { const f = DriveApp.getFileById(id); if (!f.isTrashed()) return f; } catch (e) { /* buat ulang */ } }
+  const f = dokPaFolder_().createFile('antrean.txt', '', MimeType.PLAIN_TEXT);
+  p.setProperty('DOK_PA_ANTRE', f.getId());
+  return f;
+}
+function dokPaTulis_(rows) {
+  const isi = rows.map(function (r) { return String(r.file_id) + '|' + String(r.nama).replace(/[|\r\n]/g, ' '); }).join('\n');
+  const f = dokPaFile_();
+  if (f.getBlob().getDataAsString() !== isi) f.setContent(isi);
+}
+/** Penanda dari Power Automate -> dok_terkirim. */
+function dokPaBaca_() {
+  const it = dokPaTanda_().getFiles(), sudah = dokTerkirim_(), baru = [], buang = [];
+  while (it.hasNext()) {
+    const f = it.next(), m = String(f.getName()).match(/^([\w-]{10,})\.txt$/);
+    if (!m) continue;
+    buang.push(f);
+    if (sudah[m[1]] || baru.some(function (b) { return b.file_id === m[1]; })) continue;
+    let isi = ''; try { isi = f.getBlob().getDataAsString().slice(0, 300); } catch (e) {}
+    baru.push({ file_id: m[1], nama: isi.split('\n')[0].replace(/^.*\//, ''), waktu: Utilities.formatDate(f.getDateCreated(), CFG.TZ, 'yyyy-MM-dd HH:mm:ss'), link: '', catatan: 'otomatis Power Automate' });
+  }
+  if (baru.length) withLock_(function () { appendRows_('dok_terkirim', baru); });
+  buang.forEach(function (f) { try { f.setTrashed(true); } catch (e) {} });
+  if (baru.length) { try { CacheService.getScriptCache().remove('dok_' + today_().slice(0, 7)); } catch (e) {} }
+  return baru.length;
 }
 
 function dokBaca_(bulan) {
@@ -3561,6 +3614,7 @@ function labelOf_(name) { return GmailApp.getUserLabelByName(name) || GmailApp.c
 function cekEmailDsr() {
   try { hangatkanDsr_(); } catch (e) { Logger.log('hangat dsr: ' + e); }
   try { siapkanBriefing_(); } catch (e) { Logger.log('briefing: ' + e); }
+  try { dokPaBaca_(); } catch (e) { Logger.log('dok pa baca: ' + e); }
   try { dokAntre_(false); } catch (e) { Logger.log('dok antre: ' + e); }
   try { todoSheetSync_(); } catch (e) { Logger.log('todo sheet: ' + e); }
   try { const pp = PropertiesService.getScriptProperties(); if (pp.getProperty('REKAP_ANTRE') && Date.now() - Number(pp.getProperty('REKAP_PEMICU') || 0) > 5 * 60 * 1000) prosesRekap(); } catch (e) { Logger.log('rekap antre: ' + e); }
