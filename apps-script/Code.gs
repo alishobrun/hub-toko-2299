@@ -11,7 +11,7 @@
 /** Versi kode. WAJIB dinaikkan setiap kali Code.gs diubah (format yyyy-MM-dd.n),
  *  lalu simpan ke GitHub (alishobrun/hub-toko-2299) SEBELUM dipasang. Halaman Kesehatan Data
  *  membandingkan angka ini dengan GitHub supaya kode yang dipasang di luar GitHub ketahuan. */
-const KODE_VERSI = '2026-11-12.1';
+const KODE_VERSI = '2026-11-12.2';
 
 const CFG = {
   STORE: '2299',
@@ -89,6 +89,9 @@ const TABS = {
   // buku petty cash dari CARE (laporan PettyCash.xlsx diunggah manual)
   petty_care: ['id', 'kode', 'waktu', 'debit', 'kredit', 'saldo', 'akun', 'status', 'ket', 'oleh', 'diubah'],
   // buku Store Safe (brankas) dari CARE: uang masuk saat closing (POS Desktop) & setoran ke bank
+  todo_tpl: ['id', 'shift', 'jam', 'mulai', 'selesai', 'tugas', 'tipe', 'auto', 'kondisional', 'urut', 'aktif'],
+  todo_cek: ['tanggal', 'tugas_id', 'username', 'nama', 'waktu', 'oleh'],
+  todo_ket: ['tanggal', 'username', 'ket', 'waktu', 'oleh'],
   serah_terima: ['kode', 'tahu_user', 'tahu_nama', 'tahu_waktu', 'penyetor_user', 'penyetor_nama', 'diubah', 'oleh', 'pihak', 'ttd_waktu'],
   dok_antre: ['file_id', 'nama', 'tanggal', 'jenis', 'mb', 'didaftar'],
   dok_terkirim: ['file_id', 'nama', 'waktu', 'link', 'catatan'],
@@ -113,6 +116,7 @@ const TABS = {
 const PECAHAN = [100000, 50000, 20000, 10000, 5000, 2000, 1000, 500, 200, 100];
 const SETTING_DEFAULTS = { modal_till: 600000, floating_cash: 2400000, target_upt: 2, target_basket: 0, dok_max_mb: 300, dok_batas_open: 630, dok_batas_close: 1350, na_hari: 60, dok_ingat_open: 570, dok_ingat_close: 1290, data_batas: 660,
   modal_total: 3000000, petty_plafon: 6000000, petty_ambang: 75, bap_ingat: 1320,
+  todo_mid_mulai: 660, todo_mid_selesai: 1140, // jam shift middle untuk to-do harian (menit dari 00.00)
   // komposisi standar Float to Till (lembar per pecahan) untuk usulan di BAP
   ftt_100000: 0, ftt_50000: 0, ftt_20000: 8, ftt_10000: 15, ftt_5000: 30, ftt_2000: 50, ftt_1000: 30, ftt_500: 20, ftt_200: 0, ftt_100: 0 };
 
@@ -165,6 +169,270 @@ function setup() {
   const r = syncTarget_();
   Logger.log('Setup selesai. Target: ' + JSON.stringify(r));
   return r;
+}
+
+/* =====================================================================
+ * TO-DO HARIAN TIM (pengganti sheet "TO DO LIST KARTASURA-2299")
+ * Template per shift (PD pagi, SB siang); middle (MD/MC) mengambil tugas yang jamnya masuk jam middle.
+ * Tipe "semua" = tiap orang mencentang (presensi, grooming, briefing…); "satu" = cukup satu orang.
+ * Sebagian tugas tercentang otomatis dari data Basecamp (video opening/closing, setoran, BAP closing).
+ * ===================================================================== */
+const TODO_DEFAULT = [
+  ['PD', '08:00 - 09:00', ['OPENING FISIK & VIDEO + UPLOAD|satu|video_open', 'NYALAKAN SELURUH ELEKTRONIK + CHECKING BATERAI', 'PRESENSI|semua', 'OPENING SISTEM + STORE VISIT', 'MASUKKAN UANG KE CASH DRAWER', 'HITUNG SEMUA UANG', 'PEL AREA', 'SETORAN PENJUALAN|satu|setor', 'SAPU DAN PEL (HALAMAN + TERAS)', 'PERAWATAN TANAMAN', 'GROOMING|semua', 'BRIEFING PAGI (VISI MISI CULTURE, MATERI)|semua', 'ISI MOM BRIEFING']],
+  ['PD', '09:00 - 10:00', ['MERAPIHKAN DAN FULLFILMENT BAGIAN 1', 'MERAPIHKAN DAN FULLFILMENT BAGIAN 2', 'REPORT CHECKLIST VM', 'MAPPING', 'PEMBUATAN STORY SESUAI JADWAL']],
+  ['PD', '10:00 - 11:00', ['SAMPLING / STOCK OPNAME']],
+  ['PD', '11:00 - 12:00', ['BREAK|semua', 'SUSUR SELLING (SETRIKA, HARGA, ATAU PIN SENSOR)']],
+  ['PD', '12:00 - 13:00', ['BREAK|semua', 'LIVE (KONDISIONAL)|satu||k']],
+  ['PD', '13:00 - 14:00', ['TANGGUNGAN PIC MASING-MASING (VM, SOSMED, DLL) / PEKERJAAN SL|semua', 'CEK SARANG LABA-LABA']],
+  ['PD', '14:00 - 15:00', ['BRIEFING SIANG (VISI MISI CULTURE, MATERI)|semua', 'SERAH TERIMA UANG', 'ROLEPLAY (KONDISIONAL)|semua||k', 'MERAPIHKAN DISPLAY']],
+  ['PD', '15:00 - 16:00', ['CHECK GANTUNGAN INVENTORY (SA-TR, DLL)', 'ISI SELF ASSESMENT ESS 3.0|semua', 'PRODUK BACK DISPLAY DAN GUDANG', 'BERESKAN GUDANG', 'CEK CHECKLISTAN']],
+  ['PD', '16:00 - 16:10', ['PRESENSI|semua', 'BODY CHECK DAN BAG CHECK|semua']],
+  ['SB', '14:00 - 15:00', ['GROOMING|semua', 'BRIEFING SIANG|semua', 'ISI MOM BRIEFING', 'SERAH TERIMA UANG', 'CASH DECLARE + STORE VISIT', 'MERAPIHKAN DISPLAY', 'ROLEPLAY (KONDISIONAL)|semua||k']],
+  ['SB', '15:00 - 16:00', ['BREAK|semua', 'STORY SPECIAL PRICE / BEST SELLER / PROMO KHUSUS', 'MASUKKAN DATA LOST SALES / USULAN REPEAT ORDER']],
+  ['SB', '16:00 - 17:00', ['BREAK|semua', 'TANGGUNGAN PIC MASING-MASING (VM, SOSMED, DLL) / PEKERJAAN SL|semua', 'RESPON ALL MEDSOS']],
+  ['SB', '17:00 - 18:30', ['SAMPLING / STOCK OPNAME', 'CHECK KONDISI INFRASTRUKTUR DAN ASSET']],
+  ['SB', '18:30 - 20:00', ['SELLING|semua', 'ISI SELF ASSESMENT ESS 3.0|semua']],
+  ['SB', '20:00 - 21:15', ['CHECK GANTUNGAN INVENTORY (SA-TR, DLL)', 'MAPPING']],
+  ['SB', '21:15 - 21:30', ['BRIEFING MALAM|semua', 'ISI MOM + UPLOAD']],
+  ['SB', '21:30 - 22:00', ['SAPU', 'BERSIHKAN TOILET', 'CLOSING SISTEM|satu|bap', 'BUANG SEMUA SAMPAH', 'BERSIHKAN KACA', 'CHECK ULANG CHECKLISTAN']],
+  ['SB', '22:00 - 22:15', ['PRESENSI|semua', 'MATIKAN SELURUH LISTRIK', 'VIDEO TUTUP + UPLOAD|satu|video_close', 'BODY CHECK DAN BAG CHECK|semua']]
+];
+function todoMenit_(s) { const m = String(s).match(/(\d{1,2})[.:](\d{2})/); return m ? Number(m[1]) * 60 + Number(m[2]) : null; }
+function todoTemplateDefault_() {
+  const out = []; let n = 0;
+  TODO_DEFAULT.forEach(function (b) {
+    const jam = b[1].split('-');
+    b[2].forEach(function (t) {
+      const p = t.split('|'); n++;
+      out.push({ id: b[0] + '-' + pad_(n), shift: b[0], jam: b[1], mulai: todoMenit_(jam[0]), selesai: todoMenit_(jam[1]), tugas: p[0], tipe: p[1] || 'satu', auto: p[2] || '', kondisional: p[3] === 'k' ? 1 : 0, urut: n });
+    });
+  });
+  return out;
+}
+function todoTemplate_() {
+  const r = read_('todo_tpl').filter(function (x) { return x.id && String(x.aktif) !== '0'; }).map(function (x) {
+    return { id: String(x.id), shift: String(x.shift), jam: String(x.jam), mulai: Number(x.mulai), selesai: Number(x.selesai), tugas: String(x.tugas), tipe: String(x.tipe || 'satu'), auto: String(x.auto || ''), kondisional: Number(x.kondisional) ? 1 : 0, urut: Number(x.urut) || 0 };
+  });
+  return (r.length ? r : todoTemplateDefault_()).sort(function (a, b) { return a.shift === b.shift ? a.urut - b.urut : (a.shift < b.shift ? 1 : -1); });
+}
+/** Tugas untuk satu kode shift. Middle (MD/MC): tugas PD/SB yang jamnya masuk jam middle, plus presensi masuk/pulang sendiri. */
+function todoUntuk_(tpl, kode, set) {
+  if (kode === 'PD' || kode === 'SB') return tpl.filter(function (t) { return t.shift === kode; });
+  if (kode !== 'MD' && kode !== 'MC') return [];
+  const a = Number(set.todo_mid_mulai) || 660, b = Number(set.todo_mid_selesai) || 1140, sudah = {};
+  const jm = function (m) { return pad_(Math.floor(m / 60)) + ':' + pad_(m % 60); };
+  const awal = [{ id: 'MD-01', shift: 'MD', jam: jm(a) + ' - ' + jm(a + 15), mulai: a, selesai: a + 15, tugas: 'PRESENSI', tipe: 'semua', auto: '', kondisional: 0, urut: 0 },
+    { id: 'MD-02', shift: 'MD', jam: jm(a) + ' - ' + jm(a + 15), mulai: a, selesai: a + 15, tugas: 'GROOMING', tipe: 'semua', auto: '', kondisional: 0, urut: 0 }];
+  const akhir = [{ id: 'MD-03', shift: 'MD', jam: jm(b - 10) + ' - ' + jm(b), mulai: b - 10, selesai: b, tugas: 'PRESENSI', tipe: 'semua', auto: '', kondisional: 0, urut: 999 },
+    { id: 'MD-04', shift: 'MD', jam: jm(b - 10) + ' - ' + jm(b), mulai: b - 10, selesai: b, tugas: 'BODY CHECK DAN BAG CHECK', tipe: 'semua', auto: '', kondisional: 0, urut: 999 }];
+  const tengah = tpl.filter(function (t) {
+    if (!(t.mulai < b && t.selesai > a)) return false;
+    if (/^(PRESENSI|GROOMING|BODY CHECK)/.test(t.tugas)) return false;
+    if (sudah[t.tugas]) return false; sudah[t.tugas] = 1; return true;
+  }).sort(function (x, y) { return x.mulai - y.mulai || x.urut - y.urut; });
+  return awal.concat(tengah, akhir);
+}
+const TODO_SHIFT_NAMA = { PD: 'Pagi', SB: 'Siang', MD: 'Middle', MC: 'Middle' };
+/** Status otomatis per tugas dari data Basecamp untuk satu tanggal. */
+function todoAuto_(tanggal) {
+  const o = {};
+  try { dokItems_(tanggal.slice(0, 7)).forEach(function (x) { if (x.tanggal !== tanggal) return; const k = x.jenis === 'OPENING' ? 'video_open' : 'video_close'; if (!o[k]) o[k] = { nama: todoTitle_(x.oleh), waktu: x.jam }; }); } catch (e) {}
+  try {
+    const K = kasBaca_();
+    K.bap.forEach(function (b) { if (b.tanggal === tanggal) o.bap = { nama: String(b.nama || ''), waktu: String(b.waktu || '').slice(11, 16) }; });
+    K.safe.forEach(function (x) { if (x.kredit > 0 && x.status !== 'Reversed' && /bank/i.test(x.dari) && String(x.waktu).slice(0, 10) === tanggal && !o.setor) o.setor = { nama: 'CARE ' + x.kode, waktu: String(x.waktu).slice(11, 16) }; });
+  } catch (e) {}
+  return o;
+}
+function todoTitle_(s) { return String(s || '').toLowerCase().replace(/\b\w/g, function (c) { return c.toUpperCase(); }); }
+/** Susunan hari: siapa masuk shift apa (dari jadwal) + akun Basecamp-nya. */
+function todoRoster_(tanggal) {
+  const map = jadwalMap_()[tanggal] || {}, users = readCached_('users', 60).filter(function (u) { return u.status === 'aktif'; });
+  const staf = Object.keys(map);
+  const byNama = {};
+  users.forEach(function (u) { const n = resolveNamaJadwal_(u, staf); if (n) byNama[n] = u; });
+  return staf.map(function (n) {
+    const u = byNama[n];
+    return { jadwal: n, kode: String(map[n] || '').toUpperCase(), username: u ? String(u.username) : '', nama: u ? String(u.nama) : todoTitle_(n) };
+  });
+}
+function todoHari_(tanggal, u) {
+  const set = settings_(), tpl = todoTemplate_(), roster = todoRoster_(tanggal);
+  const cek = read_('todo_cek').filter(function (r) { return String(r.tanggal) === tanggal; });
+  const ket = read_('todo_ket').filter(function (r) { return String(r.tanggal) === tanggal; });
+  const auto = todoAuto_(tanggal);
+  const done = {}; // id -> {username: {nama, waktu}}
+  cek.forEach(function (r) { const o = done[r.tugas_id] || (done[r.tugas_id] = {}); o[String(r.username)] = { nama: String(r.nama), waktu: String(r.waktu).slice(11, 16), oleh: String(r.oleh || '') }; });
+  const ketMap = {}; ket.forEach(function (r) { ketMap[String(r.username)] = { ket: String(r.ket), waktu: String(r.waktu) }; });
+  const orang = roster.map(function (p) {
+    const key = p.username || ('jadwal:' + p.jadwal);
+    const tugas = todoUntuk_(tpl, p.kode, set);
+    return { jadwal: p.jadwal, nama: p.nama, username: p.username, key: key, kode: p.kode, shift: TODO_SHIFT_NAMA[p.kode] || p.kode || '-', off: !TODO_SHIFT_NAMA[p.kode], ids: tugas.map(function (t) { return t.id; }), ket: ketMap[key] || null };
+  });
+  let saya = null;
+  if (u) { const n = resolveNamaJadwal_(u, roster.map(function (p) { return p.jadwal; })); saya = orang.filter(function (p) { return (p.username && p.username === String(u.username)) || (n && p.jadwal === n); })[0] || null; }
+  return { tanggal: tanggal, hariIni: today_(), menit: tanggal === today_() ? menitNow_() : (tanggal < today_() ? 9999 : -1), tpl: tpl.concat(todoUntuk_(tpl, 'MD', set).filter(function (t) { return /^MD-/.test(t.id); })), orang: orang, done: done, auto: auto,
+    saya: saya ? saya.key : '', admin: !!(u && u.role === 'admin'), mid: [Number(set.todo_mid_mulai) || 660, Number(set.todo_mid_selesai) || 1140], sheet: todoSheetUrl_() };
+}
+function todoSheetUrl_() { const id = PropertiesService.getScriptProperties().getProperty('TODO_SHEET_ID'); return id ? 'https://docs.google.com/spreadsheets/d/' + id + '/edit' : ''; }
+function todoTandai_(tanggal) {
+  const p = PropertiesService.getScriptProperties(), d = jsonOr_(p.getProperty('TODO_DIRTY'), {});
+  d[tanggal] = 1; p.setProperty('TODO_DIRTY', JSON.stringify(d));
+}
+Object.assign(API, {
+  todoHari: function (req) {
+    const u = auth_(req);
+    const t = /^\d{4}-\d{2}-\d{2}$/.test(String(req.tanggal || '')) ? String(req.tanggal) : today_();
+    return todoHari_(t, u);
+  },
+  /** Centang / batal centang. Anggota hanya untuk dirinya; admin boleh untuk siapa saja (key = username / "jadwal:NAMA"). */
+  todoCek: function (req) {
+    const u = auth_(req), t = String(req.tanggal || today_()), id = String(req.id || '');
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(t) || !id) throw new Error('Data tidak lengkap');
+    if (t > today_()) throw new Error('Belum bisa mencentang hari yang akan datang');
+    if (t < addDays_(today_(), -3) && u.role !== 'admin') throw new Error('Hanya admin yang bisa mengubah lebih dari 3 hari ke belakang');
+    let key = String(req.key || u.username), nama = u.nama;
+    if (key !== u.username) {
+      const roster = todoRoster_(t), p = roster.filter(function (x) { return (x.username || 'jadwal:' + x.jadwal) === key; })[0];
+      if (!p) throw new Error('Orang tidak ada di jadwal hari itu');
+      const self = resolveNamaJadwal_(u, roster.map(function (x) { return x.jadwal; }));
+      if (u.role !== 'admin' && p.jadwal !== self) throw new Error('Kamu hanya bisa mencentang tugasmu sendiri');
+      nama = p.nama;
+    }
+    withLock_(function () {
+      const all = read_('todo_cek');
+      const ada = all.filter(function (r) { return String(r.tanggal) === t && String(r.tugas_id) === id && String(r.username) === key; })[0];
+      if (req.on && !ada) appendRows_('todo_cek', [{ tanggal: t, tugas_id: id, username: key, nama: nama, waktu: now_(), oleh: u.username }]);
+      if (!req.on && ada) writeAll_('todo_cek', all.filter(function (r) { return r !== ada; }));
+    });
+    todoTandai_(t);
+    return true;
+  },
+  todoKet: function (req) {
+    const u = auth_(req), t = String(req.tanggal || today_());
+    let key = String(req.key || u.username);
+    if (key !== u.username && u.role !== 'admin') {
+      const roster = todoRoster_(t), self = resolveNamaJadwal_(u, roster.map(function (x) { return x.jadwal; }));
+      if (key !== 'jadwal:' + self) throw new Error('Hanya untuk dirimu sendiri');
+    }
+    const isi = String(req.ket || '').trim().slice(0, 500);
+    withLock_(function () {
+      const all = read_('todo_ket').filter(function (r) { return !(String(r.tanggal) === t && String(r.username) === key); });
+      if (isi) all.push({ tanggal: t, username: key, ket: isi, waktu: now_(), oleh: u.username });
+      writeAll_('todo_ket', all);
+    });
+    todoTandai_(t);
+    return true;
+  },
+  /** Rekap kepatuhan to-do per orang (admin). */
+  todoRekap: function (req) {
+    auth_(req, true);
+    const sampai = String(req.sampai || today_()), dari = String(req.dari || addDays_(sampai, -6));
+    const out = {}, hari = [];
+    for (let d = dari; d <= sampai; d = addDays_(d, 1)) {
+      const H = todoHari_(d, null); hari.push(d);
+      const tplMap = {}; H.tpl.forEach(function (x) { tplMap[x.id] = x; });
+      H.orang.forEach(function (p) {
+        if (p.off) return;
+        const o = out[p.nama] || (out[p.nama] = { nama: p.nama, wajib: 0, selesai: 0, hari: 0, lewat: {} });
+        o.hari++;
+        p.ids.forEach(function (id) {
+          const t = tplMap[id]; if (!t || t.kondisional) return;
+          const dn = H.done[id] || {}, ok = t.tipe === 'semua' ? !!dn[p.key] : (Object.keys(dn).length > 0 || !!H.auto[t.auto]);
+          o.wajib++; if (ok) o.selesai++; else o.lewat[t.tugas] = (o.lewat[t.tugas] || 0) + 1;
+        });
+      });
+    }
+    return { dari: dari, sampai: sampai, orang: Object.keys(out).map(function (k) { const o = out[k]; o.persen = o.wajib ? Math.round(o.selesai / o.wajib * 100) : 0; o.lewat = Object.keys(o.lewat).map(function (t) { return [t, o.lewat[t]]; }).sort(function (a, b) { return b[1] - a[1]; }).slice(0, 5); return o; }).sort(function (a, b) { return b.persen - a.persen; }) };
+  },
+  todoTplGet: function (req) { auth_(req); return todoTemplate_(); },
+  /** Admin: simpan template (rows: {shift, jam, tugas, tipe, auto, kondisional}). */
+  todoTplSave: function (req) {
+    const a = auth_(req, true), rows = (req.rows || []).filter(function (r) { return r && String(r.tugas || '').trim() && /^(PD|SB)$/.test(String(r.shift)); });
+    if (!rows.length) throw new Error('Template kosong');
+    const ada = {}; read_('todo_tpl').forEach(function (r) { ada[String(r.id)] = 1; });
+    let n = 0;
+    const out = rows.map(function (r, i) {
+      const jam = String(r.jam || '').split('-'), mulai = todoMenit_(jam[0]), selesai = todoMenit_(jam[1] || jam[0]);
+      if (mulai == null || selesai == null) throw new Error('Jam tidak valid: ' + r.jam);
+      let id = String(r.id || ''); if (!id) { do { n++; id = r.shift + '-N' + Date.now().toString(36) + n; } while (ada[id]); }
+      return { id: id, shift: String(r.shift), jam: String(r.jam).trim(), mulai: mulai, selesai: selesai, tugas: String(r.tugas).trim().toUpperCase().slice(0, 120), tipe: r.tipe === 'semua' ? 'semua' : 'satu', auto: String(r.auto || ''), kondisional: r.kondisional ? 1 : 0, urut: i + 1, aktif: 1 };
+    });
+    withLock_(function () { writeAll_('todo_tpl', out); });
+    log_(a.username, 'template to-do', out.length + ' tugas');
+    return todoTemplate_();
+  },
+  /** Admin: tulis ulang sheet hari tertentu sekarang. */
+  todoSheet: function (req) { auth_(req, true); const t = String(req.tanggal || today_()); todoSheetHari_(t); return { url: todoSheetUrl_() }; }
+});
+
+/* ---------- Sheet "TO DO LIST KARTASURA-2299" (format seperti sheet lama, satu tab per tanggal) ---------- */
+function todoFile_() {
+  const p = PropertiesService.getScriptProperties(), id = p.getProperty('TODO_SHEET_ID');
+  if (id) { try { const f = DriveApp.getFileById(id); if (!f.isTrashed()) return SpreadsheetApp.openById(id); } catch (e) {} }
+  const ss = SpreadsheetApp.create('TO DO LIST KARTASURA-2299 (Basecamp)');
+  ss.setSpreadsheetTimeZone(CFG.TZ);
+  const f = DriveApp.getFileById(ss.getId()); f.moveTo(folderBasecamp_());
+  try { f.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW); } catch (e) {}
+  p.setProperty('TODO_SHEET_ID', ss.getId());
+  return ss;
+}
+function todoSheetHari_(tanggal) {
+  const H = todoHari_(tanggal, null), ss = todoFile_();
+  const BLN = ['JAN', 'FEB', 'MAR', 'APR', 'MEI', 'JUN', 'JUL', 'AGU', 'SEP', 'OKT', 'NOV', 'DES'];
+  const nama = Number(tanggal.slice(8)) + ' ' + BLN[Number(tanggal.slice(5, 7)) - 1] + ' ' + tanggal.slice(0, 4);
+  let sh = ss.getSheetByName(nama);
+  if (!sh) { sh = ss.insertSheet(nama, 0); } else { sh.clear(); try { sh.getRange(1, 1, sh.getMaxRows(), sh.getMaxColumns()).removeCheckboxes(); } catch (e) {} }
+  const pd = H.orang.filter(function (p) { return p.kode === 'PD'; }), sb = H.orang.filter(function (p) { return p.kode === 'SB'; });
+  const mid = H.orang.filter(function (p) { return p.kode === 'MD' || p.kode === 'MC'; }), off = H.orang.filter(function (p) { return p.off; });
+  const tglPanjang = Number(tanggal.slice(8)) + ' ' + ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'][Number(tanggal.slice(5, 7)) - 1] + ' ' + tanggal.slice(0, 4);
+  const blok = function (kode, orang3) {
+    const rows = []; let jamLalu = '';
+    H.tpl.filter(function (t) { return t.shift === kode; }).forEach(function (t) {
+      const dn = H.done[t.id] || {}, auto = !!H.auto[t.auto], adaCek = Object.keys(dn).length > 0;
+      let pertama = true;
+      const v = orang3.map(function (p) {
+        if (!p || p.ids.indexOf(t.id) < 0) return '';
+        if (t.tipe === 'semua') return !!dn[p.key];
+        const x = !!dn[p.key] || (!adaCek && auto && pertama); pertama = false; return x;
+      });
+      rows.push([t.jam === jamLalu ? '' : t.jam, t.tugas + (auto && !adaCek ? ' ✓ otomatis' : '')].concat(v));
+      jamLalu = t.jam;
+    });
+    return rows;
+  };
+  const kiri = blok('PD', [pd[0], pd[1], mid[0] || null]), kanan = blok('SB', [sb[0], sb[1], mid[0] || null]);
+  const n = Math.max(kiri.length, kanan.length);
+  const head = [
+    ['', tglPanjang, '', 'SHIFT PAGI', '', mid.length ? 'MIDDLE' : 'OFF', '', tglPanjang, '', 'SHIFT SIANG', '', mid.length ? 'MIDDLE' : 'OFF'],
+    ['', 'WAKTU', 'LIST', '', '', '', '', 'WAKTU', 'LIST', '', '', ''],
+    ['', 'SHIFT PAGI', '', pd[0] ? pd[0].nama.split(' ')[0].toUpperCase() : 'ORANG 1', pd[1] ? pd[1].nama.split(' ')[0].toUpperCase() : 'ORANG 2', mid[0] ? mid[0].nama.split(' ')[0].toUpperCase() : (off.map(function (p) { return p.nama.split(' ')[0].toUpperCase(); }).join(', ') || '-'),
+      '', 'SHIFT SIANG', '', sb[0] ? sb[0].nama.split(' ')[0].toUpperCase() : 'ORANG 3', sb[1] ? sb[1].nama.split(' ')[0].toUpperCase() : 'ORANG 4', mid[0] ? mid[0].nama.split(' ')[0].toUpperCase() : (off.map(function (p) { return p.nama.split(' ')[0].toUpperCase(); }).join(', ') || '-')]
+  ];
+  const body = [];
+  for (let i = 0; i < n; i++) { const a = kiri[i] || ['', '', '', '', ''], b = kanan[i] || ['', '', '', '', '']; body.push([''].concat(a, [''], b)); }
+  const ketP = H.orang.filter(function (p) { return p.ket; }).map(function (p) { return p.nama.split(' ')[0].toUpperCase() + ': ' + p.ket.ket; }).join(' · ');
+  const all = head.concat(body, [['', 'KETERANGAN (TIDAK TERCHECKLIST)', ketP, '', '', '', '', 'OFF', off.map(function (p) { return p.nama + (p.kode ? ' (' + p.kode + ')' : ''); }).join(', '), '', '', '']]);
+  if (sh.getMaxRows() < all.length + 2) sh.insertRowsAfter(sh.getMaxRows(), all.length + 2 - sh.getMaxRows());
+  sh.getRange(2, 1, all.length, 12).setValues(all.map(function (r) { return r.map(function (v) { return v === true ? true : v === false ? false : v; }); }));
+  // checkbox untuk sel TRUE/FALSE
+  for (let i = 0; i < body.length; i++) {
+    [3, 4, 5, 9, 10, 11].forEach(function (c) { const v = body[i][c]; if (v === true || v === false) sh.getRange(5 + i, c + 1).insertCheckboxes(); });
+  }
+  sh.getRange(2, 2, 3, 11).setFontWeight('bold');
+  sh.getRange(4, 2, 1, 5).setBackground('#FCE5CD'); sh.getRange(4, 8, 1, 5).setBackground('#C9DAF8');
+  sh.getRange(4, 2, body.length + 1, 5).setBorder(true, true, true, true, true, true);
+  sh.getRange(4, 8, body.length + 1, 5).setBorder(true, true, true, true, true, true);
+  [20, 110, 360, 80, 80, 80, 20, 110, 360, 80, 80, 80].forEach(function (w, c) { sh.setColumnWidth(c + 1, w); });
+  sh.getRange(5, 2, body.length, 11).setVerticalAlignment('middle').setWrap(true);
+  return sh;
+}
+function todoSheetSync_() {
+  const p = PropertiesService.getScriptProperties(), d = jsonOr_(p.getProperty('TODO_DIRTY'), {}), hari = Object.keys(d);
+  const t = today_();
+  if (p.getProperty('TODO_HARI_AKHIR') !== t && hari.indexOf(t) < 0) hari.push(t); // tab hari ini dibuat sekali walau belum ada centang
+  p.setProperty('TODO_DIRTY', '{}');
+  hari.sort().slice(-4).forEach(function (h) { try { todoSheetHari_(h); if (h === t) p.setProperty('TODO_HARI_AKHIR', t); } catch (e) { Logger.log('todo sheet ' + h + ': ' + e); } });
 }
 
 /* ===================== HTTP ===================== */
@@ -1888,6 +2156,15 @@ function notifFor_(u) {
 
   // tugas video opening/closing sesuai shift hari ini
   try { dokTugas_(u, today).forEach(function (x) { items.push(x); }); } catch (e) { /* jadwal/Drive belum siap */ }
+  try { // to-do harian: tugas shift-ku yang sudah lewat 30 menit tapi belum dicentang
+    const H = todoHari_(today, u), me = H.orang.filter(function (p) { return p.key === H.saya; })[0];
+    if (me && !me.off) {
+      const lewat = H.tpl.concat(todoUntuk_(H.tpl, me.kode, settings_())).filter(function (t, i, arr) { return me.ids.indexOf(t.id) >= 0 && arr.findIndex(function (y) { return y.id === t.id; }) === i; })
+        .filter(function (t) { const dn = H.done[t.id] || {}; return !t.kondisional && t.selesai + 30 <= H.menit && !(t.tipe === 'semua' ? dn[me.key] : (Object.keys(dn).length || H.auto[t.auto])); });
+      if (lewat.length) items.push({ id: 'live-todo-' + today + '-' + lewat.length, live: true, level: 'cek', jenis: 'tim', waktu: today + ' ' + hhmm_(lewat[lewat.length - 1].selesai).replace('.', ':') + ':00',
+        judul: lewat.length + ' tugas to-do belum dicentang', isi: lewat.slice(0, 3).map(function (t) { return t.tugas.toLowerCase(); }).join(' · '), link: '#/todo' });
+    }
+  } catch (e) {}
   // BAP kas: closing belum diisi, laporan POS, setoran terlambat, petty cash
   try { bapNotif_(u, today).forEach(function (x) { items.push(x); }); } catch (e) { Logger.log('notif kas: ' + e); }
   try { badges.fb = fbMasuk_(u).filter(function (x) { return !x.dibaca; }).length; } catch (e) { badges.fb = 0; }
@@ -3368,6 +3645,7 @@ function cekEmailDsr() {
   try { hangatkanDsr_(); } catch (e) { Logger.log('hangat dsr: ' + e); }
   try { siapkanBriefing_(); } catch (e) { Logger.log('briefing: ' + e); }
   try { dokAntre_(false); } catch (e) { Logger.log('dok antre: ' + e); }
+  try { todoSheetSync_(); } catch (e) { Logger.log('todo sheet: ' + e); }
   try { const pp = PropertiesService.getScriptProperties(); if (pp.getProperty('REKAP_ANTRE') && Date.now() - Number(pp.getProperty('REKAP_PEMICU') || 0) > 5 * 60 * 1000) prosesRekap(); } catch (e) { Logger.log('rekap antre: ' + e); }
   const lab = labelOf_(DSR_EMAIL.LABEL), labGagal = labelOf_(DSR_EMAIL.LABEL_GAGAL);
   const threads = GmailApp.search('from:' + DSR_EMAIL.FROM + ' -label:' + DSR_EMAIL.LABEL + ' -label:' + DSR_EMAIL.LABEL_GAGAL + ' newer_than:3d', 0, 30);
