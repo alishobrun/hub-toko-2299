@@ -5721,6 +5721,7 @@
   function viewTodo(v) {
     pageHead(v, 'To-Do Harian', 'Checklist tugas per shift sesuai jadwal. Centang saat selesai; tugas yang tidak tercentang beri keterangan.');
     var tgl = todayJkt(), lihat = null; // lihat = key orang yang sedang dibuka (admin)
+    var todoFilt = 'semua', todoBuka = {};
     var box = el('div', null, skel(3));
     v.append(box);
     function muat() {
@@ -5749,7 +5750,7 @@
         el('button', { type: 'button', class: 'btn btn-ghost btn-sm', 'aria-label': 'Hari berikutnya', disabled: tgl >= d.hariIni ? true : null, onclick: function () { if (tgl < d.hariIni) { tgl = addDays(tgl, 1); box.replaceChildren(skel(3)); muat(); } } }, '›'),
         tgl !== d.hariIni ? el('button', { type: 'button', class: 'btn btn-ghost btn-sm', text: 'Hari ini', onclick: function () { tgl = d.hariIni; box.replaceChildren(skel(3)); muat(); } }) : null);
       // ringkasan tim
-      var tim = el('div', { class: 'card section' }, el('div', { class: 'card-head' }, el('h3', { text: 'Tim hari itu' }),
+      var tim = el('div', { class: 'card section' }, el('div', { class: 'card-head td-timhead' }, el('h3', { text: 'Tim hari itu' }),
           el('div', { class: 'row-btns' }, d.sheet ? el('a', { class: 'btn btn-ghost btn-sm', href: d.sheet, target: '_blank', rel: 'noopener' }, icon('file'), 'Lihat sheet') : null,
             d.admin ? el('button', { type: 'button', class: 'btn btn-ghost btn-sm', onclick: rekap }, icon('chart'), 'Rekap') : null,
             d.admin ? el('button', { type: 'button', class: 'btn btn-ghost btn-sm', onclick: editTpl }, icon('list'), 'Template') : null)),
@@ -5762,40 +5763,66 @@
       // checklist orang yang dibuka
       var cek = null;
       if (buka && !buka.off) {
-        var bolehUbah = buka.key === d.saya || d.admin;
+        var bolehUbah = (buka.key === d.saya || d.admin) && d.menit >= 0;
         var ts = buka.ids.map(function (id) { return T[id]; }).filter(Boolean).sort(function (a, b) { return a.mulai - b.mulai || a.urut - b.urut; });
         var grup = []; ts.forEach(function (t) { var g = grup[grup.length - 1]; if (!g || g.jam !== t.jam) grup.push(g = { jam: t.jam, mulai: t.mulai, selesai: t.selesai, ts: [] }); g.ts.push(t); });
-        var h = hitung(buka);
-        var ketIn = el('textarea', { rows: 2, placeholder: 'Keterangan tugas yang tidak tercentang (mis. sampling ditunda karena barang datang)', disabled: bolehUbah ? null : true }, buka.ket ? buka.ket.ket : '');
-        cek = el('div', { class: 'card section' },
-          el('div', { class: 'card-head' }, el('div', null, el('h3', { text: (buka.key === d.saya ? 'Tugas saya' : 'Tugas ' + titleCase(buka.nama)) + ' · shift ' + buka.shift }),
-            el('p', { class: 'sub', text: h.s + ' dari ' + h.w + ' tugas selesai (' + h.pct + '%)' + (buka.kode === 'MD' || buka.kode === 'MC' ? ' · middle ' + hhmmM(d.mid[0]) + '–' + hhmmM(d.mid[1]) : '') }))),
-          bar(h.s, h.w, h.pct >= 90 ? 'good' : ''),
-          grup.map(function (g) {
-            return el('div', { class: 'todo-blok' + (g.selesai <= d.menit ? ' lewat' : g.mulai <= d.menit ? ' kini' : '') },
-              el('div', { class: 'todo-jam', text: g.jam }),
-              el('div', null, g.ts.map(function (t) {
+        var h = hitung(buka), telatN = 0;
+        ts.forEach(function (t) { if (!t.kondisional && !selesai(buka, t) && t.selesai + 30 <= d.menit) telatN++; });
+        var mulaiS = ts.length ? ts[0].mulai : 0, akhirS = ts.length ? Math.max.apply(null, ts.map(function (t) { return t.selesai; })) : 0;
+        var ring = el('div', { class: 'td-ring', html: '<svg viewBox="0 0 44 44" aria-hidden="true"><circle cx="22" cy="22" r="19" class="bg"/><circle cx="22" cy="22" r="19" class="fg' + (h.pct >= 90 ? ' ok' : '') + '" stroke-dasharray="' + (119.4 * h.pct / 100).toFixed(1) + ' 119.4"/></svg><b>' + h.pct + '<small>%</small></b>' });
+        var ketIn = el('textarea', { rows: 2, placeholder: 'Contoh: sampling ditunda karena barang datang', disabled: bolehUbah ? null : true }, buka.ket ? buka.ket.ket : '');
+        var toggle = function (t, on) {
+          var dn = d.done[t.id] = d.done[t.id] || {}, simpan = dn[buka.key];
+          if (on) dn[buka.key] = { nama: buka.nama, waktu: hhmmM(Math.max(0, d.menit)).replace('.', ':') }; else delete dn[buka.key];
+          gambar(d);
+          api('todoCek', { tanggal: tgl, id: t.id, on: on, key: buka.key }).catch(function (e) {
+            if (simpan) dn[buka.key] = simpan; else delete dn[buka.key];
+            gambar(d); toast(e.message, true);
+          });
+        };
+        var blokEl = grup.map(function (g) {
+          var tampil = g.ts.filter(function (t) { var s = selesai(buka, t); return todoFilt === 'semua' || (todoFilt === 'belum' ? !s : !!s); });
+          if (!tampil.length) return null;
+          var wajib = g.ts.filter(function (t) { return !t.kondisional; }), beres = wajib.filter(function (t) { return selesai(buka, t); }).length;
+          var semuaBeres = wajib.length && beres === wajib.length, telatG = !semuaBeres && g.selesai + 30 <= d.menit;
+          var kini = g.mulai <= d.menit && d.menit < g.selesai;
+          var st = semuaBeres ? 'ok' : telatG ? 'telat' : kini ? 'kini' : g.selesai <= d.menit ? 'lewat' : 'nanti';
+          var lipat = semuaBeres && !kini && todoFilt === 'semua' && !todoBuka[g.jam];
+          return el('section', { class: 'td-blok ' + st },
+            el('div', { class: 'td-rail' }, el('i')),
+            el('div', { class: 'td-isi' },
+              el('button', { type: 'button', class: 'td-bh', 'aria-expanded': String(!lipat), onclick: function () { if (semuaBeres) { todoBuka[g.jam] = lipat; gambar(d); } } },
+                el('span', { class: 'td-jam', text: g.jam.replace(/:/g, '.') }),
+                kini ? el('span', { class: 'td-pill now', text: 'Sekarang' }) : telatG ? el('span', { class: 'td-pill late', text: 'Terlambat' }) : null,
+                el('span', { class: 'td-cnt', text: !wajib.length ? 'Opsional' : semuaBeres ? 'Selesai ✓' : beres + '/' + wajib.length })),
+              lipat ? null : el('div', { class: 'td-list' }, tampil.map(function (t) {
                 var s = selesai(buka, t), telat = !s && !t.kondisional && t.selesai + 30 <= d.menit;
-                var cb = el('input', { type: 'checkbox', checked: s && !s.auto && !s.orangLain ? true : null, disabled: !bolehUbah || (s && (s.auto || s.orangLain)) || d.menit < 0 ? true : null, 'aria-label': t.tugas });
-                cb.addEventListener('change', function () {
-                  cb.disabled = true;
-                  api('todoCek', { tanggal: tgl, id: t.id, on: cb.checked, key: buka.key }).then(muat).catch(function (e) { cb.disabled = false; cb.checked = !cb.checked; toast(e.message, true); });
-                });
-                return el('label', { class: 'todo-item' + (s ? ' ok' : '') + (telat ? ' telat' : '') },
-                  s && (s.auto || s.orangLain) ? el('span', { class: 'todo-done', text: '✓' }) : cb,
-                  el('span', { class: 'todo-txt' }, el('span', { text: t.tugas.charAt(0) + t.tugas.slice(1).toLowerCase() }),
-                    el('small', null,
-                      t.tipe === 'semua' ? el('i', { class: 'todo-tag', text: 'tiap orang' }) : el('i', { class: 'todo-tag', text: 'cukup 1 orang' }),
-                      t.kondisional ? el('i', { class: 'todo-tag', text: 'kondisional' }) : null,
-                      t.auto ? el('i', { class: 'todo-tag auto', text: 'otomatis' }) : null,
-                      s ? ' ' + (s.auto ? TODO_AUTO[t.auto] + ' · ' + s.nama + ' ' + s.waktu : '✓ ' + titleCase(s.nama) + ' ' + s.waktu) : telat ? ' belum dicentang' : '')));
-              })));
-          }),
-          el('div', { class: 'field', style: 'margin-top:12px' }, el('label', { text: 'Keterangan (tidak tercentang)' }), ketIn),
-          bolehUbah ? el('div', { class: 'row-btns' }, el('button', { type: 'button', class: 'btn btn-primary btn-sm', onclick: function (e) {
-            var b = e.currentTarget; b.disabled = true;
-            api('todoKet', { tanggal: tgl, key: buka.key, ket: ketIn.value }).then(function () { toast('Keterangan disimpan'); b.disabled = false; }).catch(function (er) { b.disabled = false; toast(er.message, true); });
-          } }, icon('check'), 'Simpan keterangan')) : null);
+                var kunci = !bolehUbah || (s && (s.auto || s.orangLain));
+                var meta = s ? (s.auto ? 'Otomatis · ' + TODO_AUTO[t.auto] + (s.waktu ? ' · ' + s.waktu : '') : (s.orangLain ? 'Dikerjakan ' + titleCase(s.nama) : 'Selesai') + (s.waktu ? ' · ' + s.waktu : ''))
+                  : t.kondisional ? 'Kondisional, kerjakan bila perlu' : telat ? 'Belum dicentang' : t.tipe === 'semua' ? 'Wajib tiap orang' : 'Cukup satu orang';
+                return el('button', { type: 'button', class: 'td-item' + (s ? ' done' : '') + (telat ? ' late' : '') + (t.kondisional ? ' opt' : ''), role: 'checkbox', 'aria-checked': String(!!s), disabled: kunci ? true : null,
+                  onclick: function () { toggle(t, !s); } },
+                  el('span', { class: 'td-box', html: s ? IC.check : '' }),
+                  el('span', { class: 'td-txt' }, el('span', { class: 'td-nama', text: todoKalimat(t.tugas) }), el('span', { class: 'td-meta', text: meta })),
+                  t.auto && !s ? el('span', { class: 'td-tag', text: 'Auto' }) : null);
+              }))));
+        });
+        cek = el('div', { class: 'card section td-card' },
+          el('div', { class: 'td-top' }, ring,
+            el('div', { class: 'td-judul' },
+              el('h3', { text: buka.key === d.saya ? 'Tugas saya' : 'Tugas ' + titleCase(buka.nama) }),
+              el('p', { text: 'Shift ' + buka.shift + (ts.length ? ' · ' + hhmmM(mulaiS) + '–' + hhmmM(akhirS) : '') }),
+              el('div', { class: 'td-stat' },
+                el('span', { class: 'ok', text: h.s + ' selesai' }),
+                el('span', { text: (h.w - h.s) + ' sisa' }),
+                telatN ? el('span', { class: 'late', text: telatN + ' terlambat' }) : null))),
+          el('div', { class: 'td-filter' }, segmented([['semua', 'Semua'], ['belum', 'Belum'], ['selesai', 'Selesai']], todoFilt, function (f) { todoFilt = f; gambar(d); })),
+          el('div', { class: 'td-time' }, blokEl.filter(Boolean).length ? blokEl : el('p', { class: 'muted td-kosong', text: todoFilt === 'belum' ? 'Semua tugas sudah dicentang. Mantap!' : 'Belum ada tugas yang dicentang.' })),
+          el('div', { class: 'td-ket' }, el('label', { text: 'Keterangan tugas yang tidak tercentang' }), ketIn,
+            bolehUbah ? el('button', { type: 'button', class: 'btn btn-ghost btn-sm', onclick: function (e) {
+              var b = e.currentTarget; b.disabled = true;
+              api('todoKet', { tanggal: tgl, key: buka.key, ket: ketIn.value }).then(function () { toast('Keterangan disimpan'); b.disabled = false; }).catch(function (er) { b.disabled = false; toast(er.message, true); });
+            } }, icon('check'), 'Simpan') : null));
       } else if (buka && buka.off) {
         cek = el('div', { class: 'card section' }, el('p', { class: 'muted', text: titleCase(buka.nama) + ' ' + buka.shift + ' hari itu.' }));
       } else if (!d.admin) {
@@ -5803,6 +5830,11 @@
       }
       var off = d.orang.filter(function (p) { return p.off; });
       box.replaceChildren(nav, cek || el('div'), tim, off.length ? el('p', { class: 'muted', style: 'margin:4px 2px', text: 'OFF / tidak masuk: ' + off.map(function (p) { return titleCase(p.nama) + ' (' + p.kode + ')'; }).join(', ') }) : null);
+    }
+    var TD_KAPITAL = /^(MOM|SKU|VM|PIC|BAP|CRM|PO|RO|SOH|STO|POS|AC|ATK|DSR|SL|RA|WA|IG|QR|ID|OK)$/;
+    function todoKalimat(x) {
+      var w = String(x || '').toLowerCase().split(' ').map(function (k) { return TD_KAPITAL.test(k.toUpperCase().replace(/[^A-Z]/g, '')) ? k.toUpperCase() : k; }).join(' ');
+      return w.charAt(0).toUpperCase() + w.slice(1);
     }
     function hhmmM(m) { return ('0' + Math.floor(m / 60)).slice(-2) + '.' + ('0' + (m % 60)).slice(-2); }
     function rekap() {
