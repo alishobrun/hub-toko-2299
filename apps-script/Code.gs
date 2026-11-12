@@ -11,7 +11,7 @@
 /** Versi kode. WAJIB dinaikkan setiap kali Code.gs diubah (format yyyy-MM-dd.n),
  *  lalu simpan ke GitHub (alishobrun/hub-toko-2299) SEBELUM dipasang. Halaman Kesehatan Data
  *  membandingkan angka ini dengan GitHub supaya kode yang dipasang di luar GitHub ketahuan. */
-const KODE_VERSI = '2026-11-12.3';
+const KODE_VERSI = '2026-11-12.4';
 
 const CFG = {
   STORE: '2299',
@@ -316,13 +316,15 @@ function todoSheetHari_(tanggal) {
     });
     return rows;
   };
-  const kiri = blok('PD', [pd[0], pd[1], mid[0] || null]), kanan = blok('SB', [sb[0], sb[1], mid[0] || null]);
+  const k3 = pd[2] || mid[0] || null, s3 = sb[2] || mid[pd[2] ? 0 : 1] || (pd[2] ? null : mid[0]) || null; // kolom ke-3: orang ke-3 di shift itu, kalau tidak ada: middle
+  const lab3 = function (p, sh) { return p ? p.nama.split(' ')[0].toUpperCase() : (off.map(function (o) { return o.nama.split(' ')[0].toUpperCase(); }).join(', ') || '-'); };
+  const kiri = blok('PD', [pd[0], pd[1], k3]), kanan = blok('SB', [sb[0], sb[1], s3]);
   const n = Math.max(kiri.length, kanan.length);
   const head = [
-    ['', tglPanjang, '', 'SHIFT PAGI', '', mid.length ? 'MIDDLE' : 'OFF', '', tglPanjang, '', 'SHIFT SIANG', '', mid.length ? 'MIDDLE' : 'OFF'],
+    ['', tglPanjang, '', 'SHIFT PAGI', '', k3 ? (pd.indexOf(k3) >= 0 ? 'SHIFT PAGI' : 'MIDDLE') : 'OFF', '', tglPanjang, '', 'SHIFT SIANG', '', s3 ? (sb.indexOf(s3) >= 0 ? 'SHIFT SIANG' : 'MIDDLE') : 'OFF'],
     ['', 'WAKTU', 'LIST', '', '', '', '', 'WAKTU', 'LIST', '', '', ''],
-    ['', 'SHIFT PAGI', '', pd[0] ? pd[0].nama.split(' ')[0].toUpperCase() : 'ORANG 1', pd[1] ? pd[1].nama.split(' ')[0].toUpperCase() : 'ORANG 2', mid[0] ? mid[0].nama.split(' ')[0].toUpperCase() : (off.map(function (p) { return p.nama.split(' ')[0].toUpperCase(); }).join(', ') || '-'),
-      '', 'SHIFT SIANG', '', sb[0] ? sb[0].nama.split(' ')[0].toUpperCase() : 'ORANG 3', sb[1] ? sb[1].nama.split(' ')[0].toUpperCase() : 'ORANG 4', mid[0] ? mid[0].nama.split(' ')[0].toUpperCase() : (off.map(function (p) { return p.nama.split(' ')[0].toUpperCase(); }).join(', ') || '-')]
+    ['', 'SHIFT PAGI', '', pd[0] ? pd[0].nama.split(' ')[0].toUpperCase() : 'ORANG 1', pd[1] ? pd[1].nama.split(' ')[0].toUpperCase() : 'ORANG 2', lab3(k3),
+      '', 'SHIFT SIANG', '', sb[0] ? sb[0].nama.split(' ')[0].toUpperCase() : 'ORANG 3', sb[1] ? sb[1].nama.split(' ')[0].toUpperCase() : 'ORANG 4', lab3(s3)]
   ];
   const body = [];
   for (let i = 0; i < n; i++) { const a = kiri[i] || ['', '', '', '', ''], b = kanan[i] || ['', '', '', '', '']; body.push([''].concat(a, [''], b)); }
