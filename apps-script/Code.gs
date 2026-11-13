@@ -11,7 +11,7 @@
 /** Versi kode. WAJIB dinaikkan setiap kali Code.gs diubah (format yyyy-MM-dd.n),
  *  lalu simpan ke GitHub (alishobrun/hub-toko-2299) SEBELUM dipasang. Halaman Kesehatan Data
  *  membandingkan angka ini dengan GitHub supaya kode yang dipasang di luar GitHub ketahuan. */
-const KODE_VERSI = '2026-11-12.5';
+const KODE_VERSI = '2026-11-13.1';
 
 const CFG = {
   STORE: '2299',
@@ -2178,33 +2178,7 @@ Object.assign(API, {
       o.sku = String(o.sku); o.generic = String(o.generic || '');
       return o;
     });
-    return withLock_(function () {
-      writeAll_('bin', objs);
-      katalogBaru_();
-      const today = today_();
-      const first = read_('varian_pertama');
-      const baseline = first.length === 0;
-      const have = {};
-      first.forEach(function (x) { have[String(x.varian)] = 1; });
-      const add = [];
-      objs.forEach(function (o) {
-        if (!(o.total > 0) || o.zona === 'Damage') return;
-        const k = varianKey_(o.sku, o.nama);
-        if (have[k]) return;
-        have[k] = 1;
-        add.push({ varian: k, generic: k.split('.')[0], pertama: today, baseline: baseline ? 'ya' : '' });
-      });
-      appendRows_('varian_pertama', add);
-      const skus = {};
-      let pcs = 0;
-      objs.forEach(function (o) { skus[o.sku] = 1; pcs += o.total; });
-      append_('bin_upload', { id: uploadId_(u.username), waktu: now_(), username: u.username, nama_file: String(req.fileName || '').slice(0, 120),
-        baris: objs.length, sku: Object.keys(skus).length, pcs: pcs });
-      log_(u.username, 'unggah by bin', objs.length + ' baris, ' + pcs + ' pcs' + (baseline ? '' : ', ' + add.length + ' varian baru di toko'));
-      if (u.role !== 'admin') notif_('admin', 'info', 'dsr', 'Stok by bin diunggah oleh ' + u.nama,
-        rupiah_(pcs) + ' pcs · ' + Object.keys(skus).length + ' SKU' + (baseline ? '' : ' · ' + add.length + ' varian baru masuk toko'), '#/stokart');
-      return { baris: objs.length, sku: Object.keys(skus).length, pcs: pcs, varianBaru: baseline ? 0 : add.length, awal: baseline };
-    }, 120000);
+    return simpanBin_(objs, u, req.fileName);
   },
 
   binData: function (req) {
@@ -2216,7 +2190,7 @@ Object.assign(API, {
     const pertama = {};
     read_('varian_pertama').forEach(function (x) { pertama[String(x.varian)] = x.baseline === 'ya' ? '' : String(x.pertama); });
     return {
-      upload: last ? { waktu: String(last.waktu), nama: namaUser_(last.username), file: String(last.nama_file), pcs: Number(last.pcs), sku: Number(last.sku) } : null,
+      upload: last ? { waktu: String(last.waktu), nama: last.username === 'email' ? 'Email CARE (otomatis)' : namaUser_(last.username), file: String(last.nama_file), pcs: Number(last.pcs), sku: Number(last.sku) } : null,
       kolom: F, rows: rows, pertama: pertama, today: today_(), naHari: Number(settings_().na_hari) || CFG.NA_HARI
     };
   },
@@ -2225,7 +2199,7 @@ Object.assign(API, {
     auth_(req);
     const names = namesMap_();
     return read_('bin_upload').slice(-15).reverse().map(function (r) {
-      return { waktu: String(r.waktu), nama: names[r.username] || r.username, file: String(r.nama_file), baris: Number(r.baris), sku: Number(r.sku), pcs: Number(r.pcs) };
+      return { waktu: String(r.waktu), nama: r.username === 'email' ? 'Email CARE (otomatis)' : (names[r.username] || r.username), file: String(r.nama_file), baris: Number(r.baris), sku: Number(r.sku), pcs: Number(r.pcs) };
     });
   },
 
@@ -3506,6 +3480,100 @@ Object.assign(API, {
  * CARE mengirim email "Export ItemDSRReport_….xlsx selesai diproses" berisi link unduhan.
  * Tiap 15 menit Basecamp mengambil file dari link itu, membaca, lalu mengimpornya.
  * ===================================================================== */
+/** Simpan stok by bin (dipakai unggah manual & otomatis dari email). objs = baris sesuai TABS.bin. */
+function simpanBin_(objs, u, fileName) {
+  const req = { fileName: fileName };
+  return withLock_(function () {
+    writeAll_('bin', objs);
+    katalogBaru_();
+    const today = today_();
+    const first = read_('varian_pertama');
+    const baseline = first.length === 0;
+    const have = {};
+    first.forEach(function (x) { have[String(x.varian)] = 1; });
+    const add = [];
+    objs.forEach(function (o) {
+      if (!(o.total > 0) || o.zona === 'Damage') return;
+      const k = varianKey_(o.sku, o.nama);
+      if (have[k]) return;
+      have[k] = 1;
+      add.push({ varian: k, generic: k.split('.')[0], pertama: today, baseline: baseline ? 'ya' : '' });
+    });
+    appendRows_('varian_pertama', add);
+    const skus = {};
+    let pcs = 0;
+    objs.forEach(function (o) { skus[o.sku] = 1; pcs += o.total; });
+    append_('bin_upload', { id: uploadId_(u.username), waktu: now_(), username: u.username, nama_file: String(req.fileName || '').slice(0, 120),
+      baris: objs.length, sku: Object.keys(skus).length, pcs: pcs });
+    log_(u.username, 'unggah by bin', objs.length + ' baris, ' + pcs + ' pcs' + (baseline ? '' : ', ' + add.length + ' varian baru di toko'));
+    if (u.role !== 'admin' && u.username !== 'email') notif_('admin', 'info', 'dsr', 'Stok by bin diunggah oleh ' + u.nama,
+      rupiah_(pcs) + ' pcs · ' + Object.keys(skus).length + ' SKU' + (baseline ? '' : ' · ' + add.length + ' varian baru masuk toko'), '#/stokart');
+    return { baris: objs.length, sku: Object.keys(skus).length, pcs: pcs, varianBaru: baseline ? 0 : add.length, awal: baseline };
+  }, 120000);
+}
+
+/* ---------- By Bin otomatis dari email CARE ("Export Inventory View By Bin selesai diproses") ---------- */
+const BIN_HEAD_ = { nama: 'SKU Name', sku: 'SKU Code', generic: 'Generic Code', bin: 'Bin Code', zona: 'Zone Code', lv2: 'MC LV 2', lv3: 'MC LV 3', lv4: 'MC LV 4',
+  brand: 'Brand', kategori: 'Bin Category', total: 'Total Qty', available: 'Available Qty', allocated: 'Allocated Qty', proses: 'In Process Qty', lokasi: 'Location' };
+function parseBinAoa_(aoa) {
+  const norm = function (x) { return String(x == null ? '' : x).trim().toLowerCase(); };
+  let hi = -1;
+  for (let i = 0; i < Math.min(aoa.length, 30); i++) { const r = (aoa[i] || []).map(norm); if (r.indexOf('sku code') >= 0 && r.indexOf('bin code') >= 0) { hi = i; break; } }
+  if (hi < 0) throw new Error('Kolom "SKU Code" dan "Bin Code" tidak ditemukan');
+  const head = aoa[hi].map(norm), idx = {};
+  Object.keys(BIN_HEAD_).forEach(function (k) { idx[k] = head.indexOf(norm(BIN_HEAD_[k])); });
+  ['sku', 'nama', 'bin', 'zona', 'total'].forEach(function (k) { if (idx[k] < 0) throw new Error('Kolom "' + BIN_HEAD_[k] + '" tidak ada di file'); });
+  const objs = []; let lokasi = '';
+  for (let j = hi + 1; j < aoa.length; j++) {
+    const r = aoa[j] || [];
+    const sku = String(r[idx.sku] == null ? '' : r[idx.sku]).trim();
+    if (!sku) continue;
+    if (!lokasi && idx.lokasi >= 0 && r[idx.lokasi]) lokasi = String(r[idx.lokasi]).replace(/\s+/g, ' ').trim();
+    const o = {};
+    TABS.bin.forEach(function (k) {
+      const v = idx[k] >= 0 ? r[idx[k]] : '';
+      o[k] = ['total', 'available', 'allocated', 'proses'].indexOf(k) >= 0 ? (Number(String(v == null ? 0 : v).replace(/,/g, '')) || 0) : (v == null ? '' : String(v).trim());
+    });
+    objs.push(o);
+  }
+  return { objs: objs, lokasi: lokasi };
+}
+/** Ambil export By Bin terbaru dari email (dipanggil tiap 15 menit). Hanya email paling baru yang diproses. */
+function cekEmailBin_() {
+  const p = PropertiesService.getScriptProperties();
+  const akhir = Number(p.getProperty('BIN_EMAIL_AKHIR') || 0);
+  const threads = GmailApp.search('from:' + DSR_EMAIL.FROM + ' subject:"Inventory View By Bin" newer_than:2d', 0, 10);
+  let pilih = null;
+  threads.forEach(function (th) {
+    th.getMessages().forEach(function (m) {
+      const t = m.getDate().getTime();
+      if (t > akhir && /By\s*Bin/i.test(m.getSubject()) && (!pilih || t > pilih.getDate().getTime())) pilih = m;
+    });
+  });
+  if (!pilih) return '';
+  const waktuEmail = pilih.getDate().getTime();
+  const tglEmail = Utilities.formatDate(pilih.getDate(), CFG.TZ, 'yyyy-MM-dd HH:mm:ss');
+  const ups = read_('bin_upload'), last = ups.length ? ups[ups.length - 1] : null;
+  if (last && last.username !== 'email' && String(last.waktu) > tglEmail) { p.setProperty('BIN_EMAIL_AKHIR', String(waktuEmail)); return 'By Bin dilewati (unggahan manual lebih baru)'; }
+  const body = pilih.getBody() + ' ' + pilih.getPlainBody();
+  const mm = body.match(/https:\/\/[A-Za-z0-9.\-]+\/export\/(export_by_bin_[A-Za-z0-9_\-]+\.xlsx)/i);
+  try {
+    if (!mm) throw new Error('Link unduhan tidak ditemukan di email');
+    const r = UrlFetchApp.fetch(mm[0], { muteHttpExceptions: true, followRedirects: true });
+    if (r.getResponseCode() !== 200) throw new Error('File tidak bisa diunduh (' + r.getResponseCode() + ')');
+    const x = parseBinAoa_(xlsxAoa_(r.getBlob()));
+    if (x.lokasi && x.lokasi.indexOf(CFG.STORE) < 0) throw new Error('Bukan stok toko ' + CFG.STORE + ' (' + x.lokasi + ')');
+    if (!x.objs.length) throw new Error('File tidak berisi baris stok');
+    const res = simpanBin_(x.objs, { username: 'email', nama: 'Email CARE', role: 'sistem' }, mm[1]);
+    p.setProperty('BIN_EMAIL_AKHIR', String(waktuEmail));
+    return 'By Bin ' + mm[1] + ': ' + res.baris + ' baris, ' + res.pcs + ' pcs';
+  } catch (e) {
+    p.setProperty('BIN_EMAIL_AKHIR', String(waktuEmail));
+    withLock_(function () { notif_('admin', 'cek', 'dsr', 'Stok by bin otomatis dari email gagal', (mm ? mm[1] + ': ' : '') + String(e.message || e).slice(0, 180), '#/unggahbin'); });
+    return 'GAGAL By Bin: ' + (e.message || e);
+  }
+}
+
 const DSR_EMAIL = { FROM: 'noreplyinfo@pos-eigerindo.com', LABEL: 'Basecamp-DSR', LABEL_GAGAL: 'Basecamp-DSR-gagal' };
 
 /** Simpan baris DSR (array sesuai DSR_FIELDS). Dipakai unggah manual & otomatis dari email. */
@@ -3615,6 +3683,7 @@ function cekEmailDsr() {
   try { hangatkanDsr_(); } catch (e) { Logger.log('hangat dsr: ' + e); }
   try { siapkanBriefing_(); } catch (e) { Logger.log('briefing: ' + e); }
   try { dokPaBaca_(); } catch (e) { Logger.log('dok pa baca: ' + e); }
+  try { const hb = cekEmailBin_(); if (hb) Logger.log(hb); } catch (e) { Logger.log('bin email: ' + e); }
   try { dokAntre_(false); } catch (e) { Logger.log('dok antre: ' + e); }
   try { todoSheetSync_(); } catch (e) { Logger.log('todo sheet: ' + e); }
   try { const pp = PropertiesService.getScriptProperties(); if (pp.getProperty('REKAP_ANTRE') && Date.now() - Number(pp.getProperty('REKAP_PEMICU') || 0) > 5 * 60 * 1000) prosesRekap(); } catch (e) { Logger.log('rekap antre: ' + e); }
