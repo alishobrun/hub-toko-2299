@@ -274,7 +274,9 @@
       judul: 'Diskon s/d', angka: maxD, produk: D.items.filter(function (it) { return prItem(it) && fotoBersih(it).length; }).sort(function (a, b) { return ((POTONG[b.g] ? 1 : 0) - (POTONG[a.g] ? 1 : 0)) || (prItem(b).d - prItem(a).d) || ((TERLARIS[a.g] || 999) - (TERLARIS[b.g] || 999)); }).slice(0, 3), sub: nPromo + ' artikel promo tersedia di toko · berlaku s/d ' + tglPendek(D.promoSampai), cta: 'Belanja barang promo', onclick: function () { pilihPromo(true); } }));
     var warna = ['', 's-hijau', 's-ungu', ''];
     var slidePromo = [];
-    promoTokoAktif().filter(function (p) { return p.mulai <= hariIni(); }).slice(0, 1).forEach(function (p, i) {
+    promoTokoAktif().filter(function (p) { return p.mulai <= hariIni(); })
+      // promo Event (mis. Guru/Dosen/Pelajar, 11.11) didahulukan; tampil maksimal 2 slide promo umum
+      .sort(function (a, b) { return (/event/i.test(b.jenis) ? 1 : 0) - (/event/i.test(a.jenis) ? 1 : 0); }).slice(0, 2).forEach(function (p, i) {
       var st = statusPromo(p.mulai, p.selesai);
       var J = pecahJudulPromo(p.judul);
       slidePromo.push(slideGaya({ warna: warna[(i + 1) % warna.length], tag: String(p.jenis || 'Promo').toUpperCase() === 'EAC' ? 'Member EAC' : judul(p.jenis || 'Promo'), status: st.teks, akhir: /akhir/.test(st.kelas),
@@ -287,8 +289,8 @@
         el('picture', null, el('source', { media: '(min-width: 700px)', srcset: b.d }), el('img', { src: b.m, alt: '', loading: 'lazy', decoding: 'async', referrerpolicy: 'no-referrer' })),
         el('span', { class: 'slide-sumber', text: 'eigeradventure.com · harga & promo online bisa beda dengan toko' }));
     });
-    // maksimal 4 slide: promo toko → kampanye → promo umum → kampanye
-    slides = slides.concat(kampanye.slice(0, 1), slidePromo, kampanye.slice(1, 2)).filter(Boolean).slice(0, 4);
+    // maksimal 5 slide: promo toko → kampanye → promo umum (≤2) → kampanye
+    slides = slides.concat(kampanye.slice(0, 1), slidePromo, kampanye.slice(1, 2)).filter(Boolean).slice(0, 5);
     $('#banner').classList.toggle('ada-foto', kampanye.length > 0);
     if (!slides.length) slides.push(el('div', { class: 'slide' }, el('small', { text: 'EIGER Store A. Yani Kartasura' }), el('b', { text: 'Siap jalan dari Kartasura' }),
       el('span', { text: 'Cek barang yang tersedia di toko, lalu tanya langsung lewat WhatsApp.' })));
