@@ -276,7 +276,7 @@
     var slidePromo = [];
     promoTokoAktif().filter(function (p) { return p.mulai <= hariIni(); })
       // promo Event (mis. Guru/Dosen/Pelajar, 11.11) didahulukan; tampil maksimal 2 slide promo umum
-      .sort(function (a, b) { return (/event/i.test(b.jenis) ? 1 : 0) - (/event/i.test(a.jenis) ? 1 : 0); }).slice(0, 2).forEach(function (p, i) {
+      .sort(function (a, b) { return ((/event/i.test(b.jenis) ? 1 : 0) - (/event/i.test(a.jenis) ? 1 : 0)) || (a.mulai < b.mulai ? 1 : a.mulai > b.mulai ? -1 : 0); }).slice(0, 2).forEach(function (p, i) {
       var st = statusPromo(p.mulai, p.selesai);
       var J = pecahJudulPromo(p.judul);
       slidePromo.push(slideGaya({ warna: warna[(i + 1) % warna.length], tag: String(p.jenis || 'Promo').toUpperCase() === 'EAC' ? 'Member EAC' : judul(p.jenis || 'Promo'), status: st.teks, akhir: /akhir/.test(st.kelas),
