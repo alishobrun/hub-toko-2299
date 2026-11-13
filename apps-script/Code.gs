@@ -11,7 +11,7 @@
 /** Versi kode. WAJIB dinaikkan setiap kali Code.gs diubah (format yyyy-MM-dd.n),
  *  lalu simpan ke GitHub (alishobrun/hub-toko-2299) SEBELUM dipasang. Halaman Kesehatan Data
  *  membandingkan angka ini dengan GitHub supaya kode yang dipasang di luar GitHub ketahuan. */
-const KODE_VERSI = '2026-11-13.1';
+const KODE_VERSI = '2026-11-13.2';
 
 const CFG = {
   STORE: '2299',
@@ -2721,7 +2721,12 @@ function dokPaFile_() {
   return f;
 }
 function dokPaTulis_(rows) {
-  const isi = rows.map(function (r) { return String(r.file_id) + '|' + String(r.nama).replace(/[|\r\n]/g, ' '); }).join('\n');
+  const BLN = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
+  // baris: file_id|nama|subfolder (tahun/bulan, mis. 2026/11 - November) — dipakai alur Power Automate
+  const isi = rows.map(function (r) {
+    const t = String(r.tanggal || String(r.nama).slice(0, 10)), y = t.slice(0, 4), m = Number(t.slice(5, 7)) || 1;
+    return String(r.file_id) + '|' + String(r.nama).replace(/[|\r\n]/g, ' ') + '|' + y + '/' + pad_(m) + ' - ' + BLN[m - 1];
+  }).join('\n');
   const f = dokPaFile_();
   if (f.getBlob().getDataAsString() !== isi) f.setContent(isi);
 }
