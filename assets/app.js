@@ -5729,7 +5729,7 @@
     var namaIn = el('input', { type: 'text', placeholder: 'Contoh: Retur Bazar Apparel Koli 1', maxlength: 60 });
     var skuIn = el('textarea', { rows: 8, class: 'sto-sku', placeholder: 'Satu SKU per baris (scan 2x = 2 pcs).\nBisa juga "SKU qty", mis. 910010397006 3', spellcheck: 'false' });
     var hasil = el('div');
-    var bin = null, upload = null, utamaGudang = true;
+    var bin = null, upload = null;
     var info = el('span', { class: 'sto-hitung muted' });
     skuIn.addEventListener('input', function () { var x = bacaSku(skuIn.value); info.textContent = x.n ? x.n + ' SKU · ' + x.pcs + ' pcs' : ''; });
     var dz = dropZone({ accept: '.xlsx,.xls,.csv', kecil: true, icon: 'file', judul: 'Atau ambil dari file Excel', ket: 'Kolom pertama SKU, kolom kedua qty (opsional)', onFiles: function (fs) {
@@ -5748,8 +5748,7 @@
       el('div', { class: 'card section' },
         el('div', { class: 'field' }, el('label', { text: 'Nama STO / koli' }), namaIn),
         el('div', { class: 'field' }, el('label', null, 'Daftar SKU ', info), skuIn), dz,
-        el('div', { class: 'sto-opsi' }, el('span', { class: 'muted', text: 'Kalau SKU ada di beberapa bin:' }),
-          segmented([['gudang', 'Utamakan gudang (WA)'], ['stok', 'Bin stok terbanyak']], 'gudang', function (x) { utamaGudang = x === 'gudang'; })),
+        el('p', { class: 'muted sto-catatan', text: 'Hanya bin gudang yang dipakai. Barang di selling area (bin berawalan S: SA, SB, SC, SH, …) tidak bisa dibuat STO, jadi ditandai dan tidak masuk file.' }),
         btn),
       hasil);
 
@@ -5801,12 +5800,13 @@
       if (!x.n) { toast('Isi dulu daftar SKU', true); return; }
       if (!bin) { toast('Data By Bin belum termuat', true); return; }
       var K = {}; bin.kolom.forEach(function (k, i) { K[k] = i; });
-      var stok = {}, nama = {};
+      var stok = {}, nama = {}, selling = {};
       bin.rows.forEach(function (r) {
-        var s = String(r[K.sku]), a = Number(r[K.available]) || 0;
+        var s = String(r[K.sku]), a = Number(r[K.available]) || 0, b = String(r[K.bin]);
         nama[s] = r[K.nama];
         if (a <= 0 || r[K.zona] === 'Damage' || !/saleable/i.test(String(r[K.kategori] || 'saleable'))) return;
-        (stok[s] = stok[s] || []).push({ bin: String(r[K.bin]), zona: String(r[K.zona]), sisa: a, awal: a });
+        if (/^S/i.test(b)) { (selling[s] = selling[s] || []).push(b + ': ' + a + ' pcs'); return; } // selling area: tidak bisa STO
+        (stok[s] = stok[s] || []).push({ bin: b, zona: String(r[K.zona]), sisa: a, awal: a });
       });
       pakaiLama().daftar.filter(function (d) { return d.nama !== namaSto; }).forEach(function (d) {
         d.rows.forEach(function (q) { (stok[q[0]] || []).forEach(function (b) { if (b.bin === q[1]) b.sisa = Math.max(0, b.sisa - q[2]); }); });
@@ -5815,11 +5815,7 @@
       x.urut.forEach(function (sku) {
         var n = x.butuh[sku], bs = (stok[sku] || []).slice();
         if (!nama[sku]) { tidakAda.push(sku); return; }
-        bs.sort(function (a, b) {
-          var ga = /^W/i.test(a.bin) ? 1 : 0, gb = /^W/i.test(b.bin) ? 1 : 0;
-          if (utamaGudang && ga !== gb) return gb - ga;
-          return b.sisa - a.sisa;
-        });
+        bs.sort(function (a, b) { return b.sisa - a.sisa; });
         var alt = bs.map(function (b) { return b.bin; });
         bs.forEach(function (b) {
           if (n <= 0 || b.sisa <= 0) return;
@@ -5828,14 +5824,14 @@
         });
         var r0 = rows.filter(function (r) { return r.sku === sku; });
         if (r0.length > 1) r0.forEach(function (r) { r.pecah = true; });
-        if (n > 0) kurang.push({ sku: sku, nama: nama[sku], kurang: n, minta: x.butuh[sku] });
+        if (n > 0) kurang.push({ sku: sku, nama: nama[sku], kurang: n, minta: x.butuh[sku], selling: selling[sku] || [] });
       });
       gambarHasil(namaSto, rows, tidakAda, kurang);
     }
     function gambarHasil(namaSto, rows, tidakAda, kurang) {
       var pcs = 0; rows.forEach(function (r) { pcs += r.qty; });
       var multi = rows.filter(function (r) { return r.alt.length > 1; }).length;
-      var toko = rows.filter(function (r) { return !/^W/i.test(r.bin); }).length;
+      var diSelling = kurang.filter(function (k) { return k.selling.length; }), habis = kurang.filter(function (k) { return !k.selling.length; });
       var unduh = function () {
         if (!window.XLSX) { toast('Pembuat Excel belum termuat, coba lagi', true); return; }
         var aoa = [['skucode', 'tf_qty', 'bin_code']].concat(rows.map(function (r) { return [Number(r.sku), r.qty, r.bin]; }));
@@ -5849,9 +5845,11 @@
         el('div', { class: 'card-head' }, el('div', null, el('h3', { text: namaSto }), el('p', { class: 'sub', text: rows.length + ' baris · ' + fNum(pcs) + ' pcs' })),
           el('button', { type: 'button', class: 'btn btn-primary btn-sm', disabled: rows.length ? null : true, onclick: unduh }, icon('download'), 'Unduh file STO')),
         tidakAda.length ? el('div', { class: 'sto-alert bad' }, el('b', { text: tidakAda.length + ' SKU tidak ada di stok toko (tidak dimasukkan): ' }), tidakAda.join(', ')) : null,
-        kurang.length ? el('div', { class: 'sto-alert bad' }, el('b', { text: 'Stok kurang dari jumlah scan: ' }), kurang.map(function (k) { return k.sku + ' (' + k.nama + ') minta ' + k.minta + ', kurang ' + k.kurang; }).join(' · ')) : null,
+        diSelling.length ? el('div', { class: 'sto-alert bad' }, el('b', { text: diSelling.length + ' SKU (masih) ada di selling area, tidak bisa dibuat STO: ' }),
+          el('ul', { class: 'sto-ul' }, diSelling.map(function (k) { return el('li', null, el('b', { text: k.sku }), ' ' + k.nama + ' — butuh ' + k.minta + ' pcs, ' + (k.kurang === k.minta ? 'di gudang tidak ada' : 'di gudang kurang ' + k.kurang) + '; ada di selling area ' + k.selling.join(', ')); })),
+          el('span', { text: 'Pindahkan dulu ke bin gudang (direct move / putaway) di CARE, export By Bin lagi, lalu buat ulang STO untuk SKU ini.' })) : null,
+        habis.length ? el('div', { class: 'sto-alert bad' }, el('b', { text: 'Stok di bin gudang kurang dari jumlah scan: ' }), habis.map(function (k) { return k.sku + ' (' + k.nama + ') minta ' + k.minta + ', kurang ' + k.kurang; }).join(' · ')) : null,
         multi ? el('div', { class: 'sto-alert' }, el('b', { text: multi + ' baris SKU-nya ada di lebih dari satu bin. ' }), 'Cek fisik barang diambil dari bin mana; kalau beda, ganti bin di tabel sebelum mengunduh.') : null,
-        toko ? el('div', { class: 'sto-alert' }, el('b', { text: toko + ' baris memakai bin area toko (bukan gudang). ' }), 'Itu satu-satunya lokasi yang tersedia untuk SKU tersebut.') : null,
         el('div', { class: 'tbl-wrap sto-wrap' }, el('table', { class: 't sto-tbl' },
           el('thead', null, el('tr', null, ['#', 'SKU', 'Nama', 'Qty', 'Bin'].map(function (h) { return el('th', { text: h }); }))),
           el('tbody', null, rows.map(function (r, i) {

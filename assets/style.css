@@ -1776,3 +1776,6 @@ html[data-theme=dark] .promo-tag{background:var(--orange-50);color:#FDBA74}
 .sto-tbl select{height:30px;border:1px solid var(--line);border-radius:8px;background:var(--panel);color:var(--fg);font:inherit;font-size:13px;padding:0 6px}
 .sto-tbl tr.sto-pecah td{background:var(--orange-50)}
 .sto-tbl td:nth-child(3){min-width:180px}
+.sto-catatan{margin:12px 0;font-size:12.5px}
+.sto-ul{margin:6px 0;padding-left:18px}
+.sto-ul li{margin:2px 0}
