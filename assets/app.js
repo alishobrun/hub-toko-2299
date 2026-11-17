@@ -266,6 +266,7 @@
       { icon: 'eye', id: 'display', label: 'Cek Display', desc: 'Barang belum terdisplay & display double' },
       { icon: 'search', id: 'cari', label: 'Cari Barang', desc: 'Lokasi bin per SKU, scan barcode' },
       { icon: 'tag', id: 'newarrival', label: 'New Arrival & Promo', desc: 'List promo bulanan: tag NEW ARRIVAL, Store Selected, lokasi bin' },
+      { icon: 'swap', id: 'buatsto', label: 'Buat STO', desc: 'Scan SKU → bin terbaru → file template STO Enquiry' },
       { icon: 'inbox', id: 'putaway', label: 'Putaway', desc: 'Bin tujuan barang datang + file import CARE' },
       { icon: 'inbox', id: 'saranreq', label: 'Saran Request', desc: 'Laris tapi stok tipis/habis' }] },
     { id: 'kasg', label: 'Kas', icon: 'cash', color: '#22C55E', items: [
@@ -5716,6 +5717,154 @@
     }
   }
 
+  /* ---------- Buat STO (template STO Enquiry dari scan SKU + bin terbaru) ---------- */
+  var STO_PAKAI_KEY = 'hub2299.stoPakai';
+  function stoWaktuFile(f) { // export_by_bin_17112026_131713.xlsx -> 2026-11-17 13:17
+    var m = String(f || '').match(/(\d{2})(\d{2})(\d{4})_(\d{2})(\d{2})(\d{2})/);
+    return m ? m[3] + '-' + m[2] + '-' + m[1] + ' ' + m[4] + ':' + m[5] : '';
+  }
+  function viewBuatSto(v) {
+    pageHead(v, 'Buat STO', 'Scan atau tempel kode SKU, Basecamp mengisi bin dari stok By Bin terbaru, lalu unduh file template STO Enquiry untuk diimport ke CARE.');
+    var status = el('div', { class: 'card sto-status' }, skel(1));
+    var namaIn = el('input', { type: 'text', placeholder: 'Contoh: Retur Bazar Apparel Koli 1', maxlength: 60 });
+    var skuIn = el('textarea', { rows: 8, class: 'sto-sku', placeholder: 'Satu SKU per baris (scan 2x = 2 pcs).\nBisa juga "SKU qty", mis. 910010397006 3', spellcheck: 'false' });
+    var hasil = el('div');
+    var bin = null, upload = null, utamaGudang = true;
+    var info = el('span', { class: 'sto-hitung muted' });
+    skuIn.addEventListener('input', function () { var x = bacaSku(skuIn.value); info.textContent = x.n ? x.n + ' SKU · ' + x.pcs + ' pcs' : ''; });
+    var dz = dropZone({ accept: '.xlsx,.xls,.csv', kecil: true, icon: 'file', judul: 'Atau ambil dari file Excel', ket: 'Kolom pertama SKU, kolom kedua qty (opsional)', onFiles: function (fs) {
+      if (!window.XLSX) { toast('Pembaca Excel belum termuat', true); return; }
+      fs[0].arrayBuffer().then(function (buf) {
+        var wb = XLSX.read(buf, { type: 'array' }), aoa = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, raw: false, defval: '' });
+        var baris = aoa.map(function (r) { return [String(r[0] || '').trim(), String(r[1] || '').trim()].join(' ').trim(); }).filter(function (t) { return /^\d{6,}/.test(t); });
+        skuIn.value = (skuIn.value.trim() ? skuIn.value.trim() + '\n' : '') + baris.join('\n');
+        if (!namaIn.value) namaIn.value = fs[0].name.replace(/\.[^.]+$/, '').replace(/[_]+/g, ' ');
+        skuIn.dispatchEvent(new Event('input'));
+        toast(baris.length + ' baris SKU diambil dari file');
+      }).catch(function (e) { toast(e.message, true); });
+    } });
+    var btn = el('button', { type: 'button', class: 'btn btn-primary btn-block', onclick: proses }, icon('check'), 'Isi bin & buat STO');
+    v.append(status,
+      el('div', { class: 'card section' },
+        el('div', { class: 'field' }, el('label', { text: 'Nama STO / koli' }), namaIn),
+        el('div', { class: 'field' }, el('label', null, 'Daftar SKU ', info), skuIn), dz,
+        el('div', { class: 'sto-opsi' }, el('span', { class: 'muted', text: 'Kalau SKU ada di beberapa bin:' }),
+          segmented([['gudang', 'Utamakan gudang (WA)'], ['stok', 'Bin stok terbanyak']], 'gudang', function (x) { utamaGudang = x === 'gudang'; })),
+        btn),
+      hasil);
+
+    function bacaSku(t) {
+      var butuh = {}, urut = [];
+      String(t || '').split(/\r?\n/).forEach(function (ln) {
+        var m = ln.trim().match(/^(\d{6,})(?:\.0)?(?:[\s,;\t]+(\d+))?/);
+        if (!m) return;
+        if (!(m[1] in butuh)) { butuh[m[1]] = 0; urut.push(m[1]); }
+        butuh[m[1]] += m[2] ? Number(m[2]) : 1;
+      });
+      var pcs = 0; urut.forEach(function (k) { pcs += butuh[k]; });
+      return { butuh: butuh, urut: urut, n: urut.length, pcs: pcs };
+    }
+    function pakaiLama() {
+      try { var x = JSON.parse(localStorage.getItem(STO_PAKAI_KEY) || 'null'); return x && upload && x.file === upload.file ? x : { file: upload ? upload.file : '', daftar: [] }; } catch (e) { return { file: '', daftar: [] }; }
+    }
+    function simpanPakai(nama, rows) {
+      var x = pakaiLama(); x.file = upload ? upload.file : ''; x.daftar = x.daftar.filter(function (d) { return d.nama !== nama; });
+      x.daftar.push({ nama: nama, waktu: new Date().toISOString(), rows: rows.map(function (r) { return [r.sku, r.bin, r.qty]; }) });
+      try { localStorage.setItem(STO_PAKAI_KEY, JSON.stringify(x)); } catch (e) {}
+    }
+    function gambarStatus(pesan) {
+      var w = upload ? stoWaktuFile(upload.file) : '', umurJam = w ? (Date.now() - new Date(w.replace(' ', 'T') + ':00+07:00').getTime()) / 3600000 : 99;
+      var lama = pakaiLama().daftar;
+      status.replaceChildren(
+        el('div', { class: 'sto-st-head' },
+          el('div', null, el('b', { text: 'Stok By Bin yang dipakai' }),
+            el('p', { class: 'sub', text: upload ? 'Export CARE ' + (w ? fTime(w) : upload.file) + ' · masuk ' + fTime(upload.waktu) + ' · ' + upload.oleh : 'Belum ada data By Bin' })),
+          el('button', { type: 'button', class: 'btn btn-ghost btn-sm', onclick: function () { segarkan(true); } }, icon('refresh'), 'Cek terbaru')),
+        umurJam > 3 ? el('p', { class: 'sto-warn', text: 'Data stok sudah ' + (umurJam > 48 ? Math.round(umurJam / 24) + ' hari' : Math.round(umurJam) + ' jam') + '. Supaya bin akurat, export dulu "Inventory View By Bin" di CARE; Basecamp mengambilnya otomatis dari email, lalu tekan Cek terbaru.' }) : null,
+        pesan ? el('p', { class: 'muted sto-pesan', text: pesan }) : null,
+        lama.length ? el('p', { class: 'muted sto-pesan' }, 'Stok yang sudah dipakai STO sebelumnya ikut dikurangi: ' + lama.map(function (d) { return d.nama; }).join(', ') + '. ',
+          el('button', { type: 'button', class: 'link-btn', text: 'Reset', onclick: function () { try { localStorage.removeItem(STO_PAKAI_KEY); } catch (e) {} gambarStatus(); } })) : null);
+    }
+    function segarkan(manual) {
+      status.querySelector('.sto-st-head button') && (status.querySelector('.sto-st-head button').disabled = true);
+      return api('binSegarkan').then(function (r) {
+        var ganti = !upload || !r.upload || r.upload.file !== upload.file || r.upload.waktu !== upload.waktu;
+        upload = r.upload;
+        var p = /^By Bin export/.test(r.pesan) ? 'Stok terbaru dari email baru saja diambil.' : /GAGAL/.test(r.pesan) ? r.pesan : (manual ? 'Tidak ada export By Bin yang lebih baru di email.' : '');
+        if (ganti || !bin) return api('binData').then(function (d) { bin = d; gambarStatus(p); if (hasil.firstChild && manual) proses(); });
+        gambarStatus(p);
+      }).catch(function (e) { status.replaceChildren(errBox(e)); });
+    }
+    function proses() {
+      var namaSto = namaIn.value.trim() || 'STO ' + todayJkt();
+      var x = bacaSku(skuIn.value);
+      if (!x.n) { toast('Isi dulu daftar SKU', true); return; }
+      if (!bin) { toast('Data By Bin belum termuat', true); return; }
+      var K = {}; bin.kolom.forEach(function (k, i) { K[k] = i; });
+      var stok = {}, nama = {};
+      bin.rows.forEach(function (r) {
+        var s = String(r[K.sku]), a = Number(r[K.available]) || 0;
+        nama[s] = r[K.nama];
+        if (a <= 0 || r[K.zona] === 'Damage' || !/saleable/i.test(String(r[K.kategori] || 'saleable'))) return;
+        (stok[s] = stok[s] || []).push({ bin: String(r[K.bin]), zona: String(r[K.zona]), sisa: a, awal: a });
+      });
+      pakaiLama().daftar.filter(function (d) { return d.nama !== namaSto; }).forEach(function (d) {
+        d.rows.forEach(function (q) { (stok[q[0]] || []).forEach(function (b) { if (b.bin === q[1]) b.sisa = Math.max(0, b.sisa - q[2]); }); });
+      });
+      var rows = [], tidakAda = [], kurang = [];
+      x.urut.forEach(function (sku) {
+        var n = x.butuh[sku], bs = (stok[sku] || []).slice();
+        if (!nama[sku]) { tidakAda.push(sku); return; }
+        bs.sort(function (a, b) {
+          var ga = /^W/i.test(a.bin) ? 1 : 0, gb = /^W/i.test(b.bin) ? 1 : 0;
+          if (utamaGudang && ga !== gb) return gb - ga;
+          return b.sisa - a.sisa;
+        });
+        var alt = bs.map(function (b) { return b.bin; });
+        bs.forEach(function (b) {
+          if (n <= 0 || b.sisa <= 0) return;
+          var t = Math.min(n, b.sisa); n -= t; b.sisa -= t;
+          rows.push({ sku: sku, nama: nama[sku], qty: t, bin: b.bin, zona: b.zona, alt: alt, pecah: false });
+        });
+        var r0 = rows.filter(function (r) { return r.sku === sku; });
+        if (r0.length > 1) r0.forEach(function (r) { r.pecah = true; });
+        if (n > 0) kurang.push({ sku: sku, nama: nama[sku], kurang: n, minta: x.butuh[sku] });
+      });
+      gambarHasil(namaSto, rows, tidakAda, kurang);
+    }
+    function gambarHasil(namaSto, rows, tidakAda, kurang) {
+      var pcs = 0; rows.forEach(function (r) { pcs += r.qty; });
+      var multi = rows.filter(function (r) { return r.alt.length > 1; }).length;
+      var toko = rows.filter(function (r) { return !/^W/i.test(r.bin); }).length;
+      var unduh = function () {
+        if (!window.XLSX) { toast('Pembuat Excel belum termuat, coba lagi', true); return; }
+        var aoa = [['skucode', 'tf_qty', 'bin_code']].concat(rows.map(function (r) { return [Number(r.sku), r.qty, r.bin]; }));
+        var ws = XLSX.utils.aoa_to_sheet(aoa); ws['!cols'] = [{ wch: 16 }, { wch: 8 }, { wch: 16 }];
+        aoa.forEach(function (r, i) { if (i) { var c = ws[XLSX.utils.encode_cell({ r: i, c: 0 })]; if (c) c.z = '0'; } });
+        var wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'STO Enquiry');
+        XLSX.writeFile(wb, ('sto-enquiry_' + namaSto).replace(/[\\/:*?"<>|]+/g, '-').replace(/\s+/g, '_') + '.xlsx');
+        simpanPakai(namaSto, rows); gambarStatus(); toast('File STO diunduh');
+      };
+      hasil.replaceChildren(el('div', { class: 'card section' },
+        el('div', { class: 'card-head' }, el('div', null, el('h3', { text: namaSto }), el('p', { class: 'sub', text: rows.length + ' baris · ' + fNum(pcs) + ' pcs' })),
+          el('button', { type: 'button', class: 'btn btn-primary btn-sm', disabled: rows.length ? null : true, onclick: unduh }, icon('download'), 'Unduh file STO')),
+        tidakAda.length ? el('div', { class: 'sto-alert bad' }, el('b', { text: tidakAda.length + ' SKU tidak ada di stok toko (tidak dimasukkan): ' }), tidakAda.join(', ')) : null,
+        kurang.length ? el('div', { class: 'sto-alert bad' }, el('b', { text: 'Stok kurang dari jumlah scan: ' }), kurang.map(function (k) { return k.sku + ' (' + k.nama + ') minta ' + k.minta + ', kurang ' + k.kurang; }).join(' · ')) : null,
+        multi ? el('div', { class: 'sto-alert' }, el('b', { text: multi + ' baris SKU-nya ada di lebih dari satu bin. ' }), 'Cek fisik barang diambil dari bin mana; kalau beda, ganti bin di tabel sebelum mengunduh.') : null,
+        toko ? el('div', { class: 'sto-alert' }, el('b', { text: toko + ' baris memakai bin area toko (bukan gudang). ' }), 'Itu satu-satunya lokasi yang tersedia untuk SKU tersebut.') : null,
+        el('div', { class: 'tbl-wrap sto-wrap' }, el('table', { class: 't sto-tbl' },
+          el('thead', null, el('tr', null, ['#', 'SKU', 'Nama', 'Qty', 'Bin'].map(function (h) { return el('th', { text: h }); }))),
+          el('tbody', null, rows.map(function (r, i) {
+            var sel = r.alt.length > 1 ? el('select', { 'aria-label': 'Bin ' + r.sku }, r.alt.map(function (b) { return el('option', { value: b, text: b, selected: b === r.bin ? true : null }); })) : null;
+            if (sel) sel.addEventListener('change', function () { r.bin = sel.value; });
+            return el('tr', { class: r.pecah ? 'sto-pecah' : '' }, el('td', { class: 'num', text: i + 1 }), el('td', { class: 'num', text: r.sku }), el('td', { text: r.nama }),
+              el('td', { class: 'num', text: r.qty }), el('td', null, sel || el('span', { text: r.bin }), r.pecah ? el('small', { class: 'muted', text: ' dipecah' }) : null));
+          }))))));
+      hasil.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+    segarkan(false);
+  }
+
   /* ---------- To-Do Harian tim ---------- */
   var TODO_AUTO = { video_open: 'Video opening di Dokumentasi', video_close: 'Video closing di Dokumentasi', setor: 'Setoran di laporan CARE', bap: 'BAP Kas closing tersimpan' };
   function viewTodo(v) {
@@ -7470,7 +7619,7 @@
 
   Object.assign(VIEWS, {
     beranda: viewBeranda, briefing: viewBriefing, mingguan: viewMingguan, omni: viewOmni, kesehatan: viewKesehatan, pengumuman: viewPengumuman, handover: viewHandover, todo: viewTodo, feedback: viewFeedback, apresiasi: viewApresiasi, dokumentasi: viewDokumentasi, monitoring: viewMonitoring, trend: viewTrend, ra: viewRA, produk: viewProduk, customer: viewCustomer,
-    stok: viewStok, stokart: viewStokArt, saranreq: viewSaranReq, display: viewDisplay, cari: viewCari, unggahbin: viewUnggahBin, unggahdata: viewUnggahData, newarrival: viewNewArrival, putaway: viewPutaway, kas: viewKas, 'kas-rekap': viewKasRekap, 'kas-setor': viewKasSetor, 'kas-petty': viewKasPetty, unggah: viewUnggah,
+    stok: viewStok, stokart: viewStokArt, saranreq: viewSaranReq, display: viewDisplay, cari: viewCari, unggahbin: viewUnggahBin, unggahdata: viewUnggahData, newarrival: viewNewArrival, putaway: viewPutaway, buatsto: viewBuatSto, kas: viewKas, 'kas-rekap': viewKasRekap, 'kas-setor': viewKasSetor, 'kas-petty': viewKasPetty, unggah: viewUnggah,
     jadwal: viewJadwal, jadwaldraf: viewJadwalDraf, persetujuan: viewPersetujuan, targetadm: viewTargetAdm, pengaturan: viewPengaturan, request: viewRequest, tukar: viewTukar, simpanan: viewSimpanan,
     akun: viewAkun, admin: viewAdmin, aktivitas: viewAktivitas, pica: viewPica, katalog: viewKatalog, kabari: viewKabari, studio: viewStudio
   });

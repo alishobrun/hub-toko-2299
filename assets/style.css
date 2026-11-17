@@ -1760,3 +1760,19 @@ html[data-theme=dark] .promo-tag{background:var(--orange-50);color:#FDBA74}
 .td-ket .btn{align-self:flex-end}
 @media (max-width:600px){.td-ring{width:64px;height:64px}.td-ring b{font-size:17px}.td-item{padding:10px}}
 @media (max-width:600px){.td-timhead{flex-direction:column;align-items:flex-start;gap:8px}}
+
+/* ---------- Buat STO ---------- */
+.sto-status{margin-bottom:12px}
+.sto-st-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
+.sto-st-head .sub{margin:2px 0 0}
+.sto-warn{margin:10px 0 0;padding:10px 12px;border-radius:10px;background:var(--orange-50);color:var(--fg);font-size:13px}
+.sto-pesan{margin:8px 0 0;font-size:12.5px}
+.sto-sku{width:100%;box-sizing:border-box;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:14px;padding:10px;border:1px solid var(--line);border-radius:10px;background:var(--panel);color:var(--fg);resize:vertical}
+.sto-hitung{font-weight:400;margin-left:6px}
+.sto-opsi{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:12px 0}
+.sto-alert{margin:10px 0 0;padding:10px 12px;border-radius:10px;background:var(--line-2);font-size:13px;line-height:1.45}
+.sto-alert.bad{background:var(--bad-50);color:var(--bad)}
+.sto-wrap{margin-top:12px;max-height:60vh;overflow:auto}
+.sto-tbl select{height:30px;border:1px solid var(--line);border-radius:8px;background:var(--panel);color:var(--fg);font:inherit;font-size:13px;padding:0 6px}
+.sto-tbl tr.sto-pecah td{background:var(--orange-50)}
+.sto-tbl td:nth-child(3){min-width:180px}

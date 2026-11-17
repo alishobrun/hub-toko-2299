@@ -11,7 +11,7 @@
 /** Versi kode. WAJIB dinaikkan setiap kali Code.gs diubah (format yyyy-MM-dd.n),
  *  lalu simpan ke GitHub (alishobrun/hub-toko-2299) SEBELUM dipasang. Halaman Kesehatan Data
  *  membandingkan angka ini dengan GitHub supaya kode yang dipasang di luar GitHub ketahuan. */
-const KODE_VERSI = '2026-11-13.2';
+const KODE_VERSI = '2026-11-17.1';
 
 const CFG = {
   STORE: '2299',
@@ -2193,6 +2193,19 @@ Object.assign(API, {
       upload: last ? { waktu: String(last.waktu), nama: last.username === 'email' ? 'Email CARE (otomatis)' : namaUser_(last.username), file: String(last.nama_file), pcs: Number(last.pcs), sku: Number(last.sku) } : null,
       kolom: F, rows: rows, pertama: pertama, today: today_(), naHari: Number(settings_().na_hari) || CFG.NA_HARI
     };
+  },
+
+  /** Pastikan stok by bin paling baru: cek email export By Bin dari CARE sekarang (maks. sekali per menit). */
+  binSegarkan: function (req) {
+    auth_(req);
+    const p = PropertiesService.getScriptProperties(), lalu = Number(p.getProperty('BIN_CEK_AKHIR') || 0);
+    let pesan = 'baru saja dicek';
+    if (Date.now() - lalu > 60000) {
+      p.setProperty('BIN_CEK_AKHIR', String(Date.now()));
+      try { pesan = cekEmailBin_() || 'tidak ada export By Bin baru di email'; } catch (e) { pesan = 'GAGAL: ' + (e.message || e); }
+    }
+    const ups = read_('bin_upload'), l = ups.length ? ups[ups.length - 1] : null;
+    return { pesan: pesan, upload: l ? { waktu: String(l.waktu), file: String(l.nama_file), oleh: l.username === 'email' ? 'Email CARE (otomatis)' : namaUser_(l.username) } : null };
   },
 
   binUploads: function (req) {
