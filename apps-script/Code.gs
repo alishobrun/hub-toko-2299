@@ -11,7 +11,7 @@
 /** Versi kode. WAJIB dinaikkan setiap kali Code.gs diubah (format yyyy-MM-dd.n),
  *  lalu simpan ke GitHub (alishobrun/hub-toko-2299) SEBELUM dipasang. Halaman Kesehatan Data
  *  membandingkan angka ini dengan GitHub supaya kode yang dipasang di luar GitHub ketahuan. */
-const KODE_VERSI = '2026-11-20.4';
+const KODE_VERSI = '2026-11-20.5';
 
 const CFG = {
   STORE: '2299',
@@ -4264,6 +4264,9 @@ const JD_MID = { MD: 1, MC: 1 };
 const JD_H = 1000;
 // middle diusahakan di Sabtu & Minggu: weekend sebaiknya 5 orang masuk (ada middle), hari biasa cukup 4 (tanpa middle)
 const JD_WKEND4 = 150, JD_HK5 = 80;
+// kerja berturut-turut: maks 7 hari; 7 boleh tapi dihindari, 5-6 sedikit dihindari supaya OFF tersebar rata
+const JD_MAKS_RUN = 7, JD_RUN7_ULANG = 120; // 7 hari beruntun lebih dari sekali per orang dihindari
+function jdRunCost_(run) { return run >= 7 ? 90 : run === 6 ? 14 : run === 5 ? 4 : 0; }
 
 function jdRng_(seed) {
   let s = (seed >>> 0) || 1;
@@ -4314,7 +4317,7 @@ function jdCost_(G, P, notes) {
   const midCnt = [];
   for (let p = 0; p < N; p++) {
     const g = G[p], f = P.fixed[p];
-    let off = 0, run = P.tail[p], wkOff = 0, mids = 0;
+    let off = 0, run = P.tail[p], wkOff = 0, mids = 0, k7 = 0;
     for (let t = 0; t < T; t++) {
       const x = g[t];
       const prevX = t > 0 ? g[t - 1] : P.last[p];
@@ -4333,7 +4336,8 @@ function jdCost_(G, P, notes) {
         }
       } else {
         run++;
-        if (run > 6) add(100 * (run - 6) * (run - 6), p, t, 'Hari kerja ke-' + run + ' berturut-turut', run === 7 ? 'kuning' : 'merah');
+        if (run > JD_MAKS_RUN) add(JD_H * (run - JD_MAKS_RUN), p, t, 'Hari kerja ke-' + run + ' berturut-turut (maks ' + JD_MAKS_RUN + ')', 'merah');
+        else { add(jdRunCost_(run), p, t, null); if (run === JD_MAKS_RUN) k7++; }
         // H+1 tidak boleh PD
         if (x === 'PD' && prevX && JD_REST[prevX] && !f[t]) add(JD_H, p, t, 'PD sehari setelah ' + prevX);
         if (x === 'PD' && prevX === 'SB') add(8, p, t, null);
@@ -4344,6 +4348,7 @@ function jdCost_(G, P, notes) {
     if (run > 4) add(20 * (run - 4), p, -1, null);
     if (off !== P.jatah[p]) add(JD_H * Math.abs(off - P.jatah[p]), p, -1, 'Jumlah OFF ' + off + ' (seharusnya ' + P.jatah[p] + ')');
     if (wkOff > 1) add(400 * (wkOff - 1), p, -1, 'OFF weekend ' + wkOff + '× dalam satu periode');
+    if (k7 > 1) add(JD_RUN7_ULANG * (k7 - 1), p, -1, 'Kerja 7 hari beruntun ' + k7 + '× dalam satu periode', 'kuning');
     // keseimbangan PD/SB per minggu
     for (let s = 0; s < T; s += 7) {
       let a = 0, b = 0;
@@ -4397,7 +4402,7 @@ function jdOffCost_(R, P) {
   }
   for (let p = 0; p < N; p++) {
     const r = R[p], f = P.fixed[p];
-    let run = P.tail[p], wkOff = 0;
+    let run = P.tail[p], wkOff = 0, k7 = 0;
     for (let t = 0; t < T; t++) {
       if (r[t]) {
         run = 0;
@@ -4407,10 +4412,11 @@ function jdOffCost_(R, P) {
           if (p === P.admin && P.dow[t] === 1) c += JD_H;
           if (t < T - 1 && r[t + 1] && !f[t + 1]) c += 30;
         }
-      } else { run++; if (run > 6) c += 100 * (run - 6) * (run - 6); }
+      } else { run++; c += run > JD_MAKS_RUN ? JD_H * (run - JD_MAKS_RUN) : jdRunCost_(run); if (run === JD_MAKS_RUN) k7++; }
     }
     if (run > 4) c += 20 * (run - 4); // jangan wariskan rangkaian panjang ke periode berikutnya
     if (wkOff > 1) c += 400 * (wkOff - 1);
+    if (k7 > 1) c += JD_RUN7_ULANG * (k7 - 1);
   }
   return c;
 }
