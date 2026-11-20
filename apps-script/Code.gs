@@ -11,7 +11,7 @@
 /** Versi kode. WAJIB dinaikkan setiap kali Code.gs diubah (format yyyy-MM-dd.n),
  *  lalu simpan ke GitHub (alishobrun/hub-toko-2299) SEBELUM dipasang. Halaman Kesehatan Data
  *  membandingkan angka ini dengan GitHub supaya kode yang dipasang di luar GitHub ketahuan. */
-const KODE_VERSI = '2026-11-20.2';
+const KODE_VERSI = '2026-11-20.3';
 
 const CFG = {
   STORE: '2299',
@@ -1171,8 +1171,19 @@ Object.assign(API, {
       saya: all.filter(function (r) { return r.username === u.username; }).reverse(),
       semua: u.role === 'admin' ? all.slice().reverse() : null,
       // semua orang bisa melihat request tim (tanpa alasan) supaya tahu tanggal yang sudah diminta
-      tim: all.filter(function (r) { return (r.status === 'menunggu' || r.status === 'disetujui') && String(r.tanggal) >= addDays_(cur.start, 0); })
-        .map(function (r) { return { username: r.username, nama: r.nama, tanggal: r.tanggal, jenis: r.jenis, status: r.status }; }),
+      tim: (function () {
+        const terbit = {};
+        return all.filter(function (r) { return (r.status === 'menunggu' || r.status === 'disetujui') && String(r.tanggal) >= addDays_(cur.start, 0); })
+          .map(function (r) {
+            const o = { username: r.username, nama: r.nama, tanggal: r.tanggal, jenis: r.jenis, status: r.status };
+            if (u.role === 'admin') {
+              const pr = periodOf_(String(r.tanggal));
+              if (!(pr.start in terbit)) { try { terbit[pr.start] = !jdMasihDraf_(pr); } catch (e) { terbit[pr.start] = true; } }
+              o.id = r.id; o.terbit = terbit[pr.start]; o.pakaiSimpanan = r.pakaiSimpanan; o.alasan = r.alasan;
+            }
+            return o;
+          });
+      })(),
       periode: { sekarang: periodInfo_(cur), berikut: periodInfo_(next) },
       simpananSaya: sisa,
       bolehKapanSaja: u.role === 'admin'
@@ -1262,6 +1273,66 @@ Object.assign(API, {
         else notif_('admin', 'info', 'sheet', 'Jadwal tertulis ke sheet', r.nama + ' · ' + lbl + ' · ' + String(patch.tertulis).replace(/^ya · /, ''), '#/jadwal');
       }
       return { info: info };
+    });
+  },
+
+  /** Admin mengubah atau membatalkan request yang SUDAH disetujui.
+   *  req: id, batal (bool) | tanggal + jenis baru, shiftLama (kode pengganti di tanggal lama bila jadwalnya sudah terbit), catatan. */
+  reqUbah: function (req) {
+    const a = auth_(req, true);
+    return withLock_(function () {
+      const all = read_('request_jadwal');
+      const r = all.filter(function (x) { return String(x.id) === String(req.id); })[0];
+      if (!r) throw new Error('Request tidak ditemukan');
+      if (r.status !== 'disetujui') throw new Error('Hanya request yang sudah disetujui yang bisa diubah di sini');
+      const batal = !!req.batal;
+      const lama = String(r.tanggal), jenisLama = String(r.jenis);
+      const baru = batal ? lama : String(req.tanggal || lama), jenis = batal ? jenisLama : String(req.jenis || jenisLama).toUpperCase();
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(baru)) throw new Error('Tanggal tidak valid');
+      if (JENIS_REQUEST.indexOf(jenis) < 0) throw new Error('Jenis request tidak dikenal');
+      if (!batal && baru === lama && jenis === jenisLama) throw new Error('Tidak ada yang diubah');
+      if (!batal && baru !== lama && all.some(function (x) { return x.username === r.username && String(x.tanggal) === baru && String(x.id) !== String(r.id) && (x.status === 'menunggu' || x.status === 'disetujui'); }))
+        throw new Error(r.nama + ' sudah punya request lain di tanggal itu');
+      const p0 = periodOf_(lama), p1 = periodOf_(baru);
+      if (p1.start < CFG.JADWAL_MIN_START) throw new Error('Periode ' + p1.label + ' sudah ditutup');
+      const draf0 = jdMasihDraf_(p0), draf1 = p1.start === p0.start ? draf0 : jdMasihDraf_(p1);
+      const kosongLama = batal || baru !== lama; // tanggal lama harus diisi shift lain
+      const shiftLama = String(req.shiftLama || '').toUpperCase();
+      if (kosongLama && !draf0 && JD_KODE_.indexOf(shiftLama) < 0) throw new Error('Jadwal ' + p0.label + ' sudah terbit: pilih shift pengganti untuk ' + r.nama + ' di tanggal ' + tglPendek_(lama));
+      const user = read_('users').filter(function (x) { return x.username === r.username; })[0];
+      const info = [];
+      // tulis ke sheet untuk periode yang sudah terbit
+      if (kosongLama && !draf0) { const w = writeShift_(user, lama, shiftLama, true); info.push(tglPendek_(lama) + ' → ' + shiftLama + ' (tab ' + w.tab + ')'); }
+      let tertulis = String(r.tertulis || '');
+      if (!batal) {
+        if (draf1) tertulis = 'draf ' + p1.label;
+        else { const w = writeShift_(user, baru, jenis); tertulis = 'ya · tab ' + w.tab; info.push(tglPendek_(baru) + ' → ' + jenis + ' (tab ' + w.tab + ')'); }
+      }
+      // simpanan OFF
+      if (String(r.pakai_simpanan) === 'ya') {
+        const sm = read_('simpanan_off').filter(function (x) { return x.username === r.username && x.status === 'diambil' && String(x.diambil_tanggal) === lama; })[0];
+        if (sm) {
+          if (batal || jenis !== 'OFF') updateRow_('simpanan_off', 'id', sm.id, { status: 'tersedia', diambil_tanggal: '' });
+          else if (baru !== lama) updateRow_('simpanan_off', 'id', sm.id, { diambil_tanggal: baru });
+        }
+      }
+      const cat = String(req.catatan || '').slice(0, 200);
+      const patch = batal ? { status: 'dibatalkan', diputus_oleh: a.username, diputus_pada: now_(), catatan_admin: cat || 'Dibatalkan admin' }
+        : { tanggal: baru, jenis: jenis, diputus_oleh: a.username, diputus_pada: now_(), tertulis: tertulis, catatan_admin: cat || ('Diubah admin dari ' + jenisLama + ' ' + tglPendek_(lama)),
+            pakai_simpanan: String(r.pakai_simpanan) === 'ya' && jenis === 'OFF' ? 'ya' : '' };
+      updateRow_('request_jadwal', 'id', r.id, patch);
+      const ket = batal ? 'dibatalkan' : 'diubah jadi ' + jenis + ' ' + tglPendek_(baru);
+      log_(a.username, 'ubah request', r.nama + ' ' + jenisLama + ' ' + lama + ' ' + ket);
+      if (r.username !== a.username) notif_(r.username, batal ? 'tolak' : 'ok', 'request', 'Request ' + jenisLama + ' ' + tglPendek_(lama) + ' ' + ket, cat ? 'Catatan admin: ' + cat : '', '#/request');
+      // susun ulang draf yang terdampak
+      const ulang = {};
+      if (draf0) ulang[p0.start] = p0;
+      if (!batal && draf1) ulang[p1.start] = p1;
+      Object.keys(ulang).forEach(function (k) {
+        try { jdBuat_(ulang[k], a.username, 'ubah request ' + r.nama); info.push('draf ' + ulang[k].label + ' disusun ulang'); }
+        catch (e) { info.push('draf ' + ulang[k].label + ' belum bisa disusun: ' + e.message); }
+      });
+      return { info: info.join(' · ') };
     });
   },
 
@@ -1410,6 +1481,7 @@ Object.assign(API, {
 });
 
 const JENIS_REQUEST = ['OFF', 'CT', 'PD', 'SB', 'MD', 'MC', 'SC', 'NS'];
+const JD_KODE_ = ['PD', 'SB', 'MD', 'MC', 'OFF', 'CT', 'SC', 'NS'];
 const BULAN_PENDEK = ['JAN', 'FEB', 'MAR', 'APR', 'MEI', 'JUN', 'JUL', 'AGS', 'SEP', 'OKT', 'NOV', 'DES'];
 const BULAN_PANJANG = ['JANUARI', 'FEBRUARI', 'MARET', 'APRIL', 'MEI', 'JUNI', 'JULI', 'AGUSTUS', 'SEPTEMBER', 'OKTOBER', 'NOVEMBER', 'DESEMBER'];
 const HARI_KODE = ['MG', 'SN', 'SL', 'RB', 'KM', 'JM', 'SB'];
@@ -1756,7 +1828,7 @@ function createTab_(ss, p) {
   return sh;
 }
 
-function writeShift_(user, iso, code) {
+function writeShift_(user, iso, code, polos) {
   const p = periodOf_(iso);
   if (p.start < CFG.JADWAL_MIN_START) throw new Error('Periode ' + p.label + ' sudah ditutup');
   const ss = SpreadsheetApp.openById(CFG.JADWAL_SHEET_ID);
@@ -1773,7 +1845,7 @@ function writeShift_(user, iso, code) {
   const want = Number(iso.slice(8));
   const ci = cols.filter(function (c) { return Number(dayRow[c - 1]) === want; })[0];
   if (!ci) throw new Error('Tanggal ' + iso + ' tidak ada di tab ' + sh.getName());
-  sh.getRange(5 + ri, ci).setValue(code).setBackground(CFG.REQUEST_COLOR);
+  sh.getRange(5 + ri, ci).setValue(code).setBackground(polos ? null : CFG.REQUEST_COLOR);
   return { tab: sh.getName(), tabBaru: baru };
 }
 

@@ -2704,10 +2704,14 @@
       (d.tim || []).filter(function (r) { return r.status === 'disetujui' && r.tanggal >= todayJkt(); }).forEach(function (r) { (acc[r.tanggal] = acc[r.tanggal] || []).push(r); });
       var accBox = el('div', { class: 'card section rq-acc' }, el('div', { class: 'card-head' }, el('h3', null, icon('check'), ' Request disetujui'),
           el('span', { class: 'tag tag-good', text: Object.keys(acc).reduce(function (n, t) { return n + acc[t].length; }, 0) + ' request' })),
-        el('p', { class: 'sub', text: 'Sudah pasti masuk jadwal. Hari ini dan seterusnya.' }),
+        el('p', { class: 'sub', text: 'Sudah pasti masuk jadwal. Hari ini dan seterusnya.' + (d.semua ? ' Ketuk nama untuk mengubah atau membatalkan.' : '') }),
         Object.keys(acc).length ? el('div', { class: 'rq-acc-list' }, Object.keys(acc).sort().map(function (t) {
           return el('div', { class: 'rq-acc-row' }, el('div', { class: 'rq-acc-d' }, el('b', { text: dParts(t).d }), el('span', { text: dDayName(t) + ' · ' + dShort(t).replace(/^\d+\s*/, '') })),
-            el('div', { class: 'rq-acc-n' }, acc[t].map(function (r) { return el('span', { class: 'rq-pill j-' + String(r.jenis).toLowerCase() }, el('b', { text: firstName(r.nama) }), ' ' + r.jenis); })));
+            el('div', { class: 'rq-acc-n' }, acc[t].map(function (r) {
+              var isi = [el('b', { text: firstName(r.nama) }), ' ' + r.jenis];
+              return r.id ? el('button', { type: 'button', class: 'rq-pill rq-pill-btn j-' + String(r.jenis).toLowerCase(), title: 'Ubah atau batalkan', onclick: function () { ubahReq(r); } }, isi, icon('swap')) :
+                el('span', { class: 'rq-pill j-' + String(r.jenis).toLowerCase() }, isi);
+            })));
         })) : el('div', { class: 'empty', text: 'Belum ada request yang disetujui' }));
       var timBox = null;
       if (!d.semua) {
@@ -2722,6 +2726,37 @@
           })) : el('div', { class: 'empty', text: 'Tidak ada request yang menunggu' }));
       }
       body.replaceChildren(accBox, el('div', { class: 'grid grid-2' }, form, mine), timBox, adminBox);
+    }
+    function ubahReq(r) {
+      var JK = [['PD', 'Pagi (PD)'], ['SB', 'Siang (SB)'], ['MD', 'Middle (MD)'], ['MC', 'Middle (MC)'], ['OFF', 'OFF'], ['CT', 'Cuti (CT)'], ['SC', 'SC'], ['NS', 'NS']];
+      var tgl = el('input', { type: 'date', value: r.tanggal, id: 'ru-t' });
+      var jen = el('select', { id: 'ru-j' }, JENIS.map(function (j) { return el('option', { value: j[0], text: j[1], selected: j[0] === r.jenis ? true : null }); }));
+      var lamaSel = el('select', { id: 'ru-l' }, el('option', { value: '', text: 'Pilih shift…' }), JK.map(function (j) { return el('option', { value: j[0], text: j[1] }); }));
+      var lamaBox = el('div', { class: 'field' + (r.terbit ? '' : ' hide') }, el('label', { for: 'ru-l', text: 'Shift ' + firstName(r.nama) + ' di ' + dShort(r.tanggal) + ' setelah request dilepas' }), lamaSel,
+        el('small', { class: 'muted', text: 'Jadwal periode ini sudah terbit, jadi tanggal lama perlu diisi shift lain di sheet.' }));
+      var cat = el('input', { id: 'ru-c', maxlength: 200, placeholder: 'Opsional, dikirim ke ' + firstName(r.nama) });
+      var out = el('div');
+      var back = el('div', { class: 'modal-back', onclick: function (e) { if (e.target === back) back.remove(); } });
+      function kirim(batal, btn) {
+        out.replaceChildren();
+        var pindah = batal || tgl.value !== r.tanggal;
+        if (r.terbit && pindah && !lamaSel.value) { out.replaceChildren(errBox(new Error('Pilih shift pengganti untuk tanggal lama'))); return; }
+        if (batal && !confirm('Batalkan request ' + r.jenis + ' ' + r.nama + ' tanggal ' + dShort(r.tanggal) + '?')) return;
+        btn.disabled = true;
+        api('reqUbah', { id: r.id, batal: batal, tanggal: tgl.value, jenis: jen.value, shiftLama: lamaSel.value, catatan: cat.value }).then(function (res) {
+          back.remove(); toast(batal ? 'Request dibatalkan' : 'Request diubah'); if (res.info) toast(res.info); S.jadwal = null; load();
+        }).catch(function (err) { btn.disabled = false; out.replaceChildren(errBox(err)); });
+      }
+      back.append(el('div', { class: 'modal', role: 'dialog', 'aria-modal': 'true' },
+        el('h3', { text: 'Ubah request ' + firstName(r.nama) }),
+        el('p', { class: 'sub', text: r.jenis + ' · ' + dLong(r.tanggal) + (r.pakaiSimpanan ? ' · pakai simpanan OFF' : '') + (r.alasan ? ' · ' + r.alasan : '') }),
+        el('div', { class: 'form-grid' }, el('div', { class: 'field' }, el('label', { for: 'ru-t', text: 'Tanggal' }), tgl), el('div', { class: 'field' }, el('label', { for: 'ru-j', text: 'Jenis' }), jen)),
+        lamaBox, el('div', { class: 'field' }, el('label', { for: 'ru-c', text: 'Catatan' }), cat), out,
+        el('div', { class: 'row-btns', style: 'margin-top:12px;justify-content:space-between' },
+          el('button', { type: 'button', class: 'btn btn-danger', text: 'Batalkan request', onclick: function (e) { kirim(true, e.currentTarget); } }),
+          el('div', { class: 'row-btns' }, el('button', { type: 'button', class: 'btn btn-ghost', text: 'Tutup', onclick: function () { back.remove(); } }),
+            el('button', { type: 'button', class: 'btn btn-primary', text: 'Simpan', onclick: function (e) { kirim(false, e.currentTarget); } })))));
+      document.body.append(back);
     }
     function decide(btn, r, k) {
       var cat = k === 'tolak' ? prompt('Alasan ditolak (opsional):', '') : '';

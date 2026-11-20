@@ -1798,3 +1798,6 @@ html[data-theme=dark] .promo-tag{background:var(--orange-50);color:#FDBA74}
 .rq-pill.j-off{background:var(--good-50);color:var(--good)}
 .omni-lbl{display:block;font-size:13px;color:var(--muted);font-weight:600}
 .omni-val{display:block;font-size:18px;margin-top:2px}
+.rq-pill-btn{border:1px solid transparent;cursor:pointer;font:inherit;font-size:13px}
+.rq-pill-btn:hover{border-color:currentColor}
+.rq-pill-btn svg{width:13px;height:13px;opacity:.7}
