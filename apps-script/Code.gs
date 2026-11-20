@@ -11,7 +11,7 @@
 /** Versi kode. WAJIB dinaikkan setiap kali Code.gs diubah (format yyyy-MM-dd.n),
  *  lalu simpan ke GitHub (alishobrun/hub-toko-2299) SEBELUM dipasang. Halaman Kesehatan Data
  *  membandingkan angka ini dengan GitHub supaya kode yang dipasang di luar GitHub ketahuan. */
-const KODE_VERSI = '2026-11-17.1';
+const KODE_VERSI = '2026-11-20.1';
 
 const CFG = {
   STORE: '2299',
@@ -1170,6 +1170,9 @@ Object.assign(API, {
     return {
       saya: all.filter(function (r) { return r.username === u.username; }).reverse(),
       semua: u.role === 'admin' ? all.slice().reverse() : null,
+      // semua orang bisa melihat request tim (tanpa alasan) supaya tahu tanggal yang sudah diminta
+      tim: all.filter(function (r) { return (r.status === 'menunggu' || r.status === 'disetujui') && String(r.tanggal) >= addDays_(cur.start, 0); })
+        .map(function (r) { return { username: r.username, nama: r.nama, tanggal: r.tanggal, jenis: r.jenis, status: r.status }; }),
       periode: { sekarang: periodInfo_(cur), berikut: periodInfo_(next) },
       simpananSaya: sisa,
       bolehKapanSaja: u.role === 'admin'
@@ -2852,9 +2855,14 @@ Object.assign(API, {
     const users = u.role === 'admin' ? read_('users').filter(function (x) { return x.status === 'aktif'; }).map(function (x) {
       return { username: x.username, nama: x.nama, namaDsr: resolveNamaDsr_(x, ras), manual: String(x.nama_dsr || '') };
     }) : null;
-    let toko = [];
-    try { toko = raToko_(bulan, dsrBulan_(bulan)); } catch (e) { toko = []; }
-    return { bulan: bulan, targets: targets, ras: ras, raToko: toko, targetToko: t ? Number(t.target) : null, users: users };
+    let toko = [], auto = null;
+    try {
+      const rowsM = dsrBulan_(bulan);
+      auto = raTargetAuto_(bulan, rowsM); toko = auto.list.map(function (x) { return x.ra; });
+      const per = omniPerRa_(rowsM);
+      auto.list.forEach(function (x) { x.omniAct = omniRaCari_(per, x.ra).total; });
+    } catch (e) { toko = []; }
+    return { bulan: bulan, targets: targets, ras: ras, raToko: toko, targetToko: t ? Number(t.target) : null, users: users, auto: auto };
   },
 
   raTargetSet: function (req) {
@@ -2865,7 +2873,7 @@ Object.assign(API, {
       const n = Number(x.target);
       if (!isFinite(n) || n < 0) throw new Error('Target ' + x.ra + ' tidak valid');
       return { bulan: bulan, ra: String(x.ra || '').trim(), target: Math.round(n), diubah: now_(), oleh: a.username };
-    }).filter(function (x) { return x.ra; });
+    }).filter(function (x) { return x.ra && x.target > 0; }); // 0 / kosong = pakai target otomatis
     return withLock_(function () {
       const keep = read_('target_ra').filter(function (x) { return String(x.bulan) !== bulan; });
       writeAll_('target_ra', keep.concat(list));
@@ -2894,9 +2902,13 @@ Object.assign(API, {
     const rowsM = dsrBulan_(bulan);
     const H = raHO_(rowsM, raToko_(bulan, rowsM));
     const list = H.list.map(function (x) { return { ra: x.nama, b: x.b, n: x.n, q: x.q, trx: x.trx, ownB: x.ownB, ownN: x.ownN, shareB: H.share.b, shareN: H.share.n }; });
-    const tg = read_('target_ra').filter(function (x) { return String(x.bulan) === bulan && String(x.ra) === nama; })[0];
+    const A = raTargetAuto_(bulan, rowsM);
+    const mine = A.list.filter(function (x) { return sameName_(x.ra, nama); })[0];
+    const om = omniRaCari_(omniPerRa_(rowsM), nama);
     const p = today.split('-').map(Number), dim = new Date(Date.UTC(p[0], p[1], 0)).getUTCDate();
-    return { bulan: bulan, nama: nama, list: list, target: tg ? Number(tg.target) : null, dataSampai: latestDate_(), sisaHari: dim - p[2] + 1 };
+    return { bulan: bulan, nama: nama, list: list, target: mine ? mine.target : null, targetInfo: mine ? { manual: !!mine.manual, mulai: mine.mulai, bobot: mine.bobot, jumlahRa: A.list.length, targetToko: A.targetToko } : null,
+      omni: mine ? { target: mine.omni, actual: om.total, rinci: OMNI_JENIS.map(function (j) { return [j[1], om[j[0]] || 0]; }), targetToko: A.omniToko } : null,
+      dataSampai: latestDate_(), sisaHari: dim - p[2] + 1 };
   },
 
   /* ---------- laporan mingguan ---------- */
@@ -3388,6 +3400,68 @@ function slNames_() {
   return out;
 }
 /** RA toko bulan itu: dari jadwal (tanpa Store Leader); bila jadwal tidak ada, dari penjual Walk In di DSR. */
+/** Target omnichannel toko per jenis (manual bila diisi admin, kalau tidak % dari target bulanan). */
+function omniTarget_(bulan) {
+  const manual = {};
+  read_('omni_target').forEach(function (x) { if (String(x.bulan) === bulan) manual[String(x.jenis)] = Number(x.target) || 0; });
+  const tb = read_('targets').filter(function (x) { return String(x.bulan) === bulan; })[0];
+  const tBulan = tb ? Number(tb.target) || 0 : 0;
+  let total = 0;
+  OMNI_JENIS.forEach(function (j) { total += manual[j[0]] || Math.round(tBulan * j[3]); });
+  return { manual: manual, tBulan: tBulan, total: total };
+}
+/** Target otomatis per RA: target toko (dan target omnichannel gabungan) dibagi ke RA di jadwal bulan itu.
+ *  Store Head/Leader & HL tidak dihitung (raToko_). RA yang baru muncul di jadwal di tengah bulan mendapat bagian
+ *  proporsional: (hari sejak tanggal pertama di jadwal s/d akhir bulan) / jumlah hari sebulan. Target manual admin menang. */
+function raTargetAuto_(bulan, rows) {
+  const ras = raToko_(bulan, rows);
+  const p = bulan.split('-').map(Number), dim = new Date(Date.UTC(p[0], p[1], 0)).getUTCDate();
+  const first = {};
+  try {
+    const map = jadwalMap_();
+    Object.keys(map).sort().forEach(function (t) {
+      if (t.slice(0, 7) !== bulan) return;
+      Object.keys(map[t]).forEach(function (nm) {
+        if (!String(map[t][nm] || '').trim()) return;
+        const ra = ras.filter(function (x) { return sameName_(x, nm); })[0];
+        if (ra && !first[ra]) first[ra] = t;
+      });
+    });
+  } catch (e) { /* tanpa jadwal: bagi rata */ }
+  const manual = {};
+  read_('target_ra').filter(function (x) { return String(x.bulan) === bulan; }).forEach(function (x) { if (Number(x.target) > 0) manual[String(x.ra)] = Number(x.target); });
+  const tb = read_('targets').filter(function (x) { return String(x.bulan) === bulan; })[0];
+  const tToko = tb ? Number(tb.target) || 0 : 0, oToko = omniTarget_(bulan).total;
+  const bobot = {}; let W = 0;
+  ras.forEach(function (ra) { const d = first[ra] ? Number(first[ra].slice(8, 10)) : 1; bobot[ra] = (dim - d + 1) / dim; W += bobot[ra]; });
+  W = W || 1;
+  const rnd = function (x) { return Math.round(x / 1000) * 1000; };
+  return { targetToko: tToko, omniToko: oToko, hari: dim,
+    list: ras.map(function (ra) {
+      const auto = rnd(tToko * bobot[ra] / W);
+      return { ra: ra, mulai: first[ra] || '', bobot: Math.round(bobot[ra] * 1000) / 1000, auto: auto, manual: manual[ra] || 0, target: manual[ra] || auto, omni: rnd(oToko * bobot[ra] / W) };
+    }) };
+}
+/** Pencapaian omnichannel (bruto) per sales person bulan itu. */
+function omniPerRa_(rows) {
+  const out = {};
+  rows.forEach(function (r) {
+    const sp = String(r.sales_person || '').trim(); if (!sp) return;
+    OMNI_JENIS.forEach(function (j) {
+      if (!j[2](r)) return;
+      const o = out[sp] || (out[sp] = { total: 0 }); const g = Number(r.gross) || 0;
+      o.total += g; o[j[0]] = (o[j[0]] || 0) + g;
+    });
+  });
+  return out;
+}
+function omniRaCari_(per, ra) {
+  const o = { total: 0 };
+  Object.keys(per).forEach(function (sp) { if (sameName_(sp, ra)) Object.keys(per[sp]).forEach(function (k) { o[k] = (o[k] || 0) + per[sp][k]; }); });
+  Object.keys(o).forEach(function (k) { o[k] = Math.round(o[k]); });
+  return o;
+}
+
 function raToko_(bulan, rows) {
   const sl = slNames_();
   const isSl = function (n) { return sl.some(function (s) { return sameName_(s, n); }); };
@@ -3464,10 +3538,7 @@ Object.assign(API, {
         trx.push([String(r.tanggal), String(r.invoice), j[1], String(r.sales_person || ''), String(r.nama_sku), Number(r.qty) || 0, Math.round(g)]);
       });
     });
-    const tg = {};
-    read_('omni_target').forEach(function (x) { if (String(x.bulan) === bulan) tg[String(x.jenis)] = Number(x.target) || 0; });
-    const tb = read_('targets').filter(function (x) { return String(x.bulan) === bulan; })[0];
-    const tBulan = tb ? Number(tb.target) || 0 : 0;
+    const OT = omniTarget_(bulan), tg = OT.manual, tBulan = OT.tBulan;
     return { bulan: bulan, dataSampai: latestDate_(), bulanTersedia: bulanTersedia_(), admin: u.role === 'admin', targetBulan: tBulan,
       jenis: OMNI_JENIS.map(function (j) {
         const auto = Math.round(tBulan * j[3]);
