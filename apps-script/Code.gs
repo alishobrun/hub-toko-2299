@@ -11,7 +11,7 @@
 /** Versi kode. WAJIB dinaikkan setiap kali Code.gs diubah (format yyyy-MM-dd.n),
  *  lalu simpan ke GitHub (alishobrun/hub-toko-2299) SEBELUM dipasang. Halaman Kesehatan Data
  *  membandingkan angka ini dengan GitHub supaya kode yang dipasang di luar GitHub ketahuan. */
-const KODE_VERSI = '2026-11-20.6';
+const KODE_VERSI = '2026-11-20.7';
 
 const CFG = {
   STORE: '2299',
@@ -4299,6 +4299,8 @@ const JD_WKEND4 = 150, JD_HK5 = 80;
 // kerja berturut-turut: maks 7 hari; 7 boleh tapi dihindari, 5-6 sedikit dihindari supaya OFF tersebar rata
 // keadilan: tiap RA dapat OFF weekend 1x (Sabtu/Minggu digilir, yang periode lalu paling sedikit didahulukan) dan middle minimal 1x
 const JD_MID0 = 250;
+/** Bonus middle untuk yang sedang kerja beruntun (hari ke-5 sedikit, ke-6/7 diprioritaskan). */
+function jdRunMid_(run) { return run >= 6 ? 18 : run === 5 ? 6 : 0; }
 function jdWk0_(P, p) { return 1200 - 60 * Math.min(3, (P.wkLalu && P.wkLalu[p]) || 0); }
 const JD_MAKS_RUN = 7, JD_RUN7_ULANG = 120; // 7 hari beruntun lebih dari sekali per orang dihindari
 function jdRunCost_(run) { return run >= 7 ? 90 : run === 6 ? 14 : run === 5 ? 4 : 0; }
@@ -4537,6 +4539,9 @@ function jdShifts_(P, R, rnd) {
   for (let p = 0; p < N; p++) { const g = []; for (let t = 0; t < T; t++) g.push(R[p][t] ? (P.fixed[p][t] || 'OFF') : ''); G.push(g); }
   const midCnt = []; for (let p = 0; p < N; p++) midCnt.push(0);
   const wk = [], tot = []; for (let p = 0; p < N; p++) { wk.push({ pd: 0, sb: 0 }); tot.push({ pd: 0, sb: 0 }); }
+  // hari kerja ke-berapa berturut-turut (disambung periode lalu): yang sedang kerja beruntun diprioritaskan dapat middle
+  const runAt = [];
+  for (let p = 0; p < N; p++) { let r = P.tail[p]; const a = []; for (let t = 0; t < T; t++) { r = R[p][t] ? 0 : r + 1; a.push(r); } runAt.push(a); }
   for (let t = 0; t < T; t++) {
     if (t % 7 === 0) wk.forEach(function (x) { x.pd = 0; x.sb = 0; });
     const W = [];
@@ -4571,6 +4576,7 @@ function jdShifts_(P, R, rnd) {
         if (JD_MID[v]) {
           if (p === P.admin) sc += P.wkend[t] ? 0 : 4;
           else sc += (P.wkend[t] && P.admin >= 0 && !R[P.admin][t] ? 10 : 0) + 4 * midCnt[p] - (midCnt[p] ? 0 : 8);
+          sc -= jdRunMid_(runAt[p][t]);
         }
       }
       sc += rnd() * 0.5;
