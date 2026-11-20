@@ -11,7 +11,7 @@
 /** Versi kode. WAJIB dinaikkan setiap kali Code.gs diubah (format yyyy-MM-dd.n),
  *  lalu simpan ke GitHub (alishobrun/hub-toko-2299) SEBELUM dipasang. Halaman Kesehatan Data
  *  membandingkan angka ini dengan GitHub supaya kode yang dipasang di luar GitHub ketahuan. */
-const KODE_VERSI = '2026-11-20.5';
+const KODE_VERSI = '2026-11-20.6';
 
 const CFG = {
   STORE: '2299',
@@ -1881,6 +1881,38 @@ function reqWarnings_(all, rec, p) {
     const same = all.filter(function (r) { return inP(r) && String(r.tanggal) === String(rec.tanggal) && r.jenis === 'OFF' && r.username !== rec.username; }).length;
     if (same >= 1) w.push(same + ' orang lain juga minta OFF di tanggal ini.');
   }
+  try { reqCekAdil_(all, rec, p).forEach(function (x) { w.push(x); }); } catch (e) {}
+  return w;
+}
+/** Peringatan keadilan: OFF weekend lebih dari 1x, dan apakah sisa jatah OFF cukup menjaga maks 7 hari kerja beruntun (disambung dari periode lalu). */
+function reqCekAdil_(all, rec, p) {
+  const w = [];
+  const REST = { OFF: 1, CT: 1 };
+  if (!REST[rec.jenis]) return w;
+  const mine = all.filter(function (r) { return r.username === rec.username && String(r.tanggal) >= p.start && String(r.tanggal) <= p.end && (r.status === 'menunggu' || r.status === 'disetujui') && REST[String(r.jenis).toUpperCase()]; });
+  const u = read_('users').filter(function (x) { return x.username === rec.username; })[0];
+  if (u && u.role === 'admin') return w;
+  const wk = mine.filter(function (r) { const d = jdDow_(String(r.tanggal)); return d === 0 || d === 6; }).length;
+  if (wk > 1) w.push('Ini OFF/cuti weekend ke-' + wk + ' di periode ' + p.label + '. Jatah OFF weekend 1× per RA supaya adil, perlu persetujuan admin.');
+  const prevJ = readJadwalPeriode_(addDays_(p.start, -1));
+  let tail = 0;
+  if (prevJ && u) {
+    const nm = resolveNamaJadwal_(u, prevJ.staf.map(function (x) { return x.nama; }));
+    const s = prevJ.staf.filter(function (x) { return normName_(x.nama) === normName_(nm); })[0];
+    if (s) for (let i = s.shift.length - 1; i >= 0; i--) { const x = String(s.shift[i] || '').toUpperCase(); if (!x || REST[x]) break; tail++; }
+  }
+  const istirahat = {};
+  mine.forEach(function (r) { istirahat[String(r.tanggal)] = 1; });
+  const jatah = 4 + mine.filter(function (r) { return String(r.pakai_simpanan) === 'ya'; }).length - mine.filter(function (r) { return String(r.jenis).toUpperCase() === 'OFF'; }).length;
+  // OFF tambahan paling sedikit agar tidak lebih dari 7 hari beruntun (OFF diletakkan selambat mungkin)
+  let run = tail, perlu = 0, pertama = '';
+  for (let d = p.start; d <= p.end; d = addDays_(d, 1)) {
+    if (istirahat[d]) { run = 0; continue; }
+    if (run + 1 > JD_MAKS_RUN) { perlu++; if (!pertama) pertama = d; run = 0; continue; }
+    run++;
+  }
+  if (tail >= JD_MAKS_RUN) w.push('Kamu sudah kerja ' + tail + ' hari beruntun sampai akhir periode lalu, jadi perlu OFF di hari pertama periode (' + tglPendek_(p.start) + ').');
+  if (perlu > jatah) w.push('Dengan request ini, sisa jatah OFF (' + Math.max(0, jatah) + ') tidak cukup untuk menjaga maksimal ' + JD_MAKS_RUN + ' hari kerja beruntun' + (pertama ? ' (paling lambat butuh OFF ' + tglPendek_(pertama) + ')' : '') + '.');
   return w;
 }
 function tukarOut_(t) {
@@ -4265,6 +4297,9 @@ const JD_H = 1000;
 // middle diusahakan di Sabtu & Minggu: weekend sebaiknya 5 orang masuk (ada middle), hari biasa cukup 4 (tanpa middle)
 const JD_WKEND4 = 150, JD_HK5 = 80;
 // kerja berturut-turut: maks 7 hari; 7 boleh tapi dihindari, 5-6 sedikit dihindari supaya OFF tersebar rata
+// keadilan: tiap RA dapat OFF weekend 1x (Sabtu/Minggu digilir, yang periode lalu paling sedikit didahulukan) dan middle minimal 1x
+const JD_MID0 = 250;
+function jdWk0_(P, p) { return 1200 - 60 * Math.min(3, (P.wkLalu && P.wkLalu[p]) || 0); }
 const JD_MAKS_RUN = 7, JD_RUN7_ULANG = 120; // 7 hari beruntun lebih dari sekali per orang dihindari
 function jdRunCost_(run) { return run >= 7 ? 90 : run === 6 ? 14 : run === 5 ? 4 : 0; }
 
@@ -4289,7 +4324,9 @@ function jdPrep_(inp) {
   }
   const wkend = inp.dow.map(function (d) { return d === 0 || d === 6; });
   const jatah = inp.nama.map(function (n) { return inp.jatahOff && inp.jatahOff[n] != null ? inp.jatahOff[n] : 4; });
-  return { N: N, T: T, tail: tail, last: last, fixed: fixed, wkend: wkend, jatah: jatah, dow: inp.dow, admin: inp.admin, ramai: inp.ramai };
+  const wkLalu = inp.nama.map(function (n) { return (inp.wkLalu && inp.wkLalu[n]) || 0; });
+  const wkPref = inp.nama.map(function (n) { return inp.wkPref && inp.wkPref[n] != null ? inp.wkPref[n] : -1; });
+  return { N: N, T: T, tail: tail, last: last, fixed: fixed, wkend: wkend, jatah: jatah, dow: inp.dow, admin: inp.admin, ramai: inp.ramai, wkLalu: wkLalu, wkPref: wkPref };
 }
 
 /** Biaya total + (opsional) daftar catatan. */
@@ -4317,7 +4354,7 @@ function jdCost_(G, P, notes) {
   const midCnt = [];
   for (let p = 0; p < N; p++) {
     const g = G[p], f = P.fixed[p];
-    let off = 0, run = P.tail[p], wkOff = 0, mids = 0, k7 = 0;
+    let off = 0, run = P.tail[p], wkOff = 0, wkBebas = 0, mids = 0, k7 = 0;
     for (let t = 0; t < T; t++) {
       const x = g[t];
       const prevX = t > 0 ? g[t - 1] : P.last[p];
@@ -4330,10 +4367,8 @@ function jdCost_(G, P, notes) {
         if (prevX && !JD_REST[prevX] && prevX !== 'PD' && !(t > 0 && f[t - 1])) add(JD_H, p, t > 0 ? t - 1 : t, t > 0 ? 'Sehari sebelum ' + x + ' bukan PD' : x + ' di hari pertama, padahal shift terakhir periode lalu bukan PD');
         if (x === 'OFF' && t < T - 1 && nextX === 'OFF' && !f[t] && !f[t + 1]) add(30, p, t, null);
         if (p === P.admin && P.dow[t] === 1 && !f[t]) add(JD_H, p, t, 'Store Leader libur di hari Senin (seharusnya PD)');
-        if (x === 'OFF' && P.wkend[t] && !f[t]) {
-          if (p === P.admin) add(JD_H, p, t, 'Store Leader OFF di weekend');
-          else { wkOff++; add(60, p, t, 'OFF di weekend', 'kuning'); }
-        }
+        if (P.wkend[t] && p !== P.admin) { wkOff++; if (!f[t]) { wkBebas++; if (P.wkPref[p] >= 0 && P.dow[t] !== P.wkPref[p]) add(15, p, t, null); } }
+        if (x === 'OFF' && P.wkend[t] && !f[t] && p === P.admin) add(JD_H, p, t, 'Store Leader OFF di weekend');
       } else {
         run++;
         if (run > JD_MAKS_RUN) add(JD_H * (run - JD_MAKS_RUN), p, t, 'Hari kerja ke-' + run + ' berturut-turut (maks ' + JD_MAKS_RUN + ')', 'merah');
@@ -4347,7 +4382,11 @@ function jdCost_(G, P, notes) {
     }
     if (run > 4) add(20 * (run - 4), p, -1, null);
     if (off !== P.jatah[p]) add(JD_H * Math.abs(off - P.jatah[p]), p, -1, 'Jumlah OFF ' + off + ' (seharusnya ' + P.jatah[p] + ')');
-    if (wkOff > 1) add(400 * (wkOff - 1), p, -1, 'OFF weekend ' + wkOff + '× dalam satu periode');
+    if (p !== P.admin) {
+      if (!wkOff) add(jdWk0_(P, p), p, -1, 'Belum dapat OFF weekend periode ini', 'kuning');
+      else if (wkOff > 1 && wkBebas) add(400 * Math.min(wkBebas, wkOff - 1), p, -1, 'OFF weekend ' + wkOff + '× dalam satu periode', 'kuning');
+      if (!mids && off < T) add(JD_MID0, p, -1, 'Belum dapat middle periode ini', 'kuning');
+    }
     if (k7 > 1) add(JD_RUN7_ULANG * (k7 - 1), p, -1, 'Kerja 7 hari beruntun ' + k7 + '× dalam satu periode', 'kuning');
     // keseimbangan PD/SB per minggu
     for (let s = 0; s < T; s += 7) {
@@ -4402,20 +4441,21 @@ function jdOffCost_(R, P) {
   }
   for (let p = 0; p < N; p++) {
     const r = R[p], f = P.fixed[p];
-    let run = P.tail[p], wkOff = 0, k7 = 0;
+    let run = P.tail[p], wkOff = 0, wkBebas = 0, k7 = 0;
     for (let t = 0; t < T; t++) {
       if (r[t]) {
         run = 0;
+        if (P.wkend[t] && p !== P.admin) { wkOff++; if (!f[t]) { wkBebas++; if (P.wkPref[p] >= 0 && P.dow[t] !== P.wkPref[p]) c += 15; } }
         if (!f[t]) {
           if (t === 0 && P.last[p] && !JD_REST[P.last[p]] && P.last[p] !== 'PD') c += JD_H;
-          if (P.wkend[t]) { if (p === P.admin) c += JD_H; else { wkOff++; c += 60; } }
+          if (P.wkend[t] && p === P.admin) c += JD_H;
           if (p === P.admin && P.dow[t] === 1) c += JD_H;
           if (t < T - 1 && r[t + 1] && !f[t + 1]) c += 30;
         }
       } else { run++; c += run > JD_MAKS_RUN ? JD_H * (run - JD_MAKS_RUN) : jdRunCost_(run); if (run === JD_MAKS_RUN) k7++; }
     }
     if (run > 4) c += 20 * (run - 4); // jangan wariskan rangkaian panjang ke periode berikutnya
-    if (wkOff > 1) c += 400 * (wkOff - 1);
+    if (p !== P.admin) { if (!wkOff) c += jdWk0_(P, p); else if (wkOff > 1 && wkBebas) c += 400 * Math.min(wkBebas, wkOff - 1); }
     if (k7 > 1) c += JD_RUN7_ULANG * (k7 - 1);
   }
   return c;
@@ -4530,7 +4570,7 @@ function jdShifts_(P, R, rnd) {
         if (v === 'PD') sc += 5 * Math.max(0, wk[p].pd - wk[p].sb) + 2 * Math.max(0, tot[p].pd - tot[p].sb); else if (v === 'SB') sc += 5 * Math.max(0, wk[p].sb - wk[p].pd) + 2 * Math.max(0, tot[p].sb - tot[p].pd);
         if (JD_MID[v]) {
           if (p === P.admin) sc += P.wkend[t] ? 0 : 4;
-          else sc += (P.wkend[t] && P.admin >= 0 && !R[P.admin][t] ? 10 : 0) + 4 * midCnt[p];
+          else sc += (P.wkend[t] && P.admin >= 0 && !R[P.admin][t] ? 10 : 0) + 4 * midCnt[p] - (midCnt[p] ? 0 : 8);
         }
       }
       sc += rnd() * 0.5;
@@ -4548,6 +4588,26 @@ function jdShifts_(P, R, rnd) {
   return G;
 }
 
+/** RA yang belum dapat middle: coba tukar shift dengan pemegang middle di hari yang sama, dipakai bila skor membaik. */
+function jdBagiMiddle_(G, P) {
+  let c = jdCost_(G, P);
+  for (let p = 0; p < P.N; p++) {
+    if (p === P.admin || G[p].some(function (x) { return JD_MID[x]; })) continue;
+    for (let t = 0; t < P.T; t++) {
+      const x = G[p][t];
+      if (JD_REST[x] || P.fixed[p][t]) continue;
+      let q = -1;
+      for (let k = 0; k < P.N; k++) if (k !== p && JD_MID[G[k][t]] && !P.fixed[k][t]) q = k;
+      if (q < 0) continue;
+      const y = G[q][t];
+      G[p][t] = y; G[q][t] = x;
+      const c2 = jdCost_(G, P);
+      if (c2 < c) { c = c2; break; }
+      G[p][t] = x; G[q][t] = y;
+    }
+  }
+}
+
 /** Hasil: { shift: {nama: [kode]}, skor, catatan: [{nama, tanggal, pesan, level}] } */
 function susunJadwal_(inp) {
   const P = jdPrep_(inp);
@@ -4558,6 +4618,7 @@ function susunJadwal_(inp) {
     const R = jdOffAnneal_(P, rnd, iters);
     for (let k = 0; k < 3; k++) {
       const G = jdShifts_(P, R, rnd);
+      jdBagiMiddle_(G, P);
       const c = jdCost_(G, P);
       if (!best || c < best.c) best = { G: G, c: c };
     }
@@ -4579,6 +4640,20 @@ function jdCatatan_(P, G, inp) {
   const seen = {};
   return notes0.filter(function (x) { const k = x.p + '|' + x.t + '|' + x.msg; if (seen[k]) return false; seen[k] = 1; return true; })
     .map(function (x) { return { nama: x.p >= 0 ? inp.nama[x.p] : '', tanggal: x.t >= 0 ? inp.tanggal[x.t] : '', pesan: x.msg, level: x.lvl }; });
+}
+/** Ringkasan keadilan per orang: OFF weekend (kini & periode lalu), 7 hari beruntun, rangkaian terpanjang, PD/SB/middle. */
+function jdAdil_(inp, shift) {
+  const P = jdPrep_(inp);
+  return inp.nama.map(function (n, p) {
+    const g = shift[n] || [];
+    let run = P.tail[p], maks = run, k7 = 0, wk = 0, pd = 0, sb = 0, mid = 0, off = 0, ct = 0;
+    g.forEach(function (x, t) {
+      if (JD_REST[x]) { run = 0; if (P.wkend[t]) wk++; if (x === 'OFF') off++; else ct++; return; }
+      run++; if (run > maks) maks = run; if (run === 7) k7++;
+      if (x === 'PD') pd++; else if (x === 'SB') sb++; else if (JD_MID[x]) mid++;
+    });
+    return { nama: n, sl: p === P.admin, wk: wk, wkLalu: P.wkLalu[p], tail: P.tail[p], k7: k7, maks: maks, pd: pd, sb: sb, mid: mid, off: off, ct: ct };
+  });
 }
 function nilaiJadwal_(inp, shift) {
   const P = jdPrep_(inp);
@@ -4629,6 +4704,16 @@ function jdBahan_(p, kunci) {
   const nama = staf.map(function (s) { return s.nama; });
   const prev = {};
   staf.forEach(function (s) { prev[s.nama] = s.shift.slice(-10); });
+  const wkLalu = {}, wkPref = {};
+  staf.forEach(function (s) {
+    let n = 0, akhir = -1;
+    (prevJ.tanggal || []).forEach(function (t, i) {
+      const d = jdDow_(t);
+      if ((d === 0 || d === 6) && JD_REST[String(s.shift[i] || '').toUpperCase()]) { n++; akhir = d; }
+    });
+    wkLalu[s.nama] = n;
+    wkPref[s.nama] = akhir === 0 ? 6 : akhir === 6 ? 0 : -1; // Sabtu/Minggu digilir
+  });
   const users = read_('users').filter(function (u) { return u.status === 'aktif'; });
   const admins = users.filter(function (u) { return u.role === 'admin'; }).map(function (u) { return resolveNamaJadwal_(u, nama); }).filter(Boolean);
   const admin = admins.length ? nama.map(normName_).indexOf(normName_(admins[0])) : -1;
@@ -4652,7 +4737,7 @@ function jdBahan_(p, kunci) {
     if (String(r.pakai_simpanan) === 'ya' && String(r.jenis).toUpperCase() === 'OFF') jatah[n]++;
   });
   return {
-    inp: { tanggal: tanggal, dow: tanggal.map(jdDow_), nama: nama, admin: admin, prev: prev, tetap: tetap, jatahOff: jatah, ramai: jdRamai_(tanggal) },
+    inp: { tanggal: tanggal, dow: tanggal.map(jdDow_), nama: nama, admin: admin, prev: prev, tetap: tetap, jatahOff: jatah, ramai: jdRamai_(tanggal), wkLalu: wkLalu, wkPref: wkPref },
     req: req, tabLalu: prevJ.tab
   };
 }
@@ -4661,12 +4746,12 @@ function jdBuat_(p, oleh, alasan) {
   const lama = jdBaca_(p.start);
   const kunci = lama && lama.data ? (lama.data.kunci || {}) : {};
   const B = jdBahan_(p, kunci);
-  const hasil = susunJadwal_(Object.assign({ seed: Math.floor(Math.random() * 1e6) + 1, ulang: 4, iters: 20000 }, B.inp));
+  const hasil = susunJadwal_(Object.assign({ seed: Math.floor(Math.random() * 1e6) + 1, ulang: 8, iters: 25000 }, B.inp));
   const data = {
     mulai: p.start, selesai: p.end, label: p.label, tanggal: B.inp.tanggal,
     hari: B.inp.tanggal.map(function (t) { return HARI_KODE[jdDow_(t)]; }),
     staf: B.inp.nama.map(function (n) { return { nama: n, shift: hasil.shift[n], req: B.req[n] }; }),
-    kunci: kunci, catatan: hasil.catatan, skor: hasil.skor, dibuat: now_(), alasan: alasan || '', tabLalu: B.tabLalu
+    kunci: kunci, catatan: hasil.catatan, adil: jdAdil_(B.inp, hasil.shift), skor: hasil.skor, dibuat: now_(), alasan: alasan || '', tabLalu: B.tabLalu
   };
   jdSimpan_(p.start, 'draf', data, oleh);
   return data;
@@ -4761,6 +4846,7 @@ Object.assign(API, {
       const B = jdBahan_(p, data.kunci);
       const shift = {}; data.staf.forEach(function (x) { shift[x.nama] = x.shift; });
       data.catatan = nilaiJadwal_(B.inp, shift);
+      data.adil = jdAdil_(B.inp, shift);
       jdSimpan_(p.start, 'draf', data, a.username);
       return { draf: jdBaca_(p.start) };
     });

@@ -3130,7 +3130,29 @@
           !notes.length ? el('p', { class: 'muted', text: 'Semua aturan terpenuhi.' }) : null,
           merah.length ? [el('p', { class: 'jd-h-merah', text: 'Perlu keputusan (' + merah.length + ')' }), el('ul', { class: 'jd-notes' }, merah.map(noteLi))] : null,
           kuning.length ? [el('p', { class: 'jd-h-kuning', text: 'Kelonggaran (' + kuning.length + ')' }), el('ul', { class: 'jd-notes' }, kuning.map(noteLi))] : null,
-          el('p', { class: 'sub', style: 'margin-top:10px', text: 'Aturan: min 2 PD & 2 SB per hari · middle (MC/MD) diusahakan di Sabtu & Minggu: weekend 5 orang, hari biasa 4 orang · 5 orang = 1 MC/MD · 4 OFF per orang (cuti terpisah) · sebelum OFF/cuti PD, sesudahnya bukan PD · maks 7 hari kerja beruntun, diusahakan jarang dan OFF tersebar rata (7 ditandai kuning, 8+ merah; disambung dari periode lalu) · RA boleh OFF weekend maks 1× bila terpaksa · Store Leader tidak OFF di weekend, PD tiap Senin, MC/MD diutamakan di weekend.' })));
+          el('p', { class: 'sub', style: 'margin-top:10px', text: 'Aturan: min 2 PD & 2 SB per hari · middle (MC/MD) diusahakan di Sabtu & Minggu: weekend 5 orang, hari biasa 4 orang · 5 orang = 1 MC/MD · 4 OFF per orang (cuti terpisah) · sebelum OFF/cuti PD, sesudahnya bukan PD · maks 7 hari kerja beruntun, diusahakan jarang dan OFF tersebar rata (7 ditandai kuning, 8+ merah; disambung dari periode lalu) · tiap RA dapat OFF weekend 1× (Sabtu/Minggu digilir, yang periode lalu paling sedikit didahulukan) · tiap RA dapat middle minimal 1× · Store Leader tidak OFF di weekend, PD tiap Senin, MC/MD diutamakan di weekend.' })),
+        adilCard(data));
+    }
+    function adilCard(data) {
+      var rows = data.adil;
+      var card = el('div', { class: 'card section' }, el('h3', { text: 'Keadilan jadwal' }));
+      if (!rows || !rows.length) { card.append(el('p', { class: 'muted', text: 'Tekan Susun ulang untuk menghitung ringkasan keadilan.' })); return card; }
+      var th = function (t, ttl) { return el('th', { text: t, title: ttl || '' }); };
+      var td = function (t, bad) { return el('td', { class: bad ? 'adil-bad' : '', text: String(t) }); };
+      card.append(el('p', { class: 'sub', text: 'Merah = belum adil. OFF weekend dihitung termasuk cuti di Sabtu/Minggu.' }),
+        el('div', { class: 'table-wrap' }, el('table', { class: 'adil-tbl' },
+          el('thead', null, el('tr', null, th('Nama'), th('OFF weekend', 'periode lalu → periode ini'), th('Middle'), th('7 hari beruntun', 'berapa kali'), th('Terpanjang', 'hari kerja beruntun terpanjang, disambung dari periode lalu'), th('PD / SB'), th('OFF / Cuti'))),
+          el('tbody', null, rows.map(function (r) {
+            return el('tr', null,
+              el('td', null, el('b', { text: firstName(r.nama) }), r.sl ? el('span', { class: 'muted', text: ' SL' }) : null),
+              td(r.sl ? '—' : r.wkLalu + ' → ' + r.wk, !r.sl && r.wk !== 1),
+              td(r.mid, !r.sl && !r.mid),
+              td(r.k7 + '×', r.k7 > 1),
+              td(r.maks + ' hari', r.maks > 7),
+              td(r.pd + ' / ' + r.sb, Math.abs(r.pd - r.sb) > 3),
+              td(r.off + (r.ct ? ' / ' + r.ct : '')));
+          })))));
+      return card;
     }
     function geser(k) {
       var p = dParts(mulai), y = p.y, m = p.m + k; if (m < 1) { m = 12; y--; } if (m > 12) { m = 1; y++; }

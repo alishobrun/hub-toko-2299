@@ -1801,3 +1801,8 @@ html[data-theme=dark] .promo-tag{background:var(--orange-50);color:#FDBA74}
 .rq-pill-btn{border:1px solid transparent;cursor:pointer;font:inherit;font-size:13px}
 .rq-pill-btn:hover{border-color:currentColor}
 .rq-pill-btn svg{width:13px;height:13px;opacity:.7}
+.adil-tbl{width:100%;border-collapse:collapse;font-size:13px}
+.adil-tbl th,.adil-tbl td{padding:8px 10px;border-bottom:1px solid var(--line,#E4E8F0);text-align:left;white-space:nowrap}
+.adil-tbl th{font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted,#6B7690);font-weight:600}
+.adil-tbl td.adil-bad{color:var(--bad,#C0392B);font-weight:700}
+.table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;margin:0 -4px}
