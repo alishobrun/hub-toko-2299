@@ -11,7 +11,7 @@
 /** Versi kode. WAJIB dinaikkan setiap kali Code.gs diubah (format yyyy-MM-dd.n),
  *  lalu simpan ke GitHub (alishobrun/hub-toko-2299) SEBELUM dipasang. Halaman Kesehatan Data
  *  membandingkan angka ini dengan GitHub supaya kode yang dipasang di luar GitHub ketahuan. */
-const KODE_VERSI = '2026-11-20.3';
+const KODE_VERSI = '2026-11-20.4';
 
 const CFG = {
   STORE: '2299',
@@ -4262,6 +4262,8 @@ Object.assign(API, {
 const JD_REST = { OFF: 1, CT: 1 };
 const JD_MID = { MD: 1, MC: 1 };
 const JD_H = 1000;
+// middle diusahakan di Sabtu & Minggu: weekend sebaiknya 5 orang masuk (ada middle), hari biasa cukup 4 (tanpa middle)
+const JD_WKEND4 = 150, JD_HK5 = 80;
 
 function jdRng_(seed) {
   let s = (seed >>> 0) || 1;
@@ -4305,8 +4307,8 @@ function jdCost_(G, P, notes) {
     if (sb < 2) add(JD_H * (2 - sb), -1, t, 'Shift siang kurang dari 2 orang');
     if (w >= 5 && mid !== 1) add(200, -1, t, w + ' orang masuk tetapi ' + (mid ? mid + ' orang middle' : 'tidak ada MC/MD'), 'kuning');
     if (w <= 4 && mid > 0) add(150, -1, t, 'Middle dipakai saat hanya ' + w + ' orang', 'kuning');
-    if (P.wkend[t]) { if (w < 5) add(40, -1, t, null); if (mid && midP !== P.admin && P.admin >= 0 && !JD_REST[G[P.admin][t]]) add(10, -1, t, null); }
-    else if (w >= 5) add(6 + 30 * (1 - (P.ramai[t] || 0)), -1, t, null);
+    if (P.wkend[t]) { if (w < 5) add(JD_WKEND4, -1, t, null); if (mid && midP !== P.admin && P.admin >= 0 && !JD_REST[G[P.admin][t]]) add(10, -1, t, null); }
+    else if (w >= 5) add(JD_HK5 + 30 * (1 - (P.ramai[t] || 0)), -1, t, 'Hari biasa ' + w + ' orang masuk, middle jatuh di hari biasa', 'kuning');
   }
   // per orang
   const midCnt = [];
@@ -4390,8 +4392,8 @@ function jdOffCost_(R, P) {
     if (fMid > 1) c += 200;
     if (w >= 5 && fPD > w - 3) c += 200;           // 5 orang tapi tidak bisa ada middle
     if (w <= 4 && fMid) c += 150;
-    if (P.wkend[t]) { if (w < 5) c += 40; }
-    else if (w >= 5) c += 6 + 30 * (1 - (P.ramai[t] || 0));
+    if (P.wkend[t]) { if (w < 5) c += JD_WKEND4; }
+    else if (w >= 5) c += JD_HK5 + 30 * (1 - (P.ramai[t] || 0));
   }
   for (let p = 0; p < N; p++) {
     const r = R[p], f = P.fixed[p];

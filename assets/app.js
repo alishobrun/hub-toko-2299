@@ -3130,7 +3130,7 @@
           !notes.length ? el('p', { class: 'muted', text: 'Semua aturan terpenuhi.' }) : null,
           merah.length ? [el('p', { class: 'jd-h-merah', text: 'Perlu keputusan (' + merah.length + ')' }), el('ul', { class: 'jd-notes' }, merah.map(noteLi))] : null,
           kuning.length ? [el('p', { class: 'jd-h-kuning', text: 'Kelonggaran (' + kuning.length + ')' }), el('ul', { class: 'jd-notes' }, kuning.map(noteLi))] : null,
-          el('p', { class: 'sub', style: 'margin-top:10px', text: 'Aturan: min 2 PD & 2 SB per hari · weekend diusahakan 5 orang, hari sepi 4 orang · 5 orang = 1 MC/MD · 4 OFF per orang (cuti terpisah) · sebelum OFF/cuti PD, sesudahnya bukan PD · maks 6 hari kerja beruntun (7 ditandai kuning, 8+ merah; disambung dari periode lalu) · RA boleh OFF weekend maks 1× bila terpaksa · Store Leader tidak OFF di weekend, PD tiap Senin, MC/MD diutamakan di weekend.' })));
+          el('p', { class: 'sub', style: 'margin-top:10px', text: 'Aturan: min 2 PD & 2 SB per hari · middle (MC/MD) diusahakan di Sabtu & Minggu: weekend 5 orang, hari biasa 4 orang · 5 orang = 1 MC/MD · 4 OFF per orang (cuti terpisah) · sebelum OFF/cuti PD, sesudahnya bukan PD · maks 6 hari kerja beruntun (7 ditandai kuning, 8+ merah; disambung dari periode lalu) · RA boleh OFF weekend maks 1× bila terpaksa · Store Leader tidak OFF di weekend, PD tiap Senin, MC/MD diutamakan di weekend.' })));
     }
     function geser(k) {
       var p = dParts(mulai), y = p.y, m = p.m + k; if (m < 1) { m = 12; y--; } if (m > 12) { m = 1; y++; }
