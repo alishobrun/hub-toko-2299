@@ -2355,15 +2355,16 @@
     pageHead(v, 'RA Performance', 'Penjualan, transaksi, UPT dan basket per sales person.');
     var tools = el('div', { class: 'toolbar2' }), body = el('div', null, skel(2));
     v.append(tools, body);
-    var bulan = S.raBulan || '', lingkup = 'bulan', tanggal = '', TG = {}, OM = {};
+    var bulan = S.raBulan || '', lingkup = 'bulan', tanggal = '', TG = {}, OMT = null;
     function load() {
       loadLap(bulan).then(function (d) {
         bulan = d.bulan; S.raBulan = bulan;
         return swrPromise('raTarget', { bulan: bulan }).then(function (t) {
-          TG = {}; OM = {};
-          ((t.auto && t.auto.list) || []).forEach(function (x) { TG[x.ra] = x.target; OM[x.ra] = { t: x.omni, a: x.omniAct || 0 }; });
+          TG = {};
+          OMT = t.auto ? { a: t.auto.omniAct || 0, t: t.auto.omniToko || 0, n: (t.auto.list || []).length } : null;
+          ((t.auto && t.auto.list) || []).forEach(function (x) { TG[x.ra] = x.target; });
           Object.keys(t.targets || {}).forEach(function (k) { if (t.targets[k] > 0) TG[k] = t.targets[k]; });
-        }, function () { TG = {}; OM = {}; }).then(function () { draw(d); });
+        }, function () { TG = {}; OMT = null; }).then(function () { draw(d); });
       }).catch(function (e) { body.replaceChildren(errBox(e)); });
     }
     function draw(d) {
@@ -2394,6 +2395,9 @@
           el('b', { text: 'Sales dilebur Rp ' + fRp(dilTot) }), ' = Endless Aisle, Tax Invoice (B2B2G), EASAP (Tour & Travel), Wholesale & penjualan bukan atas nama RA toko, dibagi rata ke ' + HO.ras.length + ' RA (Rp ' + fRp(share) + ' per RA), sama dengan perhitungan HO. Paper bag, item non-produk & voucher tidak dihitung. UPT, qty & basket hanya dari transaksi RA sendiri.',
           HO.dilebur.rinci.length ? el('div', { class: 'muted', style: 'margin-top:4px;font-size:12px', text: 'Rincian: ' + HO.dilebur.rinci.map(function (r) { return r[0] + ' ' + fRpShort(K === 2 ? r[1] : r[2]); }).join(' · ') }) : null)
           : el('p', { class: 'note', style: 'margin:4px 0 6px', text: 'Per hari = transaksi Walk In atas nama sendiri. Sales dilebur dibagi per bulan (lihat mode Sebulan).' }),
+        lingkup === 'bulan' && OMT && OMT.t ? el('div', { class: 'omni-bersama' }, el('span', { class: 'omni-lbl', text: 'Omnichannel toko · tanggungan bersama' }), el('b', { class: 'num omni-val', text: fRpShort(OMT.a) + ' / ' + fRpShort(OMT.t) }),
+          bar(OMT.a, OMT.t, OMT.a >= OMT.t ? 'good' : ''),
+          el('small', { class: 'muted', text: fPct(OMT.a / OMT.t) + ' · dilebur & dibagi rata: tiap RA ' + fRpShort(OMT.a / (OMT.n || 1)) + ' dari target ' + fRpShort(OMT.t / (OMT.n || 1)) + ' · EA, Eigerindo Voucher, Tax Invoice & EASAP' })) : null,
         el('div', { style: 'margin-bottom:8px' }, dlBtn(function () {
           xlsxDownload('RA Performance ' + (lingkup === 'hari' ? tanggal : bulanLabel(bulan)), [{ name: 'RA', rows: [['Peringkat', 'Nama', 'Sales (' + (K === 2 ? 'bruto' : 'netto') + ')', 'Walk In sendiri', 'Bagian dilebur', 'Kontribusi %', 'Transaksi', 'Qty', 'UPT', 'Basket']].concat(list.map(function (x, i) {
             var own = x.own != null ? x.own : x.s;
@@ -2408,7 +2412,6 @@
               bar(x.s, max, i === 0 ? 'hot' : ''),
               el('div', { class: 'tags' },
                 lingkup === 'bulan' && TG[x.nama] ? el('span', { class: 'tag ' + (x.s >= TG[x.nama] ? 'tag-good' : 'tag-warn'), text: fPct(x.s / TG[x.nama]) + ' dari target ' + fRpShort(TG[x.nama]) }) : null,
-                lingkup === 'bulan' && OM[x.nama] && OM[x.nama].t ? el('span', { class: 'tag ' + (OM[x.nama].a >= OM[x.nama].t ? 'tag-good' : ''), text: 'Omni ' + fRpShort(OM[x.nama].a) + ' / ' + fRpShort(OM[x.nama].t) }) : null,
                 el('span', { class: 'tag', text: fPct(total ? x.s / total : 0) + ' kontribusi' }),
                 el('span', { class: 'tag', text: fNum(x.t) + ' trx' }),
                 el('span', { class: 'tag', text: 'UPT ' + fDec(x.t ? x.q / x.t : null) }),
@@ -2697,19 +2700,28 @@
             })) : el('div', { class: 'empty', text: 'Belum ada request di periode ini' }))
         ];
       }
+      var acc = {};
+      (d.tim || []).filter(function (r) { return r.status === 'disetujui' && r.tanggal >= todayJkt(); }).forEach(function (r) { (acc[r.tanggal] = acc[r.tanggal] || []).push(r); });
+      var accBox = el('div', { class: 'card section rq-acc' }, el('div', { class: 'card-head' }, el('h3', null, icon('check'), ' Request disetujui'),
+          el('span', { class: 'tag tag-good', text: Object.keys(acc).reduce(function (n, t) { return n + acc[t].length; }, 0) + ' request' })),
+        el('p', { class: 'sub', text: 'Sudah pasti masuk jadwal. Hari ini dan seterusnya.' }),
+        Object.keys(acc).length ? el('div', { class: 'rq-acc-list' }, Object.keys(acc).sort().map(function (t) {
+          return el('div', { class: 'rq-acc-row' }, el('div', { class: 'rq-acc-d' }, el('b', { text: dParts(t).d }), el('span', { text: dDayName(t) + ' · ' + dShort(t).replace(/^\d+\s*/, '') })),
+            el('div', { class: 'rq-acc-n' }, acc[t].map(function (r) { return el('span', { class: 'rq-pill j-' + String(r.jenis).toLowerCase() }, el('b', { text: firstName(r.nama) }), ' ' + r.jenis); })));
+        })) : el('div', { class: 'empty', text: 'Belum ada request yang disetujui' }));
       var timBox = null;
       if (!d.semua) {
         var byD = {};
-        (d.tim || []).filter(function (r) { return r.tanggal >= cur.mulai; }).forEach(function (r) { (byD[r.tanggal] = byD[r.tanggal] || []).push(r); });
-        timBox = el('div', { class: 'card section' }, el('h3', { text: 'Request tim' }),
-          el('p', { class: 'sub', text: 'Tanggal yang sudah diminta (menunggu & disetujui). Cek dulu sebelum mengajukan supaya tidak bentrok.' }),
+        (d.tim || []).filter(function (r) { return r.tanggal >= todayJkt() && r.status === 'menunggu'; }).forEach(function (r) { (byD[r.tanggal] = byD[r.tanggal] || []).push(r); });
+        timBox = el('div', { class: 'card section' }, el('h3', { text: 'Request tim yang menunggu' }),
+          el('p', { class: 'sub', text: 'Belum diputuskan admin. Cek dulu sebelum mengajukan supaya tidak bentrok.' }),
           Object.keys(byD).length ? el('ul', { class: 'cal-list' }, Object.keys(byD).sort().map(function (t) {
             return el('li', null, el('div', { class: 'cal-date' }, el('b', { text: dParts(t).d }), el('span', { text: dDayName(t) })),
               el('div', { class: 'tags' }, el('span', { class: 'muted', style: 'font-size:12px;margin-right:4px', text: dShort(t) }),
                 byD[t].map(function (r) { return el('span', { class: 'tag ' + (r.status === 'disetujui' ? 'tag-good' : 'tag-warn'), text: firstName(r.nama) + ' · ' + r.jenis + (r.status === 'menunggu' ? ' (menunggu)' : '') }); })));
-          })) : el('div', { class: 'empty', text: 'Belum ada request dari tim' }));
+          })) : el('div', { class: 'empty', text: 'Tidak ada request yang menunggu' }));
       }
-      body.replaceChildren(el('div', { class: 'grid grid-2' }, form, mine), timBox, adminBox);
+      body.replaceChildren(accBox, el('div', { class: 'grid grid-2' }, form, mine), timBox, adminBox);
     }
     function decide(btn, r, k) {
       var cat = k === 'tolak' ? prompt('Alasan ditolak (opsional):', '') : '';
@@ -5305,11 +5317,13 @@
   }
 
   function omniSaya(d) {
-    var o = d.omni, ach = o.target ? o.actual / o.target : 0, sisa = Math.max(0, o.target - o.actual);
+    var o = d.omni, ach = o.targetToko ? o.tokoActual / o.targetToko : 0, sisa = Math.max(0, o.targetToko - o.tokoActual);
     return el('div', { class: 'omni-saya' },
-      el('div', { class: 'ra-top' }, el('b', { text: 'Target omnichannel' }), el('b', { class: 'num', text: fRpShort(o.actual) + ' / ' + fRpShort(o.target) })),
+      el('span', { class: 'omni-lbl', text: 'Omnichannel toko · tanggungan bersama' }),
+      el('b', { class: 'num omni-val', text: fRpShort(o.tokoActual) + ' / ' + fRpShort(o.targetToko) }),
       el('div', { class: 'saya-bar' }, el('i', { style: 'width:' + Math.min(100, ach * 100).toFixed(1) + '%' })),
-      el('small', { class: 'muted', text: fPct(ach) + (sisa ? ' · kurang ' + fRpShort(sisa) + (d.sisaHari > 0 ? ' (' + fRpShort(sisa / d.sisaHari) + '/hari)' : '') : ' · tercapai') + ' · gabungan Endless Aisle, Eigerindo Voucher, Tax Invoice & EASAP' }),
+      el('small', { class: 'muted', text: fPct(ach) + (sisa ? ' · kurang ' + fRpShort(sisa) + (d.sisaHari > 0 ? ' (' + fRpShort(sisa / d.sisaHari) + '/hari)' : '') : ' · tercapai') +
+        ' · bagian tiap RA ' + fRpShort(o.actual) + ' dari target ' + fRpShort(o.target) + ' (dibagi rata ' + o.jumlahRa + ' RA)' }),
       el('div', { class: 'tags', style: 'margin-top:6px' }, o.rinci.map(function (r) { return el('span', { class: 'tag' + (r[1] ? ' tag-good' : ''), text: r[0] + ' ' + fRpShort(r[1]) }); })));
   }
   function normNm(x) { return String(x || '').toUpperCase().replace(/[^A-Z ]/g, ' ').replace(/\s+/g, ' ').trim(); }

@@ -1783,3 +1783,18 @@ html[data-theme=dark] .promo-tag{background:var(--orange-50);color:#FDBA74}
 .omni-saya .saya-bar{margin:6px 0 4px}
 .ra-tg-auto{display:block;font-weight:400;font-size:11.5px;white-space:normal}
 .rq-sudah .banner{margin:4px 0 8px}
+.omni-bersama{margin:4px 0 12px;padding:12px;border-radius:12px;background:var(--line-2)}
+.omni-bersama .bar-track{margin:6px 0 4px}
+.rq-acc{border:1.5px solid var(--good);background:linear-gradient(0deg,var(--panel),var(--good-50))}
+.rq-acc h3{display:flex;align-items:center;gap:6px;color:var(--good)}
+.rq-acc-list{display:flex;flex-direction:column;gap:8px;margin-top:6px}
+.rq-acc-row{display:flex;gap:12px;align-items:center;padding:8px 10px;border-radius:12px;background:var(--panel);border:1px solid var(--line-2)}
+.rq-acc-d{display:flex;flex-direction:column;align-items:center;min-width:64px}
+.rq-acc-d b{font-size:20px;line-height:1.1}
+.rq-acc-d span{font-size:11px;color:var(--muted);text-align:center}
+.rq-acc-n{display:flex;flex-wrap:wrap;gap:6px}
+.rq-pill{display:inline-flex;gap:4px;align-items:center;padding:4px 10px;border-radius:99px;background:var(--good-50);color:var(--good);font-size:13px}
+.rq-pill.j-cuti{background:var(--orange-50);color:var(--orange)}
+.rq-pill.j-off{background:var(--good-50);color:var(--good)}
+.omni-lbl{display:block;font-size:13px;color:var(--muted);font-weight:600}
+.omni-val{display:block;font-size:18px;margin-top:2px}

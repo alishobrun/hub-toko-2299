@@ -11,7 +11,7 @@
 /** Versi kode. WAJIB dinaikkan setiap kali Code.gs diubah (format yyyy-MM-dd.n),
  *  lalu simpan ke GitHub (alishobrun/hub-toko-2299) SEBELUM dipasang. Halaman Kesehatan Data
  *  membandingkan angka ini dengan GitHub supaya kode yang dipasang di luar GitHub ketahuan. */
-const KODE_VERSI = '2026-11-20.1';
+const KODE_VERSI = '2026-11-20.2';
 
 const CFG = {
   STORE: '2299',
@@ -2859,8 +2859,9 @@ Object.assign(API, {
     try {
       const rowsM = dsrBulan_(bulan);
       auto = raTargetAuto_(bulan, rowsM); toko = auto.list.map(function (x) { return x.ra; });
-      const per = omniPerRa_(rowsM);
-      auto.list.forEach(function (x) { x.omniAct = omniRaCari_(per, x.ra).total; });
+      const ot = omniToko_(rowsM), n = auto.list.length || 1;
+      auto.omniAct = Math.round(ot.total);
+      auto.list.forEach(function (x) { x.omniAct = Math.round(ot.total / n); });
     } catch (e) { toko = []; }
     return { bulan: bulan, targets: targets, ras: ras, raToko: toko, targetToko: t ? Number(t.target) : null, users: users, auto: auto };
   },
@@ -2904,10 +2905,11 @@ Object.assign(API, {
     const list = H.list.map(function (x) { return { ra: x.nama, b: x.b, n: x.n, q: x.q, trx: x.trx, ownB: x.ownB, ownN: x.ownN, shareB: H.share.b, shareN: H.share.n }; });
     const A = raTargetAuto_(bulan, rowsM);
     const mine = A.list.filter(function (x) { return sameName_(x.ra, nama); })[0];
-    const om = omniRaCari_(omniPerRa_(rowsM), nama);
+    const ot = omniToko_(rowsM), nRa = A.list.length || 1;
     const p = today.split('-').map(Number), dim = new Date(Date.UTC(p[0], p[1], 0)).getUTCDate();
     return { bulan: bulan, nama: nama, list: list, target: mine ? mine.target : null, targetInfo: mine ? { manual: !!mine.manual, mulai: mine.mulai, bobot: mine.bobot, jumlahRa: A.list.length, targetToko: A.targetToko } : null,
-      omni: mine ? { target: mine.omni, actual: om.total, rinci: OMNI_JENIS.map(function (j) { return [j[1], om[j[0]] || 0]; }), targetToko: A.omniToko } : null,
+      omni: mine ? { target: mine.omni, actual: Math.round(ot.total / nRa), tokoActual: Math.round(ot.total), targetToko: A.omniToko, jumlahRa: nRa,
+        rinci: OMNI_JENIS.map(function (j) { return [j[1], Math.round(ot[j[0]] || 0)]; }) } : null,
       dataSampai: latestDate_(), sisaHari: dim - p[2] + 1 };
   },
 
@@ -3439,8 +3441,15 @@ function raTargetAuto_(bulan, rows) {
   return { targetToko: tToko, omniToko: oToko, hari: dim,
     list: ras.map(function (ra) {
       const auto = rnd(tToko * bobot[ra] / W);
-      return { ra: ra, mulai: first[ra] || '', bobot: Math.round(bobot[ra] * 1000) / 1000, auto: auto, manual: manual[ra] || 0, target: manual[ra] || auto, omni: rnd(oToko * bobot[ra] / W) };
+      // omnichannel = tanggungan bersama: target dibagi sama rata ke semua RA (tidak proporsional)
+      return { ra: ra, mulai: first[ra] || '', bobot: Math.round(bobot[ra] * 1000) / 1000, auto: auto, manual: manual[ra] || 0, target: manual[ra] || auto, omni: rnd(oToko / (ras.length || 1)) };
     }) };
+}
+/** Pencapaian omnichannel toko (bruto) per jenis — dilebur & dibagi rata ke RA. */
+function omniToko_(rows) {
+  const o = { total: 0 };
+  rows.forEach(function (r) { OMNI_JENIS.forEach(function (j) { if (!j[2](r)) return; const g = Number(r.gross) || 0; o.total += g; o[j[0]] = (o[j[0]] || 0) + g; }); });
+  return o;
 }
 /** Pencapaian omnichannel (bruto) per sales person bulan itu. */
 function omniPerRa_(rows) {
